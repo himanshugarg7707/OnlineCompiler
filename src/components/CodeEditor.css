@@ -1,0 +1,60 @@
+.code-editor-container {
+  position: relative;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: 0;
+  background: var(--bg-primary);
+}
+
+.editor-wrapper {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  overflow: hidden;
+}
+
+.editor-glow-top {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: var(--gradient-primary);
+  opacity: 0.3;
+  z-index: 5;
+}
+
+/* Error decorations */
+.error-line-decoration {
+  background: rgba(248, 81, 73, 0.12) !important;
+  border-left: 3px solid var(--accent-red) !important;
+}
+
+.error-glyph-margin {
+  background: var(--accent-red);
+  border-radius: 50%;
+  width: 8px !important;
+  height: 8px !important;
+  margin-left: 4px;
+  margin-top: 6px;
+}
+
+/* Loading state */
+.editor-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-3);
+  height: 100%;
+  background: var(--bg-primary);
+  color: var(--text-secondary);
+  font-size: var(--fs-sm);
+}
+
+/* Override Monaco internals for better look */
+.monaco-editor .margin {
+  background: var(--bg-primary) !important;
+}

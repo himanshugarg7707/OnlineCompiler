@@ -1,0 +1,167 @@
+.file-tabs-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 38px;
+  min-height: 38px;
+  background: var(--bg-tertiary);
+  border-bottom: 1px solid var(--border-primary);
+  padding: 0 var(--sp-2);
+  user-select: none;
+  overflow: hidden;
+}
+
+.file-tabs-scroll {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  height: 100%;
+  flex: 1;
+}
+
+.file-tabs-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.file-tab {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: 0 var(--sp-3);
+  height: 32px;
+  background: var(--bg-secondary);
+  border: 1px solid transparent;
+  border-bottom: none;
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+  color: var(--text-muted);
+  font-size: var(--fs-xs);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  white-space: nowrap;
+  position: relative;
+  max-width: 200px;
+}
+
+.file-tab:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-primary);
+}
+
+.file-tab.active {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  border-color: var(--border-primary);
+  border-bottom-color: var(--bg-primary);
+  font-weight: 500;
+}
+
+.file-tab.active::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--gradient-primary);
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+}
+
+.file-tab-icon {
+  font-size: var(--fs-sm);
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.file-tab-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+}
+
+.file-tab-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity var(--transition-fast);
+}
+
+.file-tab:hover .file-tab-actions,
+.file-tab.active .file-tab-actions {
+  opacity: 1;
+}
+
+.file-tab-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  padding: 0;
+}
+
+.file-tab-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text-primary);
+}
+
+.file-tab-btn.close:hover {
+  background: rgba(248, 81, 73, 0.2);
+  color: var(--accent-red);
+}
+
+.file-tab-rename-input,
+.file-tab-add-input {
+  background: var(--bg-primary);
+  border: 1px solid var(--accent-cyan);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: var(--fs-xs);
+  font-family: var(--font-mono);
+  padding: 2px 6px;
+  outline: none;
+  width: 130px;
+}
+
+.file-tab.adding {
+  background: var(--bg-primary);
+  border: 1px dashed var(--accent-cyan);
+  padding: 0 var(--sp-2);
+}
+
+.adding-icon {
+  color: var(--accent-cyan);
+  flex-shrink: 0;
+}
+
+.btn-new-file {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  padding: 4px 8px;
+  background: transparent;
+  border: 1px dashed var(--border-secondary);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  font-size: var(--fs-xs);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  flex-shrink: 0;
+  margin-left: var(--sp-2);
+}
+
+.btn-new-file:hover {
+  background: rgba(0, 212, 255, 0.1);
+  border-color: var(--accent-cyan);
+  color: var(--accent-cyan);
+}

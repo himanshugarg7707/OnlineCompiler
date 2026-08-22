@@ -1,0 +1,61 @@
+.status-bar {
+  height: var(--statusbar-height);
+  min-height: var(--statusbar-height);
+  background: var(--bg-tertiary);
+  border-top: 1px solid var(--border-primary);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 var(--sp-4);
+  font-size: var(--fs-xs);
+  color: var(--text-muted);
+  user-select: none;
+  z-index: 100;
+}
+
+.status-left,
+.status-right {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+}
+
+.status-item {
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+}
+
+.status-item.language {
+  color: var(--accent-cyan);
+  font-weight: 500;
+}
+
+.status-item.time {
+  color: var(--accent-green);
+}
+
+.status-item.memory {
+  color: var(--accent-purple);
+}
+
+.status-item.mode {
+  font-weight: 500;
+}
+
+.status-item.brand {
+  font-weight: 600;
+  background: var(--gradient-primary);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+@media (max-width: 640px) {
+  .status-item.time,
+  .status-item.memory,
+  .status-item.mode {
+    display: none;
+  }
+}

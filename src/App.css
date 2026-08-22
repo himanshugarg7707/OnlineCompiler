@@ -1,0 +1,117 @@
+/* ─── App Layout ───────────────────────────────────────────────────────── */
+
+.app-container {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
+  background: var(--bg-primary);
+}
+
+.app-body {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+  position: relative;
+  z-index: 10;
+}
+
+.main-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-width: 0;
+  position: relative;
+}
+
+/* Editor Section */
+.editor-section {
+  min-height: 120px;
+  overflow: hidden;
+  position: relative;
+}
+
+/* Output Section */
+.output-section {
+  min-height: 80px;
+  overflow: hidden;
+  position: relative;
+}
+
+/* ─── Draggable Split Resizer ────────────────────────────────────────── */
+
+.split-resizer {
+  height: 8px;
+  min-height: 8px;
+  background: var(--bg-secondary);
+  border-top: 1px solid var(--border-primary);
+  border-bottom: 1px solid var(--border-primary);
+  cursor: row-resize;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  z-index: 20;
+  user-select: none;
+  transition: background var(--transition-fast), border-color var(--transition-fast);
+}
+
+.split-resizer:hover,
+.split-resizer.dragging {
+  background: rgba(0, 212, 255, 0.15);
+  border-color: var(--accent-cyan);
+}
+
+.resizer-handle {
+  width: 36px;
+  height: 3px;
+  border-radius: var(--radius-full);
+  background: var(--border-secondary);
+  transition: all var(--transition-fast);
+}
+
+.split-resizer:hover .resizer-handle,
+.split-resizer.dragging .resizer-handle {
+  background: var(--accent-cyan);
+  width: 48px;
+  box-shadow: 0 0 8px var(--accent-cyan);
+}
+
+/* While resizing, prevent selection and set global resize cursor */
+body.resizing-vertical {
+  user-select: none !important;
+  cursor: row-resize !important;
+}
+
+body.resizing-vertical * {
+  user-select: none !important;
+  cursor: row-resize !important;
+}
+
+/* ─── Ambient Background Effect ────────────────────────────────────────── */
+.app-container::before {
+  content: '';
+  position: fixed;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: radial-gradient(
+    ellipse at 20% 50%,
+    rgba(0, 212, 255, 0.03) 0%,
+    transparent 50%
+  ),
+  radial-gradient(
+    ellipse at 80% 50%,
+    rgba(180, 128, 255, 0.03) 0%,
+    transparent 50%
+  );
+  pointer-events: none;
+  z-index: 0;
+}
+
+.app-container > * {
+  position: relative;
+}
