@@ -282,6 +282,7 @@ function reducer(state, action) {
         executionTime: action.payload.time,
         executionMemory: action.payload.memory,
         errorLine: action.payload.errorLine,
+        sqlData: action.payload.sqlData || null,
         executionStatus: action.payload.success ? 'success' : 'error',
       };
 

@@ -65,7 +65,26 @@ export async function executeCode(code, languageId, stdin = '', allFiles = []) {
     return launchCssInBrowser(code, allFiles);
   }
 
-  // 5. Cloud Compiled Languages via Wandbox
+  // 5. SQL — High-performance execution via Backend Multi-Database Engine
+  if (languageId === 82) {
+    try {
+      const response = await fetch('/api/execute', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code, languageId: 82, database: 'ecommerce_db' }),
+      });
+      if (response.ok) {
+        const result = await response.json();
+        if (result && !result.useClientRunner) {
+          return result;
+        }
+      }
+    } catch (err) {
+      console.warn('Backend SQL execution unavailable, falling back to Wandbox:', err.message);
+    }
+  }
+
+  // 6. Cloud Compiled Languages via Wandbox
   const compiler = WANDBOX_COMPILERS[languageId];
   if (!compiler) {
     return mockExecute(code, languageId, stdin);

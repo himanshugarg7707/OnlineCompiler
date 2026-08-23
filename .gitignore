@@ -22,3 +22,8 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+.vercel
+
+# Database WAL files
+server/data/databases/*.sqlite-wal
+server/data/databases/*.sqlite-shm

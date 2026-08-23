@@ -1,12 +1,14 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { useApp } from '../context/AppContext';
-import { Terminal, Keyboard, BrainCircuit, Sparkles } from 'lucide-react';
+import { Terminal, Keyboard, BrainCircuit, Sparkles, Database } from 'lucide-react';
+import DatabasePanel from './DatabasePanel';
 import './OutputPanel.css';
 
 const TABS = [
   { id: 'output', label: 'Output', icon: Terminal },
+  { id: 'database', label: 'Database Explorer', icon: Database },
   { id: 'input', label: 'Input', icon: Keyboard },
   { id: 'explanation', label: 'AI Explanation', icon: BrainCircuit },
 ];
@@ -24,15 +26,19 @@ export default function OutputPanel() {
     stdin,
     inputDescription,
     aiExplanation,
+    sqlData,
+    detectedLanguage,
   } = state;
 
   const hasError = stderr || compileOutput;
   const isRunning = executionStatus === 'compiling' || executionStatus === 'running';
 
-  // Auto-switch to explanation tab when AI explanation is available
-  if (aiExplanation && activeTab === 'output') {
-    // Don't auto-switch, but show indicator
-  }
+  // If user selects SQL language, auto-show database tab option
+  useEffect(() => {
+    if (detectedLanguage?.id === 82 && activeTab === 'input') {
+      setActiveTab('output');
+    }
+  }, [detectedLanguage, activeTab]);
 
   return (
     <div className="output-panel">
@@ -43,7 +49,8 @@ export default function OutputPanel() {
             const Icon = tab.icon;
             const hasNotification =
               (tab.id === 'explanation' && aiExplanation) ||
-              (tab.id === 'output' && (output || hasError));
+              (tab.id === 'output' && (output || hasError)) ||
+              (tab.id === 'database' && detectedLanguage?.id === 82);
             return (
               <button
                 key={tab.id}
@@ -108,14 +115,51 @@ export default function OutputPanel() {
                 </span>
               </div>
             ) : output || hasError ? (
-              <pre className={`output-text ${hasError ? 'error' : 'success'}`}>
-                {hasError && (
-                  <div className="error-output">
-                    {compileOutput || stderr}
+              <div className="output-results-wrapper">
+                {/* If SQL table data returned, show visual table grid */}
+                {sqlData && sqlData.rows && sqlData.rows.length > 0 && (
+                  <div className="sql-table-preview animate-slide-up">
+                    <div className="sql-table-header">
+                      <span>📊 Result Set ({sqlData.rowCount} rows in {sqlData.executionTimeMs}ms)</span>
+                    </div>
+                    <div className="sql-table-scroll">
+                      <table className="db-data-table">
+                        <thead>
+                          <tr>
+                            {sqlData.columns.map((col) => (
+                              <th key={col}>{col}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {sqlData.rows.map((row, idx) => (
+                            <tr key={idx}>
+                              {sqlData.columns.map((col) => (
+                                <td key={col}>
+                                  {row[col] === null ? (
+                                    <span className="cell-null">NULL</span>
+                                  ) : (
+                                    String(row[col])
+                                  )}
+                                </td>
+                              ))}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
                 )}
-                {output && <div className="success-output">{output}</div>}
-              </pre>
+
+                <pre className={`output-text ${hasError ? 'error' : 'success'}`}>
+                  {hasError && (
+                    <div className="error-output">
+                      {compileOutput || stderr}
+                    </div>
+                  )}
+                  {output && <div className="success-output">{output}</div>}
+                </pre>
+              </div>
             ) : (
               <div className="output-placeholder">
                 <Terminal size={40} strokeWidth={1} />
@@ -125,6 +169,9 @@ export default function OutputPanel() {
             )}
           </div>
         )}
+
+        {/* Database Explorer Tab */}
+        {activeTab === 'database' && <DatabasePanel />}
 
         {/* Input Tab */}
         {activeTab === 'input' && (

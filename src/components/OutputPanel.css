@@ -154,6 +154,36 @@
 }
 
 /* Output text */
+.output-results-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+
+.sql-table-preview {
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.sql-table-header {
+  padding: 6px 12px;
+  background: var(--bg-tertiary);
+  border-bottom: 1px solid var(--border-primary);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--accent-cyan);
+}
+
+.sql-table-scroll {
+  max-height: 250px;
+  overflow: auto;
+  padding: 4px;
+}
+
 .output-text {
   font-family: var(--font-mono);
   font-size: var(--fs-sm);
