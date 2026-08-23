@@ -19,8 +19,8 @@ const dbConnections = new Map();
 /**
  * Get or create a sqlite3 database connection
  */
-function getDbConnection(dbName = 'main_db') {
-  const sanitized = dbName.replace(/[^a-zA-Z0-9_-]/g, '_').toLowerCase();
+export function getDbConnection(dbName = 'main_db') {
+  const sanitized = (dbName || 'main_db').replace(/[^a-zA-Z0-9_-]/g, '_').toLowerCase();
   const dbPath = path.join(DB_DIR, `${sanitized}.sqlite`);
 
   if (!dbConnections.has(sanitized)) {
@@ -105,83 +105,327 @@ export async function deleteDatabase(dbName) {
 }
 
 /**
- * Execute SQL Query on a specific database
+ * Split SQL script into individual executable statements
  */
-export async function executeSqlQuery(dbName = 'main_db', sqlQuery) {
-  const startTime = performance.now();
-  const { db, sanitized } = getDbConnection(dbName);
+function splitSqlStatements(sqlText) {
+  const statements = [];
+  let current = '';
+  let inSingleQuote = false;
+  let inDoubleQuote = false;
+  let inLineComment = false;
+  let inBlockComment = false;
 
-  const cleanQuery = sqlQuery.trim();
+  for (let i = 0; i < sqlText.length; i++) {
+    const char = sqlText[i];
+    const nextChar = sqlText[i + 1];
+
+    // Handle single-line comment (-- or #)
+    if (!inSingleQuote && !inDoubleQuote && !inBlockComment) {
+      if ((char === '-' && nextChar === '-') || char === '#') {
+        inLineComment = true;
+      }
+    }
+    if (inLineComment && (char === '\n' || char === '\r')) {
+      inLineComment = false;
+      current += ' ';
+      continue;
+    }
+    if (inLineComment) {
+      continue;
+    }
+
+    // Handle block comments (/* ... */)
+    if (!inSingleQuote && !inDoubleQuote && !inLineComment) {
+      if (char === '/' && nextChar === '*') {
+        inBlockComment = true;
+        i++;
+        continue;
+      }
+    }
+    if (inBlockComment && char === '*' && nextChar === '/') {
+      inBlockComment = false;
+      i++;
+      current += ' ';
+      continue;
+    }
+    if (inBlockComment) {
+      continue;
+    }
+
+    // Handle string literals
+    if (char === "'" && !inDoubleQuote) {
+      inSingleQuote = !inSingleQuote;
+    } else if (char === '"' && !inSingleQuote) {
+      inDoubleQuote = !inDoubleQuote;
+    }
+
+    // Split on semicolon
+    if (char === ';' && !inSingleQuote && !inDoubleQuote) {
+      const trimmed = current.trim();
+      if (trimmed) {
+        statements.push(trimmed);
+      }
+      current = '';
+    } else {
+      current += char;
+    }
+  }
+
+  const lastTrimmed = current.trim();
+  if (lastTrimmed) {
+    statements.push(lastTrimmed);
+  }
+
+  return statements;
+}
+
+/**
+ * Execute SQL Query or multi-statement script on target database
+ * Supports MySQL / PostgreSQL DDL extensions:
+ * - CREATE DATABASE <name> / CREATE SCHEMA <name>
+ * - USE <name>
+ * - SHOW DATABASES / SHOW SCHEMAS
+ * - SHOW TABLES [FROM <name>]
+ * - DESCRIBE <table> / DESC <table>
+ * - DROP DATABASE <name>
+ */
+export async function executeSqlQuery(initialDbName = 'main_db', sqlQuery) {
+  const startTime = performance.now();
+  let currentDb = initialDbName || 'main_db';
+
+  const cleanQuery = (sqlQuery || '').trim();
   if (!cleanQuery) {
     return {
       success: true,
       columns: [],
       rows: [],
       rowCount: 0,
-      executionTimeMs: 0,
-      database: sanitized,
+      executionTimeMs: '0.00',
+      database: currentDb,
     };
   }
 
-  // Determine query type (SELECT / PRAGMA vs mutation)
-  const isSelect = /^(SELECT|PRAGMA|EXPLAIN|WITH)\b/i.test(cleanQuery);
+  const statements = splitSqlStatements(cleanQuery);
+  if (statements.length === 0) {
+    return {
+      success: true,
+      columns: [],
+      rows: [],
+      rowCount: 0,
+      executionTimeMs: '0.00',
+      database: currentDb,
+    };
+  }
 
-  return new Promise((resolve) => {
-    if (isSelect) {
-      db.all(cleanQuery, [], (err, rows) => {
-        const elapsed = (performance.now() - startTime).toFixed(2);
-        if (err) {
-          return resolve({
-            success: false,
-            error: err.message,
-            sql: cleanQuery,
-            executionTimeMs: elapsed,
-            database: sanitized,
-          });
-        }
+  let finalResult = null;
+  const executionLogs = [];
 
-        const columns = rows && rows.length > 0 ? Object.keys(rows[0]) : [];
-        return resolve({
-          success: true,
-          columns,
-          rows: rows || [],
-          rowCount: rows ? rows.length : 0,
-          executionTimeMs: elapsed,
-          database: sanitized,
-          type: 'SELECT',
-        });
-      });
-    } else {
-      // Execute multi-statement mutation or DDL using db.exec
-      db.exec(cleanQuery, function (err) {
-        const elapsed = (performance.now() - startTime).toFixed(2);
-        if (err) {
-          return resolve({
-            success: false,
-            error: err.message,
-            sql: cleanQuery,
-            executionTimeMs: elapsed,
-            database: sanitized,
-          });
-        }
+  for (const stmt of statements) {
+    const trimmed = stmt.trim();
+    if (!trimmed) continue;
 
-        return resolve({
-          success: true,
-          columns: ['status', 'message'],
-          rows: [
-            {
-              status: 'SUCCESS',
-              message: 'Query executed successfully',
-            },
-          ],
-          rowCount: 1,
-          executionTimeMs: elapsed,
-          database: sanitized,
-          type: 'MUTATION',
-        });
-      });
+    // 1. CREATE DATABASE / CREATE SCHEMA
+    const createDbMatch = trimmed.match(/^CREATE\s+(?:DATABASE|SCHEMA)\s+(?:IF\s+NOT\s+EXISTS\s+)?([a-zA-Z0-9_-]+)/i);
+    if (createDbMatch) {
+      const newDb = createDbMatch[1];
+      await createDatabase(newDb);
+      executionLogs.push(`✅ Database '${newDb}' created.`);
+      finalResult = {
+        success: true,
+        columns: ['status', 'message'],
+        rows: [{ status: 'OK', message: `Database '${newDb}' created successfully.` }],
+        rowCount: 1,
+        database: currentDb,
+        type: 'DDL',
+      };
+      continue;
     }
-  });
+
+    // 2. USE <db>
+    const useDbMatch = trimmed.match(/^USE\s+([a-zA-Z0-9_-]+)/i);
+    if (useDbMatch) {
+      const targetDb = useDbMatch[1];
+      // Ensure target database exists
+      await createDatabase(targetDb);
+      currentDb = targetDb.toLowerCase();
+      executionLogs.push(`🔄 Database changed to '${currentDb}'.`);
+      finalResult = {
+        success: true,
+        columns: ['status', 'message'],
+        rows: [{ status: 'OK', message: `Database changed to '${currentDb}'.` }],
+        rowCount: 1,
+        database: currentDb,
+        type: 'USE',
+      };
+      continue;
+    }
+
+    // 3. SHOW DATABASES / SHOW SCHEMAS
+    if (/^SHOW\s+(?:DATABASES|SCHEMAS)\b/i.test(trimmed)) {
+      const dbs = await listDatabases();
+      finalResult = {
+        success: true,
+        columns: ['Database', 'Tables_Count', 'Size_KB'],
+        rows: dbs.map((d) => ({
+          Database: d.name,
+          Tables_Count: d.tablesCount,
+          Size_KB: (d.sizeBytes / 1024).toFixed(1),
+        })),
+        rowCount: dbs.length,
+        database: currentDb,
+        type: 'SELECT',
+      };
+      continue;
+    }
+
+    // 4. SHOW TABLES [FROM <db>]
+    const showTablesMatch = trimmed.match(/^SHOW\s+TABLES(?:\s+FROM\s+([a-zA-Z0-9_-]+))?/i);
+    if (showTablesMatch) {
+      const targetDb = showTablesMatch[1] ? showTablesMatch[1].toLowerCase() : currentDb;
+      const { db } = getDbConnection(targetDb);
+      const tables = await new Promise((resolve) => {
+        db.all(
+          "SELECT name AS Tables_in_database FROM sqlite_master WHERE type IN ('table', 'view') AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_codeforge_%';",
+          (err, rows) => resolve(err || !rows ? [] : rows)
+        );
+      });
+      finalResult = {
+        success: true,
+        columns: [`Tables_in_${targetDb}`],
+        rows: tables.map((t) => ({ [`Tables_in_${targetDb}`]: t.Tables_in_database })),
+        rowCount: tables.length,
+        database: targetDb,
+        type: 'SELECT',
+      };
+      continue;
+    }
+
+    // 5. DESCRIBE / DESC <table>
+    const descMatch = trimmed.match(/^(?:DESCRIBE|DESC)\s+([a-zA-Z0-9_"-]+)/i);
+    if (descMatch) {
+      const table = descMatch[1].replace(/["']/g, '');
+      const { db } = getDbConnection(currentDb);
+      const info = await new Promise((resolve) => {
+        db.all(`PRAGMA table_info("${table}");`, (err, rows) => resolve(err || !rows ? [] : rows));
+      });
+      finalResult = {
+        success: true,
+        columns: ['Field', 'Type', 'Null', 'Key', 'Default'],
+        rows: info.map((r) => ({
+          Field: r.name,
+          Type: r.type || 'TEXT',
+          Null: r.notnull ? 'NO' : 'YES',
+          Key: r.pk ? 'PRI' : '',
+          Default: r.dflt_value === null ? 'NULL' : String(r.dflt_value),
+        })),
+        rowCount: info.length,
+        database: currentDb,
+        type: 'SELECT',
+      };
+      continue;
+    }
+
+    // 6. DROP DATABASE
+    const dropDbMatch = trimmed.match(/^DROP\s+DATABASE\s+(?:IF\s+EXISTS\s+)?([a-zA-Z0-9_-]+)/i);
+    if (dropDbMatch) {
+      const targetDb = dropDbMatch[1];
+      await deleteDatabase(targetDb);
+      executionLogs.push(`🗑️ Database '${targetDb}' dropped.`);
+      if (currentDb === targetDb.toLowerCase()) {
+        currentDb = 'main_db';
+      }
+      finalResult = {
+        success: true,
+        columns: ['status', 'message'],
+        rows: [{ status: 'OK', message: `Database '${targetDb}' dropped successfully.` }],
+        rowCount: 1,
+        database: currentDb,
+        type: 'DDL',
+      };
+      continue;
+    }
+
+    // 7. Regular SQL Execution (SELECT, INSERT, UPDATE, DELETE, CREATE TABLE, etc.)
+    const { db } = getDbConnection(currentDb);
+    const isSelect = /^(SELECT|PRAGMA|EXPLAIN|WITH)\b/i.test(trimmed);
+
+    const stepResult = await new Promise((resolve) => {
+      if (isSelect) {
+        db.all(trimmed, [], (err, rows) => {
+          if (err) {
+            return resolve({
+              success: false,
+              error: err.message,
+              sql: trimmed,
+              database: currentDb,
+            });
+          }
+          const columns = rows && rows.length > 0 ? Object.keys(rows[0]) : [];
+          return resolve({
+            success: true,
+            columns,
+            rows: rows || [],
+            rowCount: rows ? rows.length : 0,
+            database: currentDb,
+            type: 'SELECT',
+          });
+        });
+      } else {
+        db.run(trimmed, function (err) {
+          if (err) {
+            return resolve({
+              success: false,
+              error: err.message,
+              sql: trimmed,
+              database: currentDb,
+            });
+          }
+          return resolve({
+            success: true,
+            columns: ['status', 'rows_affected'],
+            rows: [
+              {
+                status: 'SUCCESS',
+                rows_affected: this.changes || 0,
+              },
+            ],
+            rowCount: 1,
+            database: currentDb,
+            type: 'MUTATION',
+          });
+        });
+      }
+    });
+
+    if (!stepResult.success) {
+      const elapsed = (performance.now() - startTime).toFixed(2);
+      return {
+        ...stepResult,
+        executionTimeMs: elapsed,
+      };
+    }
+
+    // Save as finalResult (if user has multiple SELECTs or mutations, last active result is displayed)
+    finalResult = stepResult;
+  }
+
+  const elapsed = (performance.now() - startTime).toFixed(2);
+
+  if (!finalResult) {
+    finalResult = {
+      success: true,
+      columns: ['status'],
+      rows: [{ status: 'Query executed successfully.' }],
+      rowCount: 1,
+    };
+  }
+
+  return {
+    ...finalResult,
+    executionTimeMs: elapsed,
+    database: currentDb,
+    logs: executionLogs,
+  };
 }
 
 /**
