@@ -87,6 +87,7 @@ const initialState = {
   hintLevel: 1,
   config: getConfig(),
   cursorPosition: { line: 1, column: 1 },
+  selectedCode: null,
 };
 
 function saveStateToStorage(files, activeFileId, stdin) {
@@ -311,6 +312,8 @@ function reducer(state, action) {
       return { ...state, currentHint: action.payload, hintLevel: action.payload.level };
     case 'SET_HINT_LEVEL':
       return { ...state, hintLevel: action.payload };
+    case 'SET_SELECTION':
+      return { ...state, selectedCode: action.payload };
     case 'TOGGLE_SETTINGS':
       return { ...state, settingsModalOpen: !state.settingsModalOpen };
     case 'UPDATE_CONFIG':
@@ -378,12 +381,24 @@ export function AppProvider({ children }) {
 
     try {
       const activeFile = state.files.find((f) => f.id === state.activeFileId) || state.files[0];
+      const isSql = activeFile.language?.id === 82;
+      const hasSelection = Boolean(state.selectedCode && state.selectedCode.trim());
+
+      // If user highlighted a query in SQL (or any code selection), run only that selection!
+      const codeToRun = hasSelection ? state.selectedCode.trim() : activeFile.content;
+
       const result = await executeCode(
-        activeFile.content,
+        codeToRun,
         activeFile.language.id,
         state.stdin,
         state.files
       );
+
+      // Add a friendly indicator if selection was executed
+      if (hasSelection && result && result.success) {
+        const previewSnippet = codeToRun.length > 50 ? codeToRun.slice(0, 50) + '...' : codeToRun;
+        result.output = `⚡ Executed Selection: [${previewSnippet.replace(/\n/g, ' ')}]\n\n` + (result.output || '');
+      }
 
       dispatch({ type: 'SET_OUTPUT', payload: result });
     } catch (err) {
@@ -400,7 +415,7 @@ export function AppProvider({ children }) {
         },
       });
     }
-  }, [state.files, state.activeFileId, state.stdin]);
+  }, [state.files, state.activeFileId, state.stdin, state.selectedCode]);
 
   const handleExplainError = useCallback(async () => {
     const activeFile = state.files.find((f) => f.id === state.activeFileId) || state.files[0];

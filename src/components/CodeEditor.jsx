@@ -73,6 +73,24 @@ export default function CodeEditor() {
       });
     });
 
+    // Track text selection (for Run Selection on SQL)
+    editor.onDidChangeCursorSelection((e) => {
+      const selection = editor.getSelection();
+      const model = editor.getModel();
+      if (selection && model && !selection.isEmpty()) {
+        const selectedText = model.getValueInRange(selection);
+        dispatch({
+          type: 'SET_SELECTION',
+          payload: selectedText.trim() ? selectedText : null,
+        });
+      } else {
+        dispatch({
+          type: 'SET_SELECTION',
+          payload: null,
+        });
+      }
+    });
+
     // Focus editor
     editor.focus();
   }, [dispatch]);

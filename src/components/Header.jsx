@@ -1,13 +1,17 @@
+import { useState } from 'react';
 import { useApp } from '../context/AppContext';
-import { Play, Lightbulb, Settings, MessageSquare, Zap } from 'lucide-react';
+import { Play, Lightbulb, Settings, MessageSquare, Zap, Code } from 'lucide-react';
 import LanguageSelector from './LanguageSelector';
+import SnippetsModal from './SnippetsModal';
 import './Header.css';
 
 export default function Header() {
   const { state, dispatch, handleRunCode } = useApp();
   const { executionStatus, sidebarOpen } = state;
+  const [snippetsOpen, setSnippetsOpen] = useState(false);
 
   const isRunning = executionStatus === 'compiling' || executionStatus === 'running';
+  const hasSelection = Boolean(state.selectedCode && state.selectedCode.trim());
 
   return (
     <header className="header">
@@ -26,18 +30,27 @@ export default function Header() {
       <div className="header-right">
         <button
           className="btn-hint btn-ghost"
+          onClick={() => setSnippetsOpen(true)}
+          title="Browse Snippets Library (Ctrl+Shift+S)"
+        >
+          <Code size={15} />
+          <span>Snippets</span>
+        </button>
+
+        <button
+          className="btn-hint btn-ghost"
           onClick={() => dispatch({ type: 'TOGGLE_HINT_MODAL' })}
           title="Get a logic hint (Ctrl+Shift+H)"
         >
-          <Lightbulb size={16} />
+          <Lightbulb size={15} />
           <span>Hint</span>
         </button>
 
         <button
-          className={`btn-run ${isRunning ? 'running' : ''}`}
+          className={`btn-run ${isRunning ? 'running' : ''} ${hasSelection ? 'has-selection' : ''}`}
           onClick={handleRunCode}
           disabled={isRunning}
-          title="Run code (Ctrl+Enter)"
+          title={hasSelection ? "Run selected query only (Ctrl+Enter)" : "Run code (Ctrl+Enter)"}
         >
           {isRunning ? (
             <>
@@ -47,7 +60,7 @@ export default function Header() {
           ) : (
             <>
               <Play size={15} fill="currentColor" />
-              <span>Run</span>
+              <span>{hasSelection ? 'Run Selection' : 'Run'}</span>
             </>
           )}
         </button>
@@ -68,6 +81,9 @@ export default function Header() {
           <Settings size={18} />
         </button>
       </div>
+
+      {/* Snippets Modal */}
+      <SnippetsModal isOpen={snippetsOpen} onClose={() => setSnippetsOpen(false)} />
     </header>
   );
 }
