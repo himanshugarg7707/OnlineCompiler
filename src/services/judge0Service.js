@@ -6,6 +6,7 @@
 import { getConfig } from './configService';
 import { executePythonInBrowser } from './pythonRunner';
 import { executeJavaScriptInBrowser } from './jsRunner';
+import { executeSqlInBrowser } from './sqlRunner';
 
 // Map our internal language IDs → Wandbox compiler names
 const WANDBOX_COMPILERS = {
@@ -65,23 +66,26 @@ export async function executeCode(code, languageId, stdin = '', allFiles = []) {
     return launchCssInBrowser(code, allFiles);
   }
 
-  // 5. SQL — High-performance execution via Backend Multi-Database Engine
+  // 5. SQL — Instant In-Browser & Persistent Multi-Database SQL Engine
   if (languageId === 82) {
+    try {
+      const result = await executeSqlInBrowser(code);
+      if (result) return result;
+    } catch (err) {
+      console.warn('In-browser SQL error, trying backend API:', err.message);
+    }
+
     try {
       const response = await fetch('/api/execute', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code, languageId: 82, database: 'ecommerce_db' }),
+        body: JSON.stringify({ code, languageId: 82 }),
       });
       if (response.ok) {
         const result = await response.json();
-        if (result && !result.useClientRunner) {
-          return result;
-        }
+        if (result && !result.useClientRunner) return result;
       }
-    } catch (err) {
-      console.warn('Backend SQL execution unavailable, falling back to Wandbox:', err.message);
-    }
+    } catch {}
   }
 
   // 6. Cloud Compiled Languages via Wandbox
