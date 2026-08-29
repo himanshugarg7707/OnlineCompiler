@@ -17,6 +17,86 @@
   z-index: 10;
 }
 
+/* ─── Left File Explorer Sidebar Container ────────────────────────────── */
+
+.explorer-container {
+  height: 100%;
+  display: flex;
+  overflow: hidden;
+  min-width: 160px;
+  max-width: 450px;
+  position: relative;
+  z-index: 15;
+}
+
+.practice-container {
+  height: 100%;
+  display: flex;
+  overflow: hidden;
+  min-width: 240px;
+  max-width: 650px;
+  position: relative;
+  z-index: 15;
+}
+
+/* ─── Draggable Horizontal Resizer (File Explorer width) ──────────────── */
+
+.horizontal-resizer {
+  width: 6px;
+  min-width: 6px;
+  background: var(--bg-secondary);
+  border-left: 1px solid var(--border-primary);
+  border-right: 1px solid var(--border-primary);
+  cursor: col-resize;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  z-index: 20;
+  user-select: none;
+  transition: background var(--transition-fast), border-color var(--transition-fast);
+}
+
+.horizontal-resizer:hover,
+.horizontal-resizer.dragging {
+  background: rgba(0, 212, 255, 0.15);
+  border-color: var(--accent-cyan);
+}
+
+[data-theme="baby-pink"] .horizontal-resizer:hover,
+[data-theme="baby-pink"] .horizontal-resizer.dragging {
+  background: rgba(236, 72, 153, 0.2);
+  border-color: var(--accent-cyan);
+}
+
+.horizontal-resizer-handle {
+  width: 2px;
+  height: 32px;
+  border-radius: var(--radius-full);
+  background: var(--border-secondary);
+  transition: all var(--transition-fast);
+}
+
+.horizontal-resizer:hover .horizontal-resizer-handle,
+.horizontal-resizer.dragging .horizontal-resizer-handle {
+  background: var(--accent-cyan);
+  height: 48px;
+  box-shadow: 0 0 8px var(--accent-cyan);
+}
+
+/* While resizing horizontally */
+body.resizing-horizontal {
+  user-select: none !important;
+  cursor: col-resize !important;
+}
+
+body.resizing-horizontal * {
+  user-select: none !important;
+  cursor: col-resize !important;
+}
+
+/* ─── Main Content (Editor + Terminal) ────────────────────────────────── */
+
 .main-content {
   flex: 1;
   display: flex;
@@ -40,7 +120,7 @@
   position: relative;
 }
 
-/* ─── Draggable Split Resizer ────────────────────────────────────────── */
+/* ─── Draggable Vertical Split Resizer (Editor vs Output) ─────────────── */
 
 .split-resizer {
   height: 8px;
@@ -64,6 +144,12 @@
   border-color: var(--accent-cyan);
 }
 
+[data-theme="baby-pink"] .split-resizer:hover,
+[data-theme="baby-pink"] .split-resizer.dragging {
+  background: rgba(236, 72, 153, 0.2);
+  border-color: var(--accent-cyan);
+}
+
 .resizer-handle {
   width: 36px;
   height: 3px;
@@ -79,7 +165,7 @@
   box-shadow: 0 0 8px var(--accent-cyan);
 }
 
-/* While resizing, prevent selection and set global resize cursor */
+/* While resizing vertically */
 body.resizing-vertical {
   user-select: none !important;
   cursor: row-resize !important;
@@ -90,7 +176,51 @@ body.resizing-vertical * {
   cursor: row-resize !important;
 }
 
+/* ─── Floating Toast Notification ──────────────────────────────────────── */
+
+.toast-notification {
+  position: fixed;
+  bottom: 40px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 8px 18px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-accent);
+  border-radius: var(--radius-full);
+  color: var(--text-primary);
+  font-size: var(--fs-xs);
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  box-shadow: var(--shadow-lg), 0 0 20px rgba(0, 212, 255, 0.25);
+  z-index: 9999;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  pointer-events: none;
+  animation: toastPop 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+[data-theme="baby-pink"] .toast-notification {
+  background: #ffffff;
+  border-color: var(--accent-cyan);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-lg), 0 0 24px rgba(236, 72, 153, 0.3);
+}
+
+@keyframes toastPop {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, 14px) scale(0.95);
+  }
+  100% {
+    opacity: 1;
+    transform: translate(-50%, 0) scale(1);
+  }
+}
+
 /* ─── Ambient Background Effect ────────────────────────────────────────── */
+
 .app-container::before {
   content: '';
   position: fixed;
@@ -110,6 +240,27 @@ body.resizing-vertical * {
   );
   pointer-events: none;
   z-index: 0;
+}
+
+[data-theme="baby-pink"] .app-container::before {
+  background: radial-gradient(
+    ellipse at 20% 50%,
+    rgba(244, 114, 182, 0.08) 0%,
+    transparent 50%
+  ),
+  radial-gradient(
+    ellipse at 80% 50%,
+    rgba(236, 72, 153, 0.08) 0%,
+    transparent 50%
+  );
+}
+
+
+
+/* In Focus Mode Adjustments */
+.in-focus-mode .main-content {
+  border-left: none;
+  border-right: none;
 }
 
 .app-container > * {

@@ -447,6 +447,22 @@ const LANGUAGE_PATTERNS = [
     ],
     weight: 1.25,
   },
+  {
+    id: 99,
+    name: 'Notes & Text',
+    monacoLanguage: 'markdown',
+    icon: '📝',
+    patterns: [
+      /^#\s+/m,
+      /^##\s+/m,
+      /^-\s+/m,
+      /^\*\s+/m,
+      /^\d+\.\s+/m,
+      /\*\*.*\*\*/,
+      /\[.*\]\(.*\)/,
+    ],
+    weight: 0.5,
+  },
 ];
 
 const DEFAULT_LANGUAGE = {
@@ -537,450 +553,110 @@ export function detectLanguage(code) {
  */
 export function getStarterTemplate(languageId) {
   const templates = {
-    71: `# Welcome to CodeForge AI! 🚀
-# Start typing your Python code here...
-
-n = int(input())
-matrix = []
-for i in range(n):
-    row = list(map(int, input().split()))
-    matrix.append(row)
-
-# Print the matrix
-for row in matrix:
-    print(' '.join(map(str, row)))
+    71: `# Start here
 `,
-    54: `// Welcome to CodeForge AI! 🚀
-// Start typing your C++ code here...
-
-#include <iostream>
-#include <vector>
+    54: `#include <iostream>
 using namespace std;
 
 int main() {
-    int n;
-    cin >> n;
-    
-    vector<vector<int>> matrix(n, vector<int>(n));
-    for (int i = 0; i < n; i++)
-        for (int j = 0; j < n; j++)
-            cin >> matrix[i][j];
-    
-    for (int i = 0; i < n; i++) {
-        for (int j = 0; j < n; j++)
-            cout << matrix[i][j] << " ";
-        cout << endl;
-    }
+    // Start here
     
     return 0;
 }
 `,
-    50: `/* Welcome to CodeForge AI! 🚀 */
-/* Start typing your C code here... */
-
-#include <stdio.h>
+    50: `#include <stdio.h>
 
 int main() {
-    int n;
-    scanf("%d", &n);
-    
-    int matrix[100][100];
-    for (int i = 0; i < n; i++)
-        for (int j = 0; j < n; j++)
-            scanf("%d", &matrix[i][j]);
-    
-    for (int i = 0; i < n; i++) {
-        for (int j = 0; j < n; j++)
-            printf("%d ", matrix[i][j]);
-        printf("\\n");
-    }
+    // Start here
     
     return 0;
 }
 `,
-    62: `// Welcome to CodeForge AI! 🚀
-// Start typing your Java code here...
+    62: `import java.util.*;
 
-import java.util.Scanner;
-
-public class Main {
+class Main {
     public static void main(String[] args) {
-        Scanner sc = new Scanner(System.in);
-        int n = sc.nextInt();
+        // Start here
         
-        int[][] matrix = new int[n][n];
-        for (int i = 0; i < n; i++)
-            for (int j = 0; j < n; j++)
-                matrix[i][j] = sc.nextInt();
+    }
+}
+`,
+    63: `// Start here
+`,
+    74: `// Start here
+`,
+    51: `using System;
+
+class Program {
+    static void Main(string[] args) {
+        // Start here
         
-        for (int i = 0; i < n; i++) {
-            for (int j = 0; j < n; j++)
-                System.out.print(matrix[i][j] + " ");
-            System.out.println();
-        }
     }
 }
 `,
-    63: `// Welcome to CodeForge AI! 🚀
-// Start typing your JavaScript code here...
-
-const readline = require('readline');
-const rl = readline.createInterface({ input: process.stdin });
-
-const lines = [];
-rl.on('line', (line) => lines.push(line.trim()));
-rl.on('close', () => {
-    const n = parseInt(lines[0]);
-    const matrix = [];
-    for (let i = 1; i <= n; i++) {
-        matrix.push(lines[i].split(' ').map(Number));
-    }
-    matrix.forEach(row => console.log(row.join(' ')));
-});
-`,
-    74: `// Welcome to CodeForge AI! 🚀
-// Start typing your TypeScript code here...
-
-interface Matrix {
-    rows: number;
-    cols: number;
-    data: number[][];
-}
-
-function createMatrix(rows: number, cols: number): Matrix {
-    const data: number[][] = Array.from({ length: rows }, () =>
-        Array.from({ length: cols }, () => Math.floor(Math.random() * 100))
-    );
-    return { rows, cols, data };
-}
-
-function printMatrix(matrix: Matrix): void {
-    matrix.data.forEach(row => {
-        console.log(row.join('\\t'));
-    });
-}
-
-const m: Matrix = createMatrix(4, 4);
-console.log(\`Matrix (\${m.rows}x\${m.cols}):\`);
-printMatrix(m);
-`,
-    51: `// Welcome to CodeForge AI! 🚀
-// Start typing your C# code here...
-
-using System;
-using System.Collections.Generic;
-
-namespace CodeForge
-{
-    class Program
-    {
-        static void Main(string[] args)
-        {
-            int n = int.Parse(Console.ReadLine());
-            int[,] matrix = new int[n, n];
-            
-            for (int i = 0; i < n; i++)
-            {
-                string[] row = Console.ReadLine().Split(' ');
-                for (int j = 0; j < n; j++)
-                    matrix[i, j] = int.Parse(row[j]);
-            }
-            
-            for (int i = 0; i < n; i++)
-            {
-                for (int j = 0; j < n; j++)
-                    Console.Write(matrix[i, j] + " ");
-                Console.WriteLine();
-            }
-        }
-    }
-}
-`,
-    78: `// Welcome to CodeForge AI! 🚀
-// Start typing your Kotlin code here...
-
-fun main() {
-    val n = readLine()!!.trim().toInt()
-    val matrix = Array(n) { IntArray(n) }
+    78: `fun main() {
+    // Start here
     
-    for (i in 0 until n) {
-        val row = readLine()!!.trim().split(" ").map { it.toInt() }
-        for (j in 0 until n) {
-            matrix[i][j] = row[j]
-        }
-    }
-    
-    for (row in matrix) {
-        println(row.joinToString(" "))
-    }
 }
 `,
-    83: `// Welcome to CodeForge AI! 🚀
-// Start typing your Swift code here...
+    83: `import Foundation
 
-import Foundation
-
-let n = Int(readLine()!)!
-var matrix = [[Int]]()
-
-for _ in 0..<n {
-    let row = readLine()!.split(separator: " ").map { Int($0)! }
-    matrix.append(row)
-}
-
-for row in matrix {
-    print(row.map { String($0) }.joined(separator: " "))
-}
+// Start here
 `,
-    60: `// Welcome to CodeForge AI! 🚀
-// Start typing your Go code here...
-
-package main
+    60: `package main
 
 import "fmt"
 
 func main() {
-    var n int
-    fmt.Scan(&n)
+    // Start here
     
-    matrix := make([][]int, n)
-    for i := 0; i < n; i++ {
-        matrix[i] = make([]int, n)
-        for j := 0; j < n; j++ {
-            fmt.Scan(&matrix[i][j])
-        }
-    }
-    
-    for i := 0; i < n; i++ {
-        for j := 0; j < n; j++ {
-            fmt.Printf("%d ", matrix[i][j])
-        }
-        fmt.Println()
-    }
 }
 `,
-    73: `// Welcome to CodeForge AI! 🚀
-// Start typing your Rust code here...
-
-use std::io::{self, BufRead};
-
-fn main() {
-    let stdin = io::stdin();
-    let mut lines = stdin.lock().lines();
+    73: `fn main() {
+    // Start here
     
-    let n: usize = lines.next().unwrap().unwrap().trim().parse().unwrap();
-    let mut matrix = vec![vec![0i32; n]; n];
-    
-    for i in 0..n {
-        let line = lines.next().unwrap().unwrap();
-        let nums: Vec<i32> = line.trim().split_whitespace()
-            .map(|x| x.parse().unwrap())
-            .collect();
-        matrix[i] = nums;
-    }
-    
-    for row in &matrix {
-        let s: Vec<String> = row.iter().map(|x| x.to_string()).collect();
-        println!("{}", s.join(" "));
-    }
 }
 `,
     68: `<?php
-// Welcome to CodeForge AI! 🚀
-// Start typing your PHP code here...
-
-$n = intval(trim(fgets(STDIN)));
-$matrix = [];
-
-for ($i = 0; $i < $n; $i++) {
-    $row = array_map('intval', explode(' ', trim(fgets(STDIN))));
-    $matrix[] = $row;
-}
-
-foreach ($matrix as $row) {
-    echo implode(' ', $row) . "\\n";
-}
-?>
+// Start here
 `,
-    72: `# Welcome to CodeForge AI! 🚀
-# Start typing your Ruby code here...
-
-n = gets.to_i
-matrix = []
-
-n.times do
-  row = gets.split.map(&:to_i)
-  matrix << row
-end
-
-matrix.each do |row|
-  puts row.join(' ')
-end
+    72: `# Start here
 `,
-    80: `# Welcome to CodeForge AI! 🚀
-# Start typing your R code here...
-
-n <- as.integer(readline())
-matrix_data <- c()
-
-for (i in 1:n) {
-  row <- as.integer(strsplit(readline(), " ")[[1]])
-  matrix_data <- c(matrix_data, row)
-}
-
-mat <- matrix(matrix_data, nrow = n, byrow = TRUE)
-print(mat)
+    80: `# Start here
 `,
-    85: `#!/usr/bin/perl
-# Welcome to CodeForge AI! 🚀
-# Start typing your Perl code here...
-
-use strict;
+    85: `use strict;
 use warnings;
 
-my $n = <STDIN>;
-chomp $n;
-
-my @matrix;
-for my $i (0..$n-1) {
-    my $line = <STDIN>;
-    chomp $line;
-    push @matrix, [split /\\s+/, $line];
-}
-
-foreach my $row (@matrix) {
-    print join(' ', @$row), "\\n";
-}
+# Start here
 `,
-    81: `// Welcome to CodeForge AI! 🚀
-// Start typing your Scala code here...
-
-object Main extends App {
-    val n = scala.io.StdIn.readInt()
-    val matrix = Array.ofDim[Int](n, n)
+    81: `object Main extends App {
+    // Start here
     
-    for (i <- 0 until n) {
-        val row = scala.io.StdIn.readLine().split(" ").map(_.toInt)
-        for (j <- 0 until n) {
-            matrix(i)(j) = row(j)
-        }
-    }
-    
-    for (row <- matrix) {
-        println(row.mkString(" "))
-    }
 }
 `,
-    82: `-- Welcome to CodeForge AI! 🚀
--- Start typing your SQL code here...
-
-CREATE TABLE IF NOT EXISTS students (
-    id INTEGER PRIMARY KEY,
-    name TEXT NOT NULL,
-    grade INTEGER,
-    score REAL
-);
-
-INSERT INTO students (name, grade, score) VALUES
-    ('Alice', 10, 95.5),
-    ('Bob', 10, 88.2),
-    ('Charlie', 11, 91.7),
-    ('Diana', 11, 97.3),
-    ('Eve', 10, 82.1);
-
-SELECT name, grade, score
-FROM students
-WHERE score > 85
-ORDER BY score DESC;
+    82: `-- Start here
 `,
-    0: `<!-- Welcome to CodeForge AI! 🚀 -->
-<!-- Start typing your HTML code here... -->
-
-<!DOCTYPE html>
+    0: `<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>My Page</title>
-    <style>
-        body {
-            font-family: 'Segoe UI', sans-serif;
-            background: #0d1117;
-            color: #e6edf3;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-        }
-        .card {
-            background: #161b22;
-            padding: 2rem;
-            border-radius: 12px;
-            border: 1px solid #30363d;
-            max-width: 400px;
-            text-align: center;
-        }
-        h1 { color: #00d4ff; }
-        p { color: #8b949e; }
-    </style>
 </head>
 <body>
-    <div class="card">
-        <h1>Hello, World!</h1>
-        <p>Built with CodeForge AI ⚡</p>
-    </div>
+    <!-- Start here -->
+    
 </body>
 </html>
 `,
-    1: `/* Welcome to CodeForge AI! 🚀 */
-/* Start typing your CSS code here... */
+    1: `/* Start here */
+`,
+    99: `# 📝 Notes & Documentation
 
-:root {
-    --primary: #00d4ff;
-    --bg-dark: #0d1117;
-    --bg-card: #161b22;
-    --text: #e6edf3;
-    --text-muted: #8b949e;
-    --border: #30363d;
-    --radius: 12px;
-}
+Write your notes, explanations, ideas, or documentation here...
 
-* {
-    margin: 0;
-    padding: 0;
-    box-sizing: border-box;
-}
-
-body {
-    font-family: 'Inter', sans-serif;
-    background: var(--bg-dark);
-    color: var(--text);
-    min-height: 100vh;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-}
-
-.container {
-    max-width: 1200px;
-    padding: 2rem;
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-    gap: 1.5rem;
-}
-
-.card {
-    background: var(--bg-card);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    padding: 1.5rem;
-    transition: transform 0.2s, box-shadow 0.2s;
-}
-
-.card:hover {
-    transform: translateY(-4px);
-    box-shadow: 0 8px 32px rgba(0, 212, 255, 0.15);
-}
+- Note 1: 
+- Note 2: 
 `,
   };
 
@@ -1047,6 +723,13 @@ const EXTENSION_MAP = {
   html: 0,
   htm: 0,
   css: 1,
+  txt: 99,
+  text: 99,
+  notes: 99,
+  note: 99,
+  md: 99,
+  markdown: 99,
+  log: 99,
 };
 
 const DEFAULT_EXTENSIONS = {
@@ -1069,6 +752,7 @@ const DEFAULT_EXTENSIONS = {
   82: 'query.sql',
   0: 'index.html',
   1: 'styles.css',
+  99: 'notes.txt',
 };
 
 /**

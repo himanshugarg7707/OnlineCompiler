@@ -3,7 +3,7 @@ import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.jsx'
 
-document.title = 'CodeForge AI — AI-Powered Online Compiler';
+document.title = 'Full Code — Online Compiler & IDE';
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>

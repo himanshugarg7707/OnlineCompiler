@@ -4,12 +4,15 @@
 const CONFIG_KEY = 'codeforge_config';
 
 const DEFAULT_CONFIG = {
-  // API Keys
+  // Theme settings ('dark' | 'baby-pink' | 'cyberpunk' | 'monokai' | 'light' | 'nord')
+  theme: 'dark',
+
+  // API Keys (Optional)
   claudeApiKey: '',
   judge0ApiKey: '',
   judge0Host: 'judge0-ce.p.rapidapi.com',
 
-  // Mode toggles
+  // Mode toggles (MockAI true enables instant built-in zero-key AI tutor)
   mockAI: true,
   mockExecution: false,
 
@@ -20,6 +23,8 @@ const DEFAULT_CONFIG = {
 
   // UI settings
   sidebarOpen: false,
+  explorerOpen: true,
+  explorerWidth: 240,
 };
 
 /**

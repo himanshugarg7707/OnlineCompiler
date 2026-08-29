@@ -1,0 +1,603 @@
+/* ─── File Explorer Component ─────────────────────────────────────────── */
+
+.file-explorer {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+  background: var(--bg-secondary);
+  border-right: 1px solid var(--border-primary);
+  overflow: hidden;
+  user-select: none;
+  position: relative;
+  z-index: 15;
+}
+
+/* Header */
+.explorer-header {
+  height: 40px;
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 8px 0 12px;
+  border-bottom: 1px solid var(--border-primary);
+  background: rgba(0, 0, 0, 0.1);
+}
+
+.explorer-title-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.explorer-title-icon {
+  color: var(--accent-cyan);
+}
+
+.explorer-title {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+}
+
+.explorer-count {
+  font-size: 10px;
+  padding: 1px 5px;
+  border-radius: var(--radius-full);
+  background: var(--bg-tertiary);
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.explorer-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.explorer-action-btn,
+.btn-icon-xs {
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text-muted);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.explorer-action-btn:hover,
+.btn-icon-xs:hover {
+  background: var(--bg-tertiary);
+  border-color: var(--border-primary);
+  color: var(--accent-cyan);
+}
+
+.explorer-action-btn.highlight {
+  color: var(--accent-cyan);
+}
+
+.explorer-action-btn.highlight:hover {
+  background: rgba(0, 212, 255, 0.15);
+  color: var(--text-primary);
+}
+
+.explorer-action-btn.collapse:hover {
+  color: var(--accent-cyan);
+}
+
+/* Search Box */
+.explorer-search {
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border-primary);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(0, 0, 0, 0.05);
+}
+
+.explorer-search .search-icon {
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.explorer-search-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  font-size: 12px;
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+}
+
+.explorer-search-input::placeholder {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.btn-clear-search {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-clear-search:hover {
+  color: var(--text-primary);
+}
+
+/* Files & Folders List */
+.explorer-files-list {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 4px 0;
+}
+
+/* Folder Node Hierarchy */
+.explorer-folder-node {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+.explorer-folder-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 5px 8px;
+  cursor: pointer;
+  position: relative;
+  transition: background var(--transition-fast);
+  color: var(--text-primary);
+  font-size: 12px;
+  user-select: none;
+  border-radius: var(--radius-xs);
+  margin: 1px 4px;
+}
+
+.explorer-folder-header:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+[data-theme="baby-pink"] .explorer-folder-header:hover {
+  background: rgba(244, 114, 182, 0.15);
+}
+
+.folder-header-left {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  flex: 1;
+}
+
+.folder-header-right {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 6px;
+  flex-shrink: 0;
+}
+
+.folder-chevron {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  width: 14px;
+  flex-shrink: 0;
+}
+
+.folder-icon {
+  color: var(--accent-purple);
+  flex-shrink: 0;
+}
+
+.folder-icon.open {
+  color: var(--accent-cyan);
+}
+
+[data-theme="baby-pink"] .folder-icon {
+  color: #ec4899;
+}
+
+[data-theme="baby-pink"] .folder-icon.open {
+  color: #f43f5e;
+}
+
+.folder-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.folder-badge {
+  font-size: 9px;
+  padding: 1px 5px;
+  border-radius: var(--radius-full);
+  background: var(--bg-tertiary);
+  color: var(--text-muted);
+  font-weight: 600;
+  border: 1px solid var(--border-primary);
+}
+
+.folder-actions {
+  display: none;
+  align-items: center;
+  gap: 2px;
+}
+
+.explorer-folder-header:hover .folder-actions {
+  display: flex;
+}
+
+.explorer-folder-header:hover .folder-badge {
+  display: none;
+}
+
+.folder-children-group {
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  border-left: 1px solid rgba(255, 255, 255, 0.06);
+  margin-left: 14px;
+}
+
+[data-theme="baby-pink"] .folder-children-group {
+  border-left-color: rgba(244, 114, 182, 0.25);
+}
+
+.explorer-empty-folder-hint {
+  padding: 4px 8px;
+  font-size: 10.5px;
+  color: var(--text-muted);
+  font-style: italic;
+  cursor: pointer;
+  opacity: 0.7;
+}
+
+.explorer-empty-folder-hint:hover {
+  opacity: 1;
+  color: var(--accent-cyan);
+}
+
+/* File Item Row */
+.explorer-file-item {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 10px 6px 14px;
+  cursor: pointer;
+  position: relative;
+  transition: background var(--transition-fast);
+  color: var(--text-secondary);
+  font-size: 12.5px;
+  font-family: var(--font-mono);
+}
+
+.explorer-file-item.child {
+  padding-left: 10px;
+}
+
+.explorer-file-item:hover {
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-primary);
+}
+
+[data-theme="baby-pink"] .explorer-file-item:hover {
+  background: rgba(244, 114, 182, 0.15);
+}
+
+.explorer-file-item.active {
+  background: rgba(0, 212, 255, 0.1);
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+[data-theme="baby-pink"] .explorer-file-item.active {
+  background: rgba(236, 72, 153, 0.18);
+  color: var(--text-primary);
+}
+
+.explorer-file-item.active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: var(--accent-cyan);
+  border-radius: 0 2px 2px 0;
+}
+
+.file-icon {
+  font-size: 13.5px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.file-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.active-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent-cyan);
+  box-shadow: 0 0 6px var(--accent-cyan);
+  flex-shrink: 0;
+}
+
+/* Item Action Buttons on hover */
+.file-item-actions {
+  display: none;
+  align-items: center;
+  gap: 2px;
+  margin-left: auto;
+}
+
+.explorer-file-item:hover .file-item-actions {
+  display: flex;
+}
+
+.file-action-btn {
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.file-action-btn:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+.file-action-btn.danger:hover {
+  color: var(--accent-red);
+  background: rgba(248, 81, 73, 0.15);
+}
+
+/* Inline Edit / Add Inputs */
+.file-rename-container {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 1;
+}
+
+.file-rename-input,
+.file-add-input,
+.folder-add-input {
+  flex: 1;
+  background: var(--bg-primary);
+  border: 1px solid var(--accent-cyan);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: 12px;
+  font-family: var(--font-mono);
+  padding: 2px 6px;
+  outline: none;
+  box-shadow: 0 0 6px rgba(0, 212, 255, 0.3);
+}
+
+.btn-confirm-rename {
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent-cyan);
+  color: #000;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.explorer-file-item.adding,
+.explorer-folder-item.adding {
+  background: rgba(0, 212, 255, 0.06);
+  padding: 5px 10px;
+}
+
+.adding-icon {
+  color: var(--accent-cyan);
+  flex-shrink: 0;
+}
+
+/* Empty State */
+.explorer-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 16px;
+  color: var(--text-muted);
+  text-align: center;
+  cursor: pointer;
+  border: 1px dashed var(--border-primary);
+  margin: 12px;
+  border-radius: var(--radius-md);
+  transition: all var(--transition-fast);
+}
+
+.explorer-empty:hover {
+  border-color: var(--accent-cyan);
+  color: var(--text-primary);
+  background: rgba(0, 212, 255, 0.04);
+}
+
+.explorer-empty p {
+  font-size: 12px;
+  font-weight: 600;
+  margin-top: 8px;
+}
+
+.explorer-empty span {
+  font-size: 11px;
+  margin-top: 2px;
+}
+
+/* Footer with New File & ZIP Workset */
+.explorer-footer {
+  padding: 8px 10px;
+  border-top: 1px solid var(--border-primary);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: rgba(0, 0, 0, 0.08);
+}
+
+.explorer-footer-buttons {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.btn-new-file-bottom,
+.btn-new-note-bottom,
+.btn-new-folder-bottom,
+.btn-download-workspace {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 6px 8px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: 11.5px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  flex: 1;
+  white-space: nowrap;
+}
+
+.btn-new-file-bottom:hover {
+  background: var(--accent-cyan);
+  border-color: var(--accent-cyan);
+  color: #000;
+  font-weight: 600;
+}
+
+.btn-new-note-bottom {
+  color: #f59e0b;
+  border-color: rgba(245, 158, 11, 0.3);
+}
+
+.btn-new-note-bottom:hover {
+  background: #f59e0b;
+  border-color: #f59e0b;
+  color: #000;
+  font-weight: 600;
+}
+
+.btn-new-folder-bottom {
+  color: var(--accent-purple);
+  border-color: rgba(180, 128, 255, 0.3);
+}
+
+.btn-new-folder-bottom:hover {
+  background: var(--accent-purple);
+  border-color: var(--accent-purple);
+  color: #fff;
+  font-weight: 600;
+}
+
+.btn-download-workspace {
+  border-color: rgba(0, 212, 255, 0.3);
+  color: var(--accent-cyan);
+}
+
+.btn-download-workspace:hover {
+  background: rgba(0, 212, 255, 0.15);
+  border-color: var(--accent-cyan);
+  color: var(--text-primary);
+}
+
+.explorer-hint {
+  font-size: 9.5px;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+/* Import buttons row */
+.explorer-footer-buttons.import-row {
+  border-top: 1px solid var(--border-primary);
+  padding-top: 6px;
+}
+
+.btn-import-file,
+.btn-import-folder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 6px 8px;
+  background: transparent;
+  border: 1px dashed var(--border-secondary);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  flex: 1;
+  white-space: nowrap;
+}
+
+.btn-import-file:hover {
+  background: rgba(0, 212, 255, 0.1);
+  border-color: var(--accent-cyan);
+  border-style: solid;
+  color: var(--accent-cyan);
+}
+
+.btn-import-folder:hover {
+  background: rgba(180, 128, 255, 0.1);
+  border-color: var(--accent-purple);
+  border-style: solid;
+  color: var(--accent-purple);
+}
+
+[data-theme="baby-pink"] .btn-import-folder:hover {
+  background: rgba(236, 72, 153, 0.1);
+  border-color: var(--accent-cyan);
+  color: var(--accent-cyan);
+}
+
+.file-lock-badge {
+  color: var(--accent-red);
+  margin-left: 4px;
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+}

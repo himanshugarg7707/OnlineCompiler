@@ -8,11 +8,15 @@ import { getConfig } from './configService';
 export async function explainError(code, error, language) {
   const config = getConfig();
 
-  if (config.mockAI) {
-    return mockExplainError(code, error, language);
+  if (!config.mockAI && config.claudeApiKey) {
+    try {
+      return await realAICall('explain_error', { code, error, language }, config);
+    } catch (err) {
+      console.warn('Real AI call failed, falling back to built-in tutor:', err);
+    }
   }
 
-  return realAICall('explain_error', { code, error, language }, config);
+  return mockExplainError(code, error, language);
 }
 
 function mockExplainError(code, error, language) {
