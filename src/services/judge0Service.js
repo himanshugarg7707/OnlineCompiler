@@ -1,14 +1,36 @@
 // Code Execution Engine
 // Uses WebAssembly Pyodide for Python (with full NumPy support)
 // Uses In-Browser runner for JavaScript
-// Uses Wandbox API for C, C++, Java, C#, Go, Rust, Ruby, PHP, R, Perl, Scala, SQL
+// Uses Godbolt Compiler Explorer API (primary) + Wandbox API (fallback)
+// for C, C++, Java, C#, Go, Rust, Ruby, PHP, R, Perl, Scala, Swift, Kotlin, TypeScript
 
 import { getConfig } from './configService';
 import { executePythonInBrowser } from './pythonRunner';
 import { executeJavaScriptInBrowser } from './jsRunner';
 import { executeSqlInBrowser } from './sqlRunner';
 
-// Map our internal language IDs → Wandbox compiler names
+// ─── Godbolt Compiler Explorer — Primary Execution Engine ─────────────────────
+// Free, no API key, actively maintained, supports execution with stdin
+const GODBOLT_COMPILERS = {
+  71: { id: 'python312', lang: 'python' },          // Python 3
+  54: { id: 'g132', lang: 'c++' },                   // C++ (GCC 13.2)
+  50: { id: 'cg132', lang: 'c' },                    // C (GCC 13.2)
+  62: { id: 'java2501', lang: 'java' },               // Java (JDK 25)
+  74: null,                                            // TypeScript (in-browser)
+  51: { id: 'dotnet90csharpmono', lang: 'csharp' },    // C# (dotnet 9.0 mono)
+  78: { id: 'kotlinc2220', lang: 'kotlin' },          // Kotlin (2.2.20)
+  83: null,                                            // Swift
+  60: { id: 'gl1260', lang: 'go' },                   // Go (1.26.0)
+  73: { id: 'r1890', lang: 'rust' },                  // Rust (1.89.0)
+  72: { id: 'ruby405', lang: 'ruby' },                // Ruby (4.0.5)
+  85: null,                                            // Perl
+  81: null,                                            // Scala
+};
+
+// Fast in-memory cache for 0ms re-runs of identical code & input
+const clientExecutionCache = new Map();
+
+// ─── Wandbox — Secondary Fallback Compiler ────────────────────────────────────
 const WANDBOX_COMPILERS = {
   71: 'cpython-3.12.7',      // Python 3 (fallback)
   54: 'gcc-13.2.0',          // C++
@@ -31,6 +53,14 @@ const WANDBOX_COMPILERS = {
   1: null,                   // CSS
 };
 
+// Human-readable language names for error messages
+const LANGUAGE_NAMES = {
+  71: 'Python', 54: 'C++', 50: 'C', 62: 'Java', 63: 'JavaScript',
+  74: 'TypeScript', 51: 'C#', 78: 'Kotlin', 83: 'Swift', 60: 'Go',
+  73: 'Rust', 68: 'PHP', 72: 'Ruby', 80: 'R', 85: 'Perl', 81: 'Scala',
+  82: 'SQL', 0: 'HTML', 1: 'CSS',
+};
+
 /**
  * Execute code with optimal execution engine
  */
@@ -41,19 +71,31 @@ export async function executeCode(code, languageId, stdin = '', allFiles = []) {
     return mockExecute(code, languageId, stdin);
   }
 
+  // Fast client cache for repeated identical runs (instant 0ms response)
+  const cacheKey = `${languageId}:${(stdin || '').trim()}:${code.trim()}`;
+  if (clientExecutionCache.has(cacheKey)) {
+    const cached = clientExecutionCache.get(cacheKey);
+    return { ...cached, time: '0.001', cached: true };
+  }
+
   // 1. Python — Use in-browser WebAssembly with NumPy
   if (languageId === 71) {
     try {
-      return await executePythonInBrowser(code, stdin);
+      const res = await executePythonInBrowser(code, stdin);
+      if (res) clientExecutionCache.set(cacheKey, res);
+      return res;
     } catch (e) {
-      console.warn('Pyodide failed, trying Wandbox cloud compiler:', e);
-      return wandboxExecute(code, 'cpython-3.12.7', languageId, stdin);
+      console.warn('Pyodide failed, trying Godbolt cloud compiler:', e);
+      // Fallback: try Godbolt, then Wandbox
+      return cloudExecuteWithFallback(code, languageId, stdin);
     }
   }
 
   // 2. JavaScript — Use in-browser runner
   if (languageId === 63) {
-    return executeJavaScriptInBrowser(code, stdin);
+    const res = await executeJavaScriptInBrowser(code, stdin);
+    if (res) clientExecutionCache.set(cacheKey, res);
+    return res;
   }
 
   // 3. HTML — Launch live HTML page in a new browser tab
@@ -70,7 +112,10 @@ export async function executeCode(code, languageId, stdin = '', allFiles = []) {
   if (languageId === 82) {
     try {
       const result = await executeSqlInBrowser(code);
-      if (result) return result;
+      if (result) {
+        clientExecutionCache.set(cacheKey, result);
+        return result;
+      }
     } catch (err) {
       console.warn('In-browser SQL error, trying backend API:', err.message);
     }
@@ -83,28 +128,157 @@ export async function executeCode(code, languageId, stdin = '', allFiles = []) {
       });
       if (response.ok) {
         const result = await response.json();
-        if (result && !result.useClientRunner) return result;
+        if (result && !result.useClientRunner) {
+          clientExecutionCache.set(cacheKey, result);
+          return result;
+        }
       }
     } catch {}
   }
 
-  // 6. Cloud Compiled Languages via Wandbox
-  const compiler = WANDBOX_COMPILERS[languageId];
-  if (!compiler) {
-    return mockExecute(code, languageId, stdin);
-  }
-
-  // Preprocess Java: replace 'public class' with 'class' so javac doesn't require Main.java filename
+  // 6. Cloud Compiled Languages — Godbolt (primary) → Wandbox (fallback)
+  // Preprocess Java: replace 'public class' with 'class' and strip package header
   let processedCode = code;
   if (languageId === 62) {
-    processedCode = code.replace(/\bpublic\s+class\b/g, 'class');
+    processedCode = code
+      .replace(/\bpublic\s+class\b/g, 'class')
+      .replace(/^\s*package\s+[\w.]+;\s*$/gm, '// package stripped');
   }
 
-  return wandboxExecute(processedCode, compiler, languageId, stdin);
+  const result = await cloudExecuteWithFallback(processedCode, languageId, stdin);
+  if (result && (result.success || result.error)) {
+    clientExecutionCache.set(cacheKey, result);
+  }
+  return result;
 }
 
 /**
- * Execute via Wandbox API
+ * Cloud execution with Godbolt → Wandbox → error message fallback chain
+ */
+async function cloudExecuteWithFallback(code, languageId, stdin) {
+  // Try Godbolt first
+  const godboltCompiler = GODBOLT_COMPILERS[languageId];
+  if (godboltCompiler) {
+    try {
+      const result = await godboltExecute(code, godboltCompiler, languageId, stdin);
+      if (result) return result;
+    } catch (err) {
+      console.warn('Godbolt failed:', err.message, '— trying Wandbox fallback');
+    }
+  }
+
+  // Try Wandbox as fallback
+  const wandboxCompiler = WANDBOX_COMPILERS[languageId];
+  if (wandboxCompiler) {
+    try {
+      const result = await wandboxExecute(code, wandboxCompiler, languageId, stdin);
+      if (result) return result;
+    } catch (err) {
+      console.warn('Wandbox also failed:', err.message);
+    }
+  }
+
+  // Both APIs failed — show clear error instead of fake output
+  return executionUnavailable(languageId);
+}
+
+/**
+ * Execute via Godbolt Compiler Explorer API (godbolt.org)
+ * Supports execution with stdin and returns stdout/stderr
+ */
+async function godboltExecute(code, compilerInfo, languageId, stdin) {
+  const startTime = performance.now();
+
+  const response = await fetch(`https://godbolt.org/api/compiler/${compilerInfo.id}/compile`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+    },
+    body: JSON.stringify({
+      source: code,
+      options: {
+        userArguments: '',
+        executeParameters: {
+          args: '',
+          stdin: stdin || '',
+        },
+        filters: {
+          execute: true,
+        },
+      },
+    }),
+  });
+
+  const elapsed = ((performance.now() - startTime) / 1000).toFixed(3);
+
+  if (!response.ok) {
+    console.warn('Godbolt returned HTTP', response.status);
+    return null; // Signal to try next fallback
+  }
+
+  const result = await response.json();
+
+  // Check if execution actually ran
+  const execResult = result.execResult;
+  if (!execResult || !execResult.didExecute) {
+    // Compilation might have failed
+    const compileStderr = (result.stderr || []).map((s) => s.text).join('\n');
+    const compileStdout = (result.stdout || []).map((s) => s.text).join('\n');
+
+    if (compileStderr || result.code !== 0) {
+      return {
+        success: false,
+        output: compileStdout,
+        error: compileStderr || `Compilation failed (exit code ${result.code})`,
+        time: elapsed,
+        memory: 0,
+        statusCode: result.code || 1,
+      };
+    }
+    return null; // Unexpected response, try fallback
+  }
+
+  // Extract execution output
+  const stdout = (execResult.stdout || []).map((s) => s.text).join('\n');
+  const stderr = (execResult.stderr || []).map((s) => s.text).join('\n');
+  const exitCode = execResult.code ?? 0;
+
+  // Check for build errors (compilation succeeded but there may be warnings)
+  const buildStderr = (execResult.buildResult?.stderr || []).map((s) => s.text).join('\n');
+  const compilerWarnings = buildStderr || null;
+
+  if (exitCode !== 0 || (stderr && !stdout)) {
+    let errorMsg = stderr || `Program exited with code ${exitCode}`;
+
+    if (errorMsg.includes('EOFError') || errorMsg.includes('EOF when reading a line')) {
+      errorMsg +=
+        '\n\n💡 Tip: Your code expects input. Switch to the "Input" tab and enter values, or click "Auto-Generate Input".';
+    }
+
+    return {
+      success: false,
+      output: stdout,
+      error: errorMsg,
+      time: elapsed,
+      memory: 0,
+      statusCode: exitCode || 1,
+    };
+  }
+
+  return {
+    success: true,
+    output: stdout || '(Program finished with no output)',
+    error: null,
+    time: elapsed,
+    memory: 0,
+    statusCode: 0,
+    compilerWarnings,
+  };
+}
+
+/**
+ * Execute via Wandbox API (fallback)
  */
 async function wandboxExecute(code, compiler, languageId, stdin) {
   const startTime = performance.now();
@@ -124,8 +298,8 @@ async function wandboxExecute(code, compiler, languageId, stdin) {
     const elapsed = ((performance.now() - startTime) / 1000).toFixed(3);
 
     if (!response.ok) {
-      console.warn('Wandbox returned', response.status, '— falling back to mock');
-      return mockExecute(code, languageId, stdin);
+      console.warn('Wandbox returned', response.status);
+      return null; // Signal to try next fallback
     }
 
     const result = await response.json();
@@ -134,6 +308,12 @@ async function wandboxExecute(code, compiler, languageId, stdin) {
     const programError = result.program_error || '';
     const compilerError = result.compiler_error || result.compiler_message || '';
     const statusCode = result.status ?? '0';
+
+    // Detect Wandbox server errors (like "Failed to get uid")
+    if (programError.includes('Failed to get uid') || compilerError.includes('Failed to get uid')) {
+      console.warn('Wandbox server error (uid failure)');
+      return null; // Signal to try next fallback instead of returning fake result
+    }
 
     const hasFailed =
       (statusCode !== '0' && statusCode !== 0) ||
@@ -168,13 +348,34 @@ async function wandboxExecute(code, compiler, languageId, stdin) {
       compilerWarnings: compilerError || null,
     };
   } catch (err) {
-    console.warn('Wandbox network error:', err.message, '— falling back to mock');
-    return mockExecute(code, languageId, stdin);
+    console.warn('Wandbox network error:', err.message);
+    return null; // Signal to try next fallback
   }
 }
 
 /**
- * Mock execution fallback
+ * Show clear error when all execution backends are unavailable
+ * Instead of showing fake "Hello, World!" output which is misleading
+ */
+function executionUnavailable(languageId) {
+  const langName = LANGUAGE_NAMES[languageId] || 'this language';
+
+  return {
+    success: false,
+    output: '',
+    error:
+      `⚠️ Cloud compiler temporarily unavailable for ${langName}.\n\n` +
+      `The remote compilation services (Godbolt & Wandbox) are not responding.\n` +
+      `This is a temporary issue — please try again in a few seconds.\n\n` +
+      `💡 Tip: Python and JavaScript run locally in your browser and are always available.`,
+    time: '0.000',
+    memory: 0,
+    statusCode: 1,
+  };
+}
+
+/**
+ * Mock execution fallback (only used when mockExecution is explicitly enabled in settings)
  */
 function mockExecute(code, languageId, stdin) {
   return new Promise((resolve) => {
@@ -363,4 +564,3 @@ ${cssCode}
     };
   }
 }
-

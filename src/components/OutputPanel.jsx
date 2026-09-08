@@ -2,13 +2,16 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { useApp } from '../context/AppContext';
-import { Terminal, Keyboard, BrainCircuit, Sparkles, Database, TerminalSquare, Globe, Minus, ChevronDown } from 'lucide-react';
+import { Terminal, Keyboard, BrainCircuit, Sparkles, Database, TerminalSquare, Globe, Minus, ChevronDown, FileCode, Play, CheckCircle2, Activity } from 'lucide-react';
 import DatabasePanel from './DatabasePanel';
 import WebPreviewPanel from './WebPreviewPanel';
+import ComplexityTab from './ComplexityTab';
+import LanguageIcon from './LanguageIcon';
 import './OutputPanel.css';
 
 const TABS = [
   { id: 'output', label: 'Output', icon: Terminal },
+  { id: 'complexity', label: 'Complexity', icon: Activity },
   { id: 'web', label: 'Web Preview', icon: Globe },
   { id: 'terminal', label: 'Terminal', icon: TerminalSquare },
   { id: 'database', label: 'Database Explorer', icon: Database },
@@ -561,8 +564,35 @@ function TerminalTab() {
 
 // ─── Main OutputPanel ────────────────────────────────────────────────────
 export default function OutputPanel() {
-  const [activeTab, setActiveTab] = useState('output');
-  const { state, dispatch, handleGenerateInput, handleToggleTerminal } = useApp();
+  const {
+    state,
+    dispatch,
+    handleGenerateInput,
+    handleGenerateInputs,
+    handleExplainCode,
+    handleToggleTerminal,
+    handleSelectFile,
+    handleRunCode,
+  } = useApp();
+
+  const activeTab = state.activeTerminalTab || 'output';
+  const setActiveTab = (tabId) => dispatch({ type: 'SET_TERMINAL_TAB', payload: tabId });
+  const generateInputFn = handleGenerateInput || handleGenerateInputs;
+
+  const handleAutoGenerateInputAndRun = async () => {
+    setActiveTab('output');
+    if (generateInputFn) {
+      await generateInputFn();
+    }
+  };
+
+  const handleTriggerExplanation = async (mode = null) => {
+    setActiveTab('explanation');
+    if (handleExplainCode) {
+      await handleExplainCode(mode);
+    }
+  };
+
   const {
     output,
     stderr,
@@ -575,8 +605,11 @@ export default function OutputPanel() {
     aiExplanation,
     sqlData,
     detectedLanguage,
+    files,
+    activeFileId,
   } = state;
 
+  const activeFile = files.find((f) => f.id === activeFileId) || files[0];
   const hasError = stderr || compileOutput;
   const isRunning = executionStatus === 'compiling' || executionStatus === 'running';
 
@@ -602,7 +635,12 @@ export default function OutputPanel() {
               <button
                 key={tab.id}
                 className={`tab-btn ${activeTab === tab.id ? 'active' : ''}`}
-                onClick={() => setActiveTab(tab.id)}
+                onClick={() => {
+                  setActiveTab(tab.id);
+                  if (tab.id === 'explanation' && (!aiExplanation || aiExplanation.includes('❌'))) {
+                    handleExplainCode(hasError ? 'error' : 'code');
+                  }
+                }}
               >
                 <Icon size={14} />
                 <span>{tab.label}</span>
@@ -610,6 +648,28 @@ export default function OutputPanel() {
               </button>
             );
           })}
+        </div>
+
+        {/* Active File Binding Pill & Selector */}
+        <div className="terminal-file-binding-badge" title="This terminal is currently executing and showing output for this file">
+          <span className="binding-label">In use with:</span>
+          <div className="binding-select-wrap">
+            <span className="binding-file-icon">
+              <LanguageIcon language={activeFile?.language} filename={activeFile?.name} size={14} />
+            </span>
+            <select
+              className="binding-file-dropdown"
+              value={activeFileId}
+              onChange={(e) => handleSelectFile(e.target.value)}
+              title="Change the target file bound to this terminal"
+            >
+              {files.map((f) => (
+                <option key={f.id} value={f.id}>
+                  {f.name}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
 
         {/* Status indicator */}
@@ -658,6 +718,36 @@ export default function OutputPanel() {
         {/* Output Tab */}
         {activeTab === 'output' && (
           <div className="output-view">
+            {/* Terminal in use indicator banner */}
+            <div className="terminal-in-use-banner">
+              <div className="in-use-left">
+                <span className="in-use-dot" />
+                <span className="in-use-text">
+                  Terminal in use with: <strong>{activeFile?.name || 'File'}</strong>
+                </span>
+                <span className="in-use-lang">({activeFile?.language?.name || 'Code'})</span>
+              </div>
+              <div className="in-use-right">
+                <button
+                  className="btn-in-use-action"
+                  onClick={handleRunCode}
+                  disabled={isRunning}
+                  title={`Run ${activeFile?.name}`}
+                >
+                  <Play size={12} fill="currentColor" />
+                  <span>Run File</span>
+                </button>
+                <button
+                  className="btn-in-use-action"
+                  onClick={() => handleTriggerExplanation('code')}
+                  title="Explain this file with AI"
+                >
+                  <BrainCircuit size={12} />
+                  <span>Explain with AI</span>
+                </button>
+              </div>
+            </div>
+
             {isRunning ? (
               <div className="output-placeholder running">
                 <div className="loading-animation">
@@ -722,9 +812,53 @@ export default function OutputPanel() {
                         </div>
                       )}
                       {compileOutput || stderr}
+                      <div style={{ marginTop: '12px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                        {((stderr || compileOutput).includes('expects input') ||
+                          (stderr || compileOutput).includes('NoSuchElementException') ||
+                          (stderr || compileOutput).includes('EOFError')) && (
+                          <button
+                            className="btn-auto-input"
+                            onClick={handleAutoGenerateInputAndRun}
+                            style={{ display: 'inline-flex', padding: '6px 14px', fontSize: '13px' }}
+                          >
+                            <Sparkles size={14} />
+                            <span>Auto-Generate Input & Run</span>
+                          </button>
+                        )}
+                        <button
+                          className="btn-auto-input"
+                          onClick={() => handleTriggerExplanation('error')}
+                          style={{ display: 'inline-flex', padding: '6px 14px', fontSize: '13px' }}
+                        >
+                          <BrainCircuit size={14} />
+                          <span>Explain Error with AI</span>
+                        </button>
+                      </div>
                     </div>
                   )}
-                  {!hasError && output && <div className="success-output">{output}</div>}
+                  {!hasError && output && (
+                    <div className="success-output">
+                      <div>{output}</div>
+                      <div style={{ marginTop: '14px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                        <button
+                          className="btn-auto-input"
+                          onClick={() => handleTriggerExplanation('code')}
+                          style={{ display: 'inline-flex', padding: '6px 14px', fontSize: '13px' }}
+                        >
+                          <BrainCircuit size={14} />
+                          <span>Explain Code with AI</span>
+                        </button>
+                        <button
+                          className="btn-auto-input"
+                          onClick={handleAutoGenerateInputAndRun}
+                          style={{ display: 'inline-flex', padding: '6px 14px', fontSize: '13px' }}
+                        >
+                          <Sparkles size={14} />
+                          <span>Generate New Input & Run</span>
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </pre>
               </div>
             ) : (
@@ -736,6 +870,8 @@ export default function OutputPanel() {
             )}
           </div>
         )}
+        {/* Complexity Tab */}
+        {activeTab === 'complexity' && <ComplexityTab />}
 
         {/* Terminal Tab */}
         {activeTab === 'terminal' && <TerminalTab />}
@@ -753,10 +889,11 @@ export default function OutputPanel() {
               <span className="input-label">Standard Input (stdin)</span>
               <button
                 className="btn-auto-input"
-                onClick={handleGenerateInput}
+                onClick={handleAutoGenerateInputAndRun}
+                title="Generate smart inputs and run code live"
               >
                 <Sparkles size={14} />
-                <span>Auto-Generate Input</span>
+                <span>Auto-Generate Input & Run</span>
               </button>
             </div>
             <textarea
@@ -781,7 +918,56 @@ export default function OutputPanel() {
         {/* AI Explanation Tab */}
         {activeTab === 'explanation' && (
           <div className="explanation-view">
-            {aiExplanation ? (
+            <div className="explanation-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px', flexWrap: 'wrap', gap: '10px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <BrainCircuit size={18} style={{ color: 'var(--accent-cyan)' }} />
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{ fontWeight: 600, fontSize: '14px', color: 'var(--text-primary)' }}>AI Code & Error Explanation</span>
+                    <span className="terminal-file-tag-pill">{activeFile?.name}</span>
+                  </div>
+                  <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Logic breakdown • Time/Space complexity • Diagnostics</span>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                {hasError && (
+                  <button
+                    className="btn-auto-input"
+                    onClick={() => handleExplainCode('error')}
+                    style={{ background: 'rgba(239, 68, 68, 0.15)', borderColor: 'rgba(239, 68, 68, 0.4)', color: '#fca5a5' }}
+                    title="Explain compiler or runtime error"
+                  >
+                    <Sparkles size={14} />
+                    <span>Explain Error</span>
+                  </button>
+                )}
+                <button
+                  className="btn-auto-input"
+                  onClick={() => handleExplainCode('code')}
+                  title="Explain code logic, complexity, and variables"
+                >
+                  <Sparkles size={14} />
+                  <span>{aiExplanation && !aiExplanation.includes('⏳') ? 'Re-Analyze Code' : 'Explain My Code'}</span>
+                </button>
+              </div>
+            </div>
+
+            {aiExplanation && aiExplanation.includes('⏳') ? (
+              <div className="output-placeholder running animate-slide-up" style={{ padding: '36px 16px' }}>
+                <div className="loading-animation">
+                  <div className="loading-bar" />
+                  <div className="loading-bar" />
+                  <div className="loading-bar" />
+                </div>
+                <span style={{ fontSize: '15px', fontWeight: 600, color: 'var(--accent-cyan)' }}>
+                  🧠 AI Tutor is analyzing {activeFile?.name}...
+                </span>
+                <span className="placeholder-hint">
+                  Parsing control flow, loop invariants, complexity bounds, and data structures
+                </span>
+              </div>
+            ) : aiExplanation ? (
               <div className="md-content animate-slide-up">
                 <ReactMarkdown remarkPlugins={[remarkGfm]}>
                   {aiExplanation}
@@ -789,11 +975,19 @@ export default function OutputPanel() {
               </div>
             ) : (
               <div className="output-placeholder">
-                <BrainCircuit size={40} strokeWidth={1} />
-                <span>AI will explain errors in plain English</span>
+                <BrainCircuit size={44} strokeWidth={1.2} />
+                <span>AI will explain your code and errors in plain English</span>
                 <span className="placeholder-hint">
-                  Run code with an error to see AI analysis
+                  Click below to get a step-by-step logic, complexity, and error analysis for <strong>{activeFile?.name}</strong>
                 </span>
+                <button
+                  className="btn-auto-input"
+                  onClick={() => handleExplainCode('code')}
+                  style={{ marginTop: '14px', padding: '10px 20px', fontSize: '14px' }}
+                >
+                  <Sparkles size={16} />
+                  <span>Explain My Code with AI</span>
+                </button>
               </div>
             )}
           </div>

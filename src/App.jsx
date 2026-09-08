@@ -15,7 +15,13 @@ import IncomingChangesModal from './components/IncomingChangesModal';
 import CookieConsentBanner from './components/CookieConsentBanner';
 import LiveRoomChatDrawer from './components/LiveRoomChatDrawer';
 import StatusBar from './components/StatusBar';
-import { Plus, Terminal } from 'lucide-react';
+import WorkspacesModal from './components/WorkspacesModal';
+import WelcomeLandingModal from './components/WelcomeLandingModal';
+import TemplatesModal from './components/TemplatesModal';
+import SharedWorkspaceBanner from './components/SharedWorkspaceBanner';
+import SettingsPage from './pages/SettingsPage';
+import NotebookSetupPage from './pages/NotebookSetupPage';
+import { FolderTree, ChevronLeft, ChevronRight } from 'lucide-react';
 import './App.css';
 
 const SPLIT_STORAGE_KEY = 'fullcode_split_percent';
@@ -28,12 +34,12 @@ function AppContent() {
     dispatch,
     handleRunCode,
     handleSaveActiveFile,
+    handleCreateSequentialFile,
     handleAcceptIncomingChanges,
     handleDeclineIncomingChanges,
-    handleToggleFocusMode,
     handleToggleTerminal,
   } = useApp();
-  const { explorerOpen, practiceOpen, toast, focusMode, terminalHidden } = state;
+  const { explorerOpen, practiceOpen, toast, terminalHidden } = state;
 
   // Vertical Editor/Terminal Split
   const [splitPercent, setSplitPercent] = useState(() => {
@@ -78,28 +84,28 @@ function AppContent() {
   const mainContentRef = useRef(null);
   const appBodyRef = useRef(null);
 
-  // Global keyboard shortcuts
+  // Global Keyboard Shortcuts
   useEffect(() => {
     const handleKeyDown = (e) => {
-      // Cmd+S / Ctrl+S to save active file
-      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
-        e.preventDefault();
-        handleSaveActiveFile();
-      }
-      // Ctrl+Enter to run
+      // Ctrl+Enter or Cmd+Enter to Run Code
       if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
         e.preventDefault();
         handleRunCode();
       }
-      // Ctrl+Shift+E to toggle File Explorer
-      if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'E' || e.key === 'e')) {
+      // Ctrl+S or Cmd+S to Save
+      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+        e.preventDefault();
+        handleSaveActiveFile();
+      }
+      // Ctrl+N or Cmd+N to create sequential file
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'n' || e.key === 'N')) {
+        e.preventDefault();
+        handleCreateSequentialFile();
+      }
+      // Ctrl+Shift+E to toggle Explorer
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'e' || e.key === 'E')) {
         e.preventDefault();
         dispatch({ type: 'TOGGLE_EXPLORER' });
-      }
-      // Esc to exit Focus Mode if active
-      if (e.key === 'Escape' && focusMode) {
-        e.preventDefault();
-        handleToggleFocusMode();
       }
       // Ctrl+` to toggle Terminal
       if ((e.ctrlKey || e.metaKey) && e.key === '`') {
@@ -108,9 +114,9 @@ function AppContent() {
       }
     };
 
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleRunCode, handleSaveActiveFile, handleToggleFocusMode, handleToggleTerminal, focusMode, dispatch]);
+    window.addEventListener('keydown', handleKeyDown, { capture: true });
+    return () => window.removeEventListener('keydown', handleKeyDown, { capture: true });
+  }, [handleRunCode, handleSaveActiveFile, handleCreateSequentialFile, handleToggleTerminal, dispatch]);
 
   // Handle Vertical Dragging (Editor vs Output)
   const handleVerticalMouseDown = useCallback((e) => {
@@ -171,6 +177,21 @@ function AppContent() {
     document.body.classList.add('resizing-horizontal');
   }, []);
 
+  const handleHorizontalTouchStart = useCallback(() => {
+    setIsHorizontalDragging(true);
+    document.body.classList.add('resizing-horizontal');
+  }, []);
+
+  const handleExplorerResizerDoubleClick = useCallback(() => {
+    setExplorerWidth((prev) => {
+      const target = prev <= 240 ? 340 : 240;
+      try {
+        localStorage.setItem(EXPLORER_WIDTH_KEY, String(target));
+      } catch {}
+      return target;
+    });
+  }, []);
+
   useEffect(() => {
     if (!isHorizontalDragging) return;
 
@@ -181,17 +202,28 @@ function AppContent() {
       if (clientX === undefined) return;
 
       const offsetLeft = clientX - rect.left;
-      // Clamp between 160px and 450px
-      const clamped = Math.min(Math.max(offsetLeft, 160), 450);
+
+      // Auto-collapse if dragged very small
+      if (offsetLeft < 60) {
+        dispatch({ type: 'TOGGLE_EXPLORER' });
+        setIsHorizontalDragging(false);
+        document.body.classList.remove('resizing-horizontal');
+        return;
+      }
+
+      // Responsive clamp based on viewport width: min 140px, max 55% of screen width or 550px
+      const maxAllowed = Math.min(550, Math.floor(window.innerWidth * 0.55));
+      const minAllowed = 140;
+      const clamped = Math.min(Math.max(offsetLeft, minAllowed), maxAllowed);
       setExplorerWidth(clamped);
+      try {
+        localStorage.setItem(EXPLORER_WIDTH_KEY, String(clamped));
+      } catch {}
     };
 
     const handleMouseUp = () => {
       setIsHorizontalDragging(false);
       document.body.classList.remove('resizing-horizontal');
-      try {
-        localStorage.setItem(EXPLORER_WIDTH_KEY, String(explorerWidth));
-      } catch {}
     };
 
     window.addEventListener('mousemove', handleMouseMove);
@@ -206,11 +238,16 @@ function AppContent() {
       window.removeEventListener('touchend', handleMouseUp);
       document.body.classList.remove('resizing-horizontal');
     };
-  }, [isHorizontalDragging, explorerWidth]);
+  }, [isHorizontalDragging, dispatch]);
 
   // Handle Practice Panel Horizontal Dragging
   const handlePracticeMouseDown = useCallback((e) => {
     e.preventDefault();
+    setIsPracticeDragging(true);
+    document.body.classList.add('resizing-horizontal');
+  }, []);
+
+  const handlePracticeTouchStart = useCallback(() => {
     setIsPracticeDragging(true);
     document.body.classList.add('resizing-horizontal');
   }, []);
@@ -253,13 +290,31 @@ function AppContent() {
   }, [isPracticeDragging, practiceWidth]);
 
   return (
-    <div className={`app-container ${focusMode ? 'in-focus-mode' : ''}`}>
+    <div className="app-container">
       <Header />
+      <SharedWorkspaceBanner />
 
       <div className="app-body" ref={appBodyRef}>
-        {/* Left File Explorer Sidebar (Hidden in Focus Mode) */}
-        {!focusMode && explorerOpen && (
+        {/* Left File Explorer Sidebar */}
+        {!explorerOpen && (
+          <div
+            className="explorer-collapsed-rail"
+            onClick={() => dispatch({ type: 'TOGGLE_EXPLORER' })}
+            title="Expand File Explorer (Ctrl+Shift+E)"
+          >
+            <FolderTree size={15} className="rail-folder-icon" />
+            <span className="rail-vertical-text">EXPLORER</span>
+            <ChevronRight size={12} className="rail-expand-arrow" />
+          </div>
+        )}
+
+        {explorerOpen && (
           <>
+            <div
+              className="explorer-mobile-backdrop"
+              onClick={() => dispatch({ type: 'TOGGLE_EXPLORER' })}
+              title="Close File Explorer"
+            />
             <div
               className="explorer-container"
               style={{ width: `${explorerWidth}px`, flex: 'none' }}
@@ -270,9 +325,29 @@ function AppContent() {
             <div
               className={`horizontal-resizer ${isHorizontalDragging ? 'dragging' : ''}`}
               onMouseDown={handleHorizontalMouseDown}
-              title="Drag to resize file explorer"
+              onTouchStart={handleHorizontalTouchStart}
+              onDoubleClick={handleExplorerResizerDoubleClick}
+              title="Drag to resize file explorer • Double-click to toggle width"
             >
-              <div className="horizontal-resizer-handle" />
+              <div className="horizontal-resizer-handle" title="Drag to slide explorer width">
+                <div className="resizer-dots-grip">
+                  <span />
+                  <span />
+                  <span />
+                </div>
+              </div>
+
+              <button
+                type="button"
+                className="btn-quick-collapse-slider"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  dispatch({ type: 'TOGGLE_EXPLORER' });
+                }}
+                title="Collapse File Explorer"
+              >
+                <ChevronLeft size={10} />
+              </button>
             </div>
           </>
         )}
@@ -310,12 +385,13 @@ function AppContent() {
           )}
         </div>
 
-        {/* Right Adjustable Practice Sidebar (Hidden in Focus Mode) */}
-        {!focusMode && practiceOpen && (
+        {/* Right Adjustable Practice Sidebar */}
+        {practiceOpen && (
           <>
             <div
               className={`horizontal-resizer practice-resizer ${isPracticeDragging ? 'dragging' : ''}`}
               onMouseDown={handlePracticeMouseDown}
+              onTouchStart={handlePracticeTouchStart}
               title="Drag to resize practice panel"
             >
               <div className="horizontal-resizer-handle" />
@@ -371,14 +447,38 @@ function AppContent() {
       />
       <CookieConsentBanner />
       <LiveRoomChatDrawer />
+
+      <WorkspacesModal
+        isOpen={state.workspacesModalOpen}
+        onClose={() => dispatch({ type: 'SET_WORKSPACES_MODAL', payload: false })}
+      />
+      <WelcomeLandingModal
+        isOpen={state.welcomeModalOpen}
+        onClose={() => dispatch({ type: 'SET_WELCOME_MODAL', payload: false })}
+      />
+      <TemplatesModal
+        isOpen={state.templatesModalOpen}
+        onClose={() => dispatch({ type: 'SET_TEMPLATES_MODAL', payload: false })}
+      />
     </div>
   );
+}
+
+function AppRouter() {
+  const { state } = useApp();
+  if (state.currentPage === 'settings') {
+    return <SettingsPage />;
+  }
+  if (state.currentPage === 'notebook-setup') {
+    return <NotebookSetupPage />;
+  }
+  return <AppContent />;
 }
 
 function App() {
   return (
     <AppProvider>
-      <AppContent />
+      <AppRouter />
     </AppProvider>
   );
 }

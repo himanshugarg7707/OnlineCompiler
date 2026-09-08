@@ -1,5 +1,6 @@
 // ─── Variable & Function History Autocomplete Engine ─────────────────────
 const KEYWORDS_SET = new Set([
+  // Control flow & language structures
   'if', 'else', 'elif', 'for', 'while', 'do', 'switch', 'case', 'break', 'continue', 'return',
   'function', 'def', 'class', 'struct', 'enum', 'interface', 'type', 'import', 'from', 'as', 'export', 'default',
   'let', 'const', 'var', 'public', 'private', 'protected', 'static', 'final', 'void', 'int',
@@ -7,14 +8,23 @@ const KEYWORDS_SET = new Set([
   'undefined', 'None', 'self', 'this', 'super', 'try', 'catch', 'finally', 'except', 'raise',
   'throw', 'throws', 'async', 'await', 'yield', 'lambda', 'with', 'in', 'is', 'not', 'and', 'or',
   'new', 'delete', 'typeof', 'instanceof', 'package', 'using', 'namespace', 'include', 'define',
-  'print', 'printf', 'cout', 'cin', 'console', 'log', 'System', 'out', 'println',
+  // Java specific keywords & core classes to preserve
+  'abstract', 'assert', 'byte', 'short', 'long', 'native', 'strictfp', 'synchronized',
+  'transient', 'volatile', 'implements', 'extends', 'record', 'sealed', 'permits',
+  'System', 'out', 'err', 'in', 'print', 'printf', 'println', 'format',
+  'Scanner', 'Math', 'Arrays', 'Collections', 'List', 'ArrayList', 'LinkedList', 'Map', 'HashMap',
+  'TreeMap', 'Set', 'HashSet', 'TreeSet', 'Queue', 'Deque', 'Stack', 'StringBuilder', 'StringBuffer',
+  'Integer', 'Character', 'Boolean', 'Double', 'Float', 'Long', 'Short', 'Byte', 'Object',
+  'Exception', 'Throwable', 'RuntimeException', 'Override',
+  // C/C++ / Python / JS
+  'cout', 'cin', 'endl', 'console', 'log', 'warn', 'error', 'table',
 ]);
 
 // Global session variable history store
 const globalVariableHistory = new Map();
 
 /**
- * Scan text and record disovered variables into history
+ * Scan text and record discovered variables into history
  */
 export function recordVariablesFromCode(codeText) {
   if (!codeText) return;
@@ -44,7 +54,7 @@ export function registerSnippets(monaco) {
     const staticItems = COMPLETIONS[langId] || [];
 
     monaco.languages.registerCompletionItemProvider(langId, {
-      triggerCharacters: ['(', '.', '_', '$', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z'],
+      triggerCharacters: ['.', '(', '@', '<', '$', '_'],
       provideCompletionItems: (model, position) => {
         const word = model.getWordUntilPosition(position);
         const currentWord = word.word;
@@ -60,7 +70,19 @@ export function registerSnippets(monaco) {
         // Record variables from current buffer into global history
         recordVariablesFromCode(text);
 
-        // 1. Extract Dynamic Variable & Function Suggestions
+        // 1. Static Snippets and Standard Library Completions (Priority 0000_ so keywords come FIRST!)
+        const staticSuggestions = staticItems.map((s, idx) => ({
+          label: s.label || s.prefix,
+          kind: s.kind ? monaco.languages.CompletionItemKind[s.kind] : monaco.languages.CompletionItemKind.Snippet,
+          documentation: s.doc || s.description,
+          insertText: s.insertText || s.body,
+          insertTextRules: s.insertTextRules ?? monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+          range,
+          detail: s.detail || (s.kind ? s.kind : 'Snippet'),
+          sortText: `0000_${String(idx).padStart(4, '0')}`,
+        }));
+
+        // 2. Extract Dynamic Variable & Function Suggestions (Priority 0050_ so user variables never hijack keywords)
         const localVariables = new Map();
         const matches = text.match(/[a-zA-Z_$][a-zA-Z0-9_$]*/g) || [];
 
@@ -95,30 +117,17 @@ export function registerSnippets(monaco) {
             kind: isFunction
               ? monaco.languages.CompletionItemKind.Function
               : monaco.languages.CompletionItemKind.Variable,
-            documentation: `Variable / identifier from code history (${isFunction ? 'function' : 'variable'})`,
+            documentation: `User identifier (${isFunction ? 'function' : 'variable'})`,
             insertText: name,
             insertTextRules: monaco.languages.CompletionItemInsertTextRule.KeepWhitespace,
             range,
-            detail: isFunction ? 'Function (code history)' : 'Variable (code history)',
-            // '0000_' sortText ensures user variable history appears at top of suggestions!
-            sortText: `0000_${String(idx).padStart(4, '0')}`,
+            detail: isFunction ? 'Function' : 'Variable',
+            sortText: `0050_${String(idx).padStart(4, '0')}`,
           })
         );
 
-        // 2. Static Snippets and Standard Library Completions
-        const staticSuggestions = staticItems.map((s, idx) => ({
-          label: s.label || s.prefix,
-          kind: s.kind ? monaco.languages.CompletionItemKind[s.kind] : monaco.languages.CompletionItemKind.Snippet,
-          documentation: s.doc || s.description,
-          insertText: s.insertText || s.body,
-          insertTextRules: s.insertTextRules ?? monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
-          range,
-          detail: s.detail || (s.kind ? s.kind : 'Snippet'),
-          sortText: `0001_${String(idx).padStart(4, '0')}`,
-        }));
-
         return {
-          suggestions: [...variableSuggestions, ...staticSuggestions],
+          suggestions: [...staticSuggestions, ...variableSuggestions],
         };
       },
     });
@@ -241,11 +250,23 @@ export const COMPLETIONS = {
   // ─── Java ──────────────────────────────────────────────────────────────
   java: [
     { prefix: 'main', label: 'Main Class & method', body: 'import java.util.*;\n\nclass Main {\n\tpublic static void main(String[] args) {\n\t\t// Start here\n\t\t${1}\n\t}\n}', detail: 'Java Boilerplate', doc: 'Standard Main class with java.util.*' },
-    { prefix: 'sout', label: 'System.out.println()', body: 'System.out.println(${1});', detail: 'Print to stdout', doc: 'Print line to console' },
-    { prefix: 'souf', label: 'System.out.printf()', body: 'System.out.printf("${1:%s\\n}", ${2:var});', detail: 'Formatted print', doc: 'Formatted print to stdout' },
+    { prefix: 'sout', label: 'System.out.println()', body: 'System.out.println(${1});', detail: 'System.out.println', doc: 'Print line to stdout' },
+    { prefix: 'sop', label: 'System.out.print()', body: 'System.out.print(${1});', detail: 'System.out.print', doc: 'Print without newline to stdout' },
+    { prefix: 'souf', label: 'System.out.printf()', body: 'System.out.printf("${1:%s\\n}", ${2:var});', detail: 'System.out.printf', doc: 'Formatted print to stdout' },
+    { prefix: 'print', label: 'System.out.print()', body: 'System.out.print(${1});', detail: 'System.out.print', doc: 'Print to stdout' },
+    { prefix: 'println', label: 'System.out.println()', body: 'System.out.println(${1});', detail: 'System.out.println', doc: 'Print line to stdout' },
+    { prefix: 'System.out.println', label: 'System.out.println()', body: 'System.out.println(${1});', detail: 'System.out.println', doc: 'Print line to stdout' },
+    { prefix: 'System.out.print', label: 'System.out.print()', body: 'System.out.print(${1});', detail: 'System.out.print', doc: 'Print to stdout' },
+    { prefix: 'sysout', label: 'System.out.println()', body: 'System.out.println(${1});', detail: 'sysout shortcut', doc: 'Eclipse/IntelliJ print shortcut' },
+    { prefix: 'syserr', label: 'System.err.println()', body: 'System.err.println(${1});', detail: 'System.err.println', doc: 'Print error line to stderr' },
     { prefix: 'scanner', label: 'Scanner sc = new Scanner(System.in)', body: 'Scanner ${1:sc} = new Scanner(System.in);\nint ${2:n} = ${1:sc}.nextInt();', detail: 'Scanner input', doc: 'Read token input from stdin' },
     { prefix: 'bfr', label: 'BufferedReader Fast I/O', body: 'BufferedReader br = new BufferedReader(new InputStreamReader(System.in));\nStringTokenizer st = new StringTokenizer(br.readLine());', detail: 'Fast I/O', doc: 'High-speed input reader for competitive programming' },
     { prefix: 'sb', label: 'StringBuilder sb', body: 'StringBuilder ${1:sb} = new StringBuilder();\n${1:sb}.append(${2:"text"}).append("\\n");\nSystem.out.print(${1:sb}.toString());', detail: 'StringBuilder buffer', doc: 'Mutable sequence of characters' },
+
+    { prefix: 'psvm', label: 'public static void main(String[] args)', body: 'public static void main(String[] args) {\n\t${1}\n}', detail: 'psvm method', doc: 'Standard Java main method' },
+    { prefix: 'fastio', label: 'FastReader competitive programming', body: 'static class FastReader {\n\tBufferedReader br;\n\tStringTokenizer st;\n\tpublic FastReader() { br = new BufferedReader(new InputStreamReader(System.in)); }\n\tString next() {\n\t\twhile (st == null || !st.hasMoreElements()) {\n\t\t\ttry { st = new StringTokenizer(br.readLine()); } catch (IOException e) { e.printStackTrace(); }\n\t\t}\n\t\treturn st.nextToken();\n\t}\n\tint nextInt() { return Integer.parseInt(next()); }\n\tlong nextLong() { return Long.parseLong(next()); }\n\tdouble nextDouble() { return Double.parseDouble(next()); }\n\tString nextLine() { String str = ""; try { str = br.readLine(); } catch (IOException e) { e.printStackTrace(); } return str; }\n}', detail: 'FastReader Class', doc: 'Ultra fast standard input reader' },
+    { prefix: 'pw', label: 'PrintWriter out = new PrintWriter(System.out)', body: 'PrintWriter out = new PrintWriter(new BufferedOutputStream(System.out));\n${1:out.println("Hello");}\nout.flush();', detail: 'Fast PrintWriter', doc: 'Fast buffered output writer' },
+    { prefix: 'pair', label: 'record Pair<F, S>(F first, S second)', body: 'static record Pair<F, S>(F first, S second) {}', detail: 'Pair Record', doc: 'Generic Pair container in Java' },
 
     // Lists
     { prefix: 'arraylist', label: 'List<T> = new ArrayList<>()', body: 'List<${1:String}> ${2:list} = new ArrayList<>();\n${2:list}.add(${3:"Item"});', detail: 'ArrayList<E>', doc: 'Resizable array implementation of List' },
@@ -263,6 +284,7 @@ export const COMPLETIONS = {
     // Maps
     { prefix: 'hashmap', label: 'Map<K, V> = new HashMap<>()', body: 'Map<${1:String}, ${2:Integer}> ${3:map} = new HashMap<>();\n${3:map}.put(${4:"key"}, ${5:100});', detail: 'HashMap<K, V> O(1)', doc: 'Hash table key-value map' },
     { prefix: 'map', label: 'Map<K, V> = new HashMap<>()', body: 'Map<${1:String}, ${2:Integer}> ${3:map} = new HashMap<>();\n${3:map}.put(${4:"key"}, ${5:100});', detail: 'HashMap<K, V>', doc: 'Key-value map' },
+    { prefix: 'getordefault', label: 'map.getOrDefault(key, 0)', body: '${1:map}.put(${2:key}, ${1:map}.getOrDefault(${2:key}, 0) + 1);', detail: 'Frequency Map Counter', doc: 'Increment frequency with getOrDefault' },
     { prefix: 'linkedhashmap', label: 'Map<K, V> = new LinkedHashMap<>()', body: 'Map<${1:String}, ${2:Integer}> ${3:map} = new LinkedHashMap<>();\n${3:map}.put(${4:"key"}, ${5:100});', detail: 'LinkedHashMap<K, V>', doc: 'Insertion-order preserving map' },
     { prefix: 'treemap', label: 'TreeMap<K, V> = new TreeMap<>()', body: 'TreeMap<${1:String}, ${2:Integer}> ${3:map} = new TreeMap<>();\n${3:map}.put(${4:"key"}, ${5:100});', detail: 'TreeMap<K, V> O(log N)', doc: 'Sorted Red-Black tree map' },
     { prefix: 'concurrenthashmap', label: 'ConcurrentHashMap<K, V>()', body: 'ConcurrentHashMap<${1:String}, ${2:Integer}> ${3:map} = new ConcurrentHashMap<>();\n${3:map}.put(${4:"key"}, ${5:100});', detail: 'ConcurrentHashMap<K, V>', doc: 'Thread-safe concurrent map' },
@@ -277,22 +299,64 @@ export const COMPLETIONS = {
     { prefix: 'collsort', label: 'Collections.sort(list)', body: 'Collections.sort(${1:list});', detail: 'Collections.sort', doc: 'Sort list in ascending order' },
     { prefix: 'collreverse', label: 'Collections.reverse(list)', body: 'Collections.reverse(${1:list});', detail: 'Collections.reverse', doc: 'Reverse elements in list' },
     { prefix: 'collbinsearch', label: 'Collections.binarySearch(list, key)', body: 'int ${1:idx} = Collections.binarySearch(${2:list}, ${3:key});', detail: 'Collections.binarySearch', doc: 'Binary search in sorted list' },
+    { prefix: 'collmin', label: 'Collections.min(list)', body: '${1:int min = }Collections.min(${2:list});', detail: 'Collections.min', doc: 'Find minimum element in collection' },
+    { prefix: 'collmax', label: 'Collections.max(list)', body: '${1:int max = }Collections.max(${2:list});', detail: 'Collections.max', doc: 'Find maximum element in collection' },
     { prefix: 'arrsort', label: 'Arrays.sort(arr)', body: 'Arrays.sort(${1:arr});', detail: 'Arrays.sort', doc: 'Dual-pivot Quicksort for arrays' },
+    { prefix: 'arrsort2d', label: 'Arrays.sort 2D array (a, b) -> a[0] - b[0]', body: 'Arrays.sort(${1:arr}, (a, b) -> Integer.compare(a[${2:0}], b[${2:0}]));', detail: 'Sort 2D Array', doc: 'Sort 2D array by column index' },
+    { prefix: 'arrfill', label: 'Arrays.fill(arr, val)', body: 'Arrays.fill(${1:arr}, ${2:-1});', detail: 'Arrays.fill', doc: 'Fill 1D array with value' },
+    { prefix: 'arrfill2d', label: 'Arrays.fill 2D matrix', body: 'for (int[] row : ${1:matrix}) Arrays.fill(row, ${2:-1});', detail: 'Fill 2D Array', doc: 'Fill entire 2D matrix with value' },
     { prefix: 'arrtolist', label: 'Arrays.asList(...)', body: 'List<${1:String}> ${2:list} = Arrays.asList(${3:"A", "B", "C"});', detail: 'Arrays.asList', doc: 'Fixed-size list backed by array' },
+    { prefix: 'arrcopy', label: 'Arrays.copyOf(arr, newLength)', body: 'int[] ${1:copy} = Arrays.copyOf(${2:arr}, ${2:arr}.length);', detail: 'Arrays.copyOf', doc: 'Copy array to new instance' },
 
     // Loops & Iterations
     { prefix: 'fori', label: 'for (int i = 0; i < n; i++)', body: 'for (int ${1:i} = 0; ${1:i} < ${2:n}; ${1:i}++) {\n\t${3}\n}', detail: 'Standard for loop', doc: 'Loop counter 0 to n' },
+    { prefix: 'forj', label: 'for (int j = 0; j < m; j++)', body: 'for (int ${1:j} = 0; ${1:j} < ${2:m}; ${1:j}++) {\n\t${3}\n}', detail: 'Nested for loop (j)', doc: 'Loop counter j from 0 to m' },
+    { prefix: 'forr', label: 'for (int i = n - 1; i >= 0; i--)', body: 'for (int ${1:i} = ${2:n} - 1; ${1:i} >= 0; ${1:i}--) {\n\t${3}\n}', detail: 'Reverse for loop', doc: 'Loop backwards from n-1 down to 0' },
     { prefix: 'fore', label: 'for (Type item : collection)', body: 'for (${1:String} ${2:item} : ${3:list}) {\n\tSystem.out.println(${2:item});\n}', detail: 'Enhanced for-each loop', doc: 'Iterate over collection elements' },
+    { prefix: 'while', label: 'while (condition)', body: 'while (${1:condition}) {\n\t${2}\n}', detail: 'While loop', doc: 'Standard while loop' },
+    { prefix: 'dowhile', label: 'do { ... } while (condition);', body: 'do {\n\t${1}\n} while (${2:condition});', detail: 'Do-While loop', doc: 'Loop that executes body at least once' },
+    { prefix: 'sw', label: 'switch (expr) { case ... }', body: 'switch (${1:val}) {\n\tcase ${2:1} -> {\n\t\t${3}\n\t}\n\tdefault -> {\n\t\t${4}\n\t}\n}', detail: 'Modern switch expression', doc: 'Pattern matching switch' },
     { prefix: 'mapentry', label: 'for (Map.Entry<K, V> entry : map.entrySet())', body: 'for (Map.Entry<${1:String}, ${2:Integer}> ${3:entry} : ${4:map}.entrySet()) {\n\tSystem.out.println(${3:entry}.getKey() + " -> " + ${3:entry}.getValue());\n}', detail: 'Iterate Map Entries', doc: 'Loop through map keys and values' },
     { prefix: 'iterator', label: 'Iterator<T> it = list.iterator()', body: 'Iterator<${1:String}> ${2:it} = ${3:list}.iterator();\nwhile (${2:it}.hasNext()) {\n\t${1:String} ${4:item} = ${2:it}.next();\n\t${5}\n}', detail: 'Iterator traversal', doc: 'Collection iterator' },
+
+    // Math & Algorithms
+    { prefix: 'mathmax', label: 'Math.max(a, b)', body: 'Math.max(${1:a}, ${2:b})', detail: 'Math.max', doc: 'Maximum of two numbers' },
+    { prefix: 'mathmin', label: 'Math.min(a, b)', body: 'Math.min(${1:a}, ${2:b})', detail: 'Math.min', doc: 'Minimum of two numbers' },
+    { prefix: 'mathabs', label: 'Math.abs(n)', body: 'Math.abs(${1:n})', detail: 'Math.abs', doc: 'Absolute value' },
+    { prefix: 'mathpow', label: 'Math.pow(base, exp)', body: 'Math.pow(${1:base}, ${2:exp})', detail: 'Math.pow', doc: 'Power calculation' },
+    { prefix: 'mathsqrt', label: 'Math.sqrt(n)', body: 'Math.sqrt(${1:n})', detail: 'Math.sqrt', doc: 'Square root calculation' },
+    { prefix: 'gcd', label: 'static int gcd(int a, int b)', body: 'static int gcd(int a, int b) {\n\treturn b == 0 ? a : gcd(b, a % b);\n}', detail: 'Greatest Common Divisor', doc: 'Euclidean algorithm for GCD' },
+    { prefix: 'lcm', label: 'static int lcm(int a, int b)', body: 'static int lcm(int a, int b) {\n\treturn (a / gcd(a, b)) * b;\n}', detail: 'Lowest Common Multiple', doc: 'LCM helper using GCD' },
+    { prefix: 'powmod', label: 'static long powMod(base, exp, mod)', body: 'static long powMod(long base, long exp, long mod) {\n\tlong res = 1;\n\tbase %= mod;\n\twhile (exp > 0) {\n\t\tif ((exp & 1) == 1) res = (res * base) % mod;\n\t\tbase = (base * base) % mod;\n\t\texp >>= 1;\n\t}\n\treturn res;\n}', detail: 'Binary Exponentiation', doc: 'Fast modular exponentiation O(log exp)' },
+    { prefix: 'isprime', label: 'static boolean isPrime(n)', body: 'static boolean isPrime(long n) {\n\tif (n <= 1) return false;\n\tif (n <= 3) return true;\n\tif (n % 2 == 0 || n % 3 == 0) return false;\n\tfor (long i = 5; i * i <= n; i += 6) {\n\t\tif (n % i == 0 || n % (i + 2) == 0) return false;\n\t}\n\treturn true;\n}', detail: 'Prime Check O(sqrt N)', doc: 'Fast primality test' },
+    { prefix: 'sieve', label: 'Sieve of Eratosthenes', body: 'static boolean[] sieve(int n) {\n\tboolean[] isPrime = new boolean[n + 1];\n\tArrays.fill(isPrime, true);\n\tisPrime[0] = isPrime[1] = false;\n\tfor (int p = 2; p * p <= n; p++) {\n\t\tif (isPrime[p]) {\n\t\t\tfor (int i = p * p; i <= n; i += p) isPrime[i] = false;\n\t\t}\n\t}\n\treturn isPrime;\n}', detail: 'Sieve Algorithm', doc: 'Prime sieve up to N' },
+    { prefix: 'binarysearch', label: 'Binary Search Algorithm', body: 'static int binarySearch(int[] arr, int target) {\n\tint low = 0, high = arr.length - 1;\n\twhile (low <= high) {\n\t\tint mid = low + (high - low) / 2;\n\t\tif (arr[mid] == target) return mid;\n\t\telse if (arr[mid] < target) low = mid + 1;\n\t\telse high = mid - 1;\n\t}\n\treturn -1;\n}', detail: 'Binary Search Template', doc: 'Iterative binary search' },
+    { prefix: 'bfs', label: 'Breadth First Search (BFS)', body: 'Queue<Integer> q = new LinkedList<>();\nboolean[] visited = new boolean[${1:n}];\nq.offer(${2:startNode});\nvisited[${2:startNode}] = true;\n\nwhile (!q.isEmpty()) {\n\tint curr = q.poll();\n\tfor (int neighbor : ${3:adj}.get(curr)) {\n\t\tif (!visited[neighbor]) {\n\t\t\tvisited[neighbor] = true;\n\t\t\tq.offer(neighbor);\n\t\t}\n\t}\n}', detail: 'BFS Graph Traversal', doc: 'Queue-based BFS algorithm' },
+    { prefix: 'dfs', label: 'Depth First Search (DFS)', body: 'static void dfs(int node, List<List<Integer>> adj, boolean[] visited) {\n\tvisited[node] = true;\n\tfor (int neighbor : adj.get(node)) {\n\t\tif (!visited[neighbor]) {\n\t\t\tdfs(neighbor, adj, visited);\n\t\t}\n\t}\n}', detail: 'DFS Graph Traversal', doc: 'Recursive DFS template' },
+    { prefix: 'dsu', label: 'Disjoint Set Union (DSU / Union-Find)', body: 'static class DSU {\n\tint[] parent, rank;\n\tpublic DSU(int n) {\n\t\tparent = new int[n];\n\t\trank = new int[n];\n\t\tfor (int i = 0; i < n; i++) parent[i] = i;\n\t}\n\tpublic int find(int i) {\n\t\tif (parent[i] == i) return i;\n\t\treturn parent[i] = find(parent[i]);\n\t}\n\tpublic boolean union(int i, int j) {\n\t\tint rootI = find(i), rootJ = find(j);\n\t\tif (rootI == rootJ) return false;\n\t\tif (rank[rootI] < rank[rootJ]) parent[rootI] = rootJ;\n\t\telse if (rank[rootI] > rank[rootJ]) parent[rootJ] = rootI;\n\t\telse { parent[rootJ] = rootI; rank[rootI]++; }\n\t\treturn true;\n\t}\n}', detail: 'DSU / Union-Find', doc: 'Disjoint Set Union with path compression' },
 
     // Streams & Lambdas
     { prefix: 'streamfilter', label: 'list.stream().filter().collect()', body: 'List<${1:String}> ${2:filtered} = ${3:list}.stream()\n\t.filter(${4:item -> item.length() > 0})\n\t.collect(Collectors.toList());', detail: 'Stream Filter', doc: 'Filter collection into new list' },
     { prefix: 'streammap', label: 'list.stream().map().collect()', body: 'List<${1:Integer}> ${2:mapped} = ${3:list}.stream()\n\t.map(${4:String::length})\n\t.collect(Collectors.toList());', detail: 'Stream Map', doc: 'Transform collection elements' },
     { prefix: 'streamsum', label: 'list.stream().mapToInt().sum()', body: 'int ${1:sum} = ${2:list}.stream().mapToInt(${3:Integer::intValue}).sum();', detail: 'Stream Sum', doc: 'Sum integer elements with stream' },
     { prefix: 'streamgroup', label: 'list.stream().collect(groupingBy())', body: 'Map<${1:Integer}, List<${2:String}>> ${3:grouped} = ${4:list}.stream()\n\t.collect(Collectors.groupingBy(${5:String::length}));', detail: 'Stream Grouping', doc: 'Group collection into Map' },
+    { prefix: 'optional', label: 'Optional<T> value check', body: 'Optional.ofNullable(${1:value}).orElse(${2:defaultValue});', detail: 'Optional orElse', doc: 'Safely handle null with Optional' },
 
-    // Exception Handling & Robust Error Management
+    // OOP & Methods
+    { prefix: 'constructor', label: 'Class constructor', body: 'public ${1:MyClass}(${2:int id}) {\n\tthis.${3:id} = ${2:id};\n}', detail: 'Constructor', doc: 'Define class constructor' },
+    { prefix: 'getter', label: 'public Type getProperty()', body: 'public ${1:String} get${2:Name}() {\n\treturn this.${3:name};\n}', detail: 'Getter method', doc: 'Standard getter' },
+    { prefix: 'setter', label: 'public void setProperty(Type value)', body: 'public void set${1:Name}(${2:String} ${3:name}) {\n\tthis.${3:name} = ${3:name};\n}', detail: 'Setter method', doc: 'Standard setter' },
+    { prefix: 'tostring', label: '@Override public String toString()', body: '@Override\npublic String toString() {\n\treturn "${1:Class}[" + ${2} + "]";\n}', detail: 'toString() method', doc: 'String representation of object' },
+    { prefix: 'equals', label: '@Override public boolean equals(Object o)', body: '@Override\npublic boolean equals(Object o) {\n\tif (this == o) return true;\n\tif (!(o instanceof ${1:MyClass} that)) return false;\n\treturn Objects.equals(this.${2:id}, that.${2:id});\n}\n\n@Override\npublic int hashCode() {\n\treturn Objects.hash(this.${2:id});\n}', detail: 'equals & hashCode', doc: 'Standard object identity comparison' },
+    { prefix: 'comparator', label: 'Comparator.comparing()', body: 'Comparator.comparing(${1:Person::getAge}).thenComparing(${2:Person::getName})', detail: 'Chained Comparator', doc: 'Comparator for sorting objects' },
+    { prefix: 'record', label: 'public record RecordName(...) {}', body: 'public record ${1:Person}(${2:String name, int age}) {}', detail: 'Java 17+ Record', doc: 'Immutable data carrier class' },
+    { prefix: 'interface', label: 'public interface InterfaceName {}', body: 'public interface ${1:Identifiable} {\n\t${2:String getId();}\n}', detail: 'Interface', doc: 'Contract definition' },
+
+    // Concurrency
+    { prefix: 'thread', label: 'new Thread(() -> { ... }).start()', body: 'new Thread(() -> {\n\t${1}\n}).start();', detail: 'Spawn Thread', doc: 'Run task on new thread' },
+    { prefix: 'executor', label: 'Executors.newFixedThreadPool()', body: 'ExecutorService executor = Executors.newFixedThreadPool(${1:4});\nexecutor.submit(() -> {\n\t${2}\n});\nexecutor.shutdown();', detail: 'Executor Service', doc: 'ThreadPool for managing concurrency' },
+
+    // Exception Handling
     { prefix: 'trycatch', label: 'try { ... } catch (Exception e)', body: 'try {\n\t${1:// Code that may throw exception}\n} catch (${2:Exception} e) {\n\tSystem.err.println("Caught exception: " + e.getMessage());\n\te.printStackTrace();\n}', detail: 'Try-Catch Block', doc: 'Handle runtime & checked exceptions' },
     { prefix: 'trycatchfin', label: 'try-catch-finally block', body: 'try {\n\t${1:// Code}\n} catch (${2:Exception} e) {\n\tSystem.err.println("Error: " + e.getMessage());\n} finally {\n\t${3:// Cleanup resource code}\n}', detail: 'Try-Catch-Finally', doc: 'Execute finally block regardless of exception' },
     { prefix: 'throw', label: 'throw new Exception("message")', body: 'throw new ${1:IllegalArgumentException}("${2:Invalid argument provided}");', detail: 'Throw Exception', doc: 'Explicitly throw a new exception' },

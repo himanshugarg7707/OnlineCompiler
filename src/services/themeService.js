@@ -35,6 +35,11 @@ export function applyCustomPalette(palette) {
   if (!palette || !palette.bg || !palette.primary || !palette.secondary) return;
 
   const root = document.documentElement;
+  root.setAttribute('data-theme', 'custom');
+  if (typeof document !== 'undefined' && document.body) {
+    document.body.style.backgroundColor = palette.bg;
+  }
+
   const { bg, primary, secondary } = palette;
   const isDark = getLuminance(bg) < 140;
 
@@ -101,6 +106,49 @@ export function applyCustomPalette(palette) {
     '--shadow-glow-purple',
     `0 0 24px ${secondary}40`
   );
+
+  root.style.setProperty(
+    '--btn-run-bg',
+    `linear-gradient(135deg, #10b981 0%, ${primary} 100%)`
+  );
+  root.style.setProperty('--btn-run-color', '#ffffff');
+  root.style.setProperty('--btn-run-glow', `0 0 20px ${primary}50`);
+  root.style.setProperty('--btn-run-hover-shadow', `0 0 28px ${primary}80, 0 0 12px ${secondary}60`);
+  root.style.setProperty('--btn-run-border', `1px solid ${primary}80`);
+
+  if (typeof window !== 'undefined' && window.monaco) {
+    try {
+      const cleanHex = (h) => (h ? String(h).replace('#', '') : '');
+      window.monaco.editor.defineTheme('fullcode-custom', {
+        base: isDark ? 'vs-dark' : 'vs',
+        inherit: true,
+        rules: [
+          { token: 'comment', foreground: isDark ? '64748b' : '94a3b8', fontStyle: 'italic' },
+          { token: 'keyword', foreground: cleanHex(primary) || '00d4ff', fontStyle: 'bold' },
+          { token: 'string', foreground: isDark ? '34d399' : '16a34a' },
+          { token: 'number', foreground: isDark ? 'fb923c' : 'ea580c' },
+          { token: 'type', foreground: cleanHex(secondary) || '8b5cf6' },
+          { token: 'function', foreground: cleanHex(primary) || '00d4ff' },
+          { token: 'variable', foreground: isDark ? 'f8fafc' : '0f172a' },
+          { token: 'operator', foreground: cleanHex(primary) || '00d4ff' },
+        ],
+        colors: {
+          'editor.background': bg,
+          'editor.foreground': isDark ? '#f8fafc' : '#0f172a',
+          'editor.lineHighlightBackground': isDark ? '#ffffff0f' : '#00000008',
+          'editor.selectionBackground': `${primary}35`,
+          'editorCursor.foreground': primary || '#00d4ff',
+          'editorLineNumber.foreground': isDark ? '#64748b' : '#94a3b8',
+          'editorLineNumber.activeForeground': isDark ? '#f8fafc' : '#0f172a',
+          'minimap.background': bg,
+          'editorGutter.background': bg,
+        },
+      });
+      window.monaco.editor.setTheme('fullcode-custom');
+    } catch {
+      // Ignore if monaco not initialized yet
+    }
+  }
 }
 
 /**
@@ -108,6 +156,9 @@ export function applyCustomPalette(palette) {
  */
 export function clearCustomPaletteOverrides() {
   const root = document.documentElement;
+  if (typeof document !== 'undefined' && document.body) {
+    document.body.style.removeProperty('background-color');
+  }
   const props = [
     '--bg-primary',
     '--bg-secondary',
@@ -136,6 +187,11 @@ export function clearCustomPaletteOverrides() {
     '--gradient-bg',
     '--shadow-glow-cyan',
     '--shadow-glow-purple',
+    '--btn-run-bg',
+    '--btn-run-color',
+    '--btn-run-glow',
+    '--btn-run-hover-shadow',
+    '--btn-run-border',
   ];
   props.forEach((prop) => root.style.removeProperty(prop));
 }

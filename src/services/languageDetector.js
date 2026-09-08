@@ -777,3 +777,88 @@ export function getDefaultFilename(languageId) {
   return DEFAULT_EXTENSIONS[languageId] || 'file.txt';
 }
 
+/**
+ * Calculate the next sequential filename (e.g. file_01.java, file_02.java)
+ */
+export function getNextSequentialFilename(files = [], activeFileId = null, detectedLanguage = null) {
+  const activeFile = files.find((f) => f.id === activeFileId) || files[0];
+  let ext = 'java';
+  let folder = null;
+
+  if (activeFile && activeFile.name) {
+    if (activeFile.name.includes('/')) {
+      folder = activeFile.name.substring(0, activeFile.name.lastIndexOf('/'));
+    }
+    const dotIdx = activeFile.name.lastIndexOf('.');
+    if (dotIdx !== -1) {
+      ext = activeFile.name.substring(dotIdx + 1).toLowerCase();
+    }
+  } else if (detectedLanguage && detectedLanguage.id !== undefined) {
+    const defaultName = getDefaultFilename(detectedLanguage.id);
+    const dotIdx = defaultName.lastIndexOf('.');
+    if (dotIdx !== -1) {
+      ext = defaultName.substring(dotIdx + 1).toLowerCase();
+    }
+  }
+
+  let highestNum = 0;
+  const targetFolderPrefix = folder ? `${folder}/` : '';
+
+  files.forEach((f) => {
+    if (!f || !f.name) return;
+    const relativeName = targetFolderPrefix
+      ? (f.name.startsWith(targetFolderPrefix) ? f.name.slice(targetFolderPrefix.length) : null)
+      : (!f.name.includes('/') ? f.name : null);
+    if (!relativeName) return;
+
+    const match = relativeName.match(/^file_(\d+)\.([^.]+)$/i);
+    if (match && match[2].toLowerCase() === ext) {
+      const num = parseInt(match[1], 10);
+      if (!isNaN(num) && num > highestNum) {
+        highestNum = num;
+      }
+    }
+  });
+
+  let nextNum = highestNum + 1;
+  let paddedNum = String(nextNum).padStart(2, '0');
+  let candidateBase = `file_${paddedNum}`;
+  let candidateFullName = targetFolderPrefix ? `${targetFolderPrefix}${candidateBase}.${ext}` : `${candidateBase}.${ext}`;
+
+  while (files.some((f) => f && f.name && f.name.toLowerCase() === candidateFullName.toLowerCase())) {
+    nextNum++;
+    paddedNum = String(nextNum).padStart(2, '0');
+    candidateBase = `file_${paddedNum}`;
+    candidateFullName = targetFolderPrefix ? `${targetFolderPrefix}${candidateBase}.${ext}` : `${candidateBase}.${ext}`;
+  }
+
+  return {
+    fullName: candidateFullName,
+    baseName: candidateBase,
+    ext,
+    folder,
+  };
+}
+
+/**
+ * Generate starter template matching sequential filename
+ */
+export function getSequentialFileStarterContent(baseName, ext) {
+  if (ext === 'java') {
+    return `import java.util.*;\n\npublic class ${baseName} {\n    public static void main(String[] args) {\n        Scanner sc = new Scanner(System.in);\n        // Start coding here\n        \n    }\n}\n`;
+  }
+  if (ext === 'py') {
+    return `# ${baseName}.py\n# Start coding here\n\n`;
+  }
+  if (ext === 'cpp') {
+    return `#include <iostream>\nusing namespace std;\n\nint main() {\n    // ${baseName}.cpp\n    \n    return 0;\n}\n`;
+  }
+  if (ext === 'c') {
+    return `#include <stdio.h>\n\nint main() {\n    // ${baseName}.c\n    \n    return 0;\n}\n`;
+  }
+  if (ext === 'js') {
+    return `// ${baseName}.js\n\n`;
+  }
+  return '';
+}
+

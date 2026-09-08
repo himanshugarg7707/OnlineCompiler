@@ -17,7 +17,7 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
 // Healthcheck
-app.get('/api/health', (req, res) => {
+app.get(['/api/health', '/health'], (req, res) => {
   res.json({
     status: 'ok',
     timestamp: new Date().toISOString(),
@@ -25,10 +25,10 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// Routes
-app.use('/api/db', dbRoutes);
-app.use('/api/execute', executeRoutes);
-app.use('/api/collab', collabRoutes);
+// Routes - supports both /api/xxx and /xxx for seamless Vercel serverless proxy routing
+app.use(['/api/db', '/db'], dbRoutes);
+app.use(['/api/execute', '/execute'], executeRoutes);
+app.use(['/api/collab', '/collab'], collabRoutes);
 
 // Seed sample databases and start server for local dev
 if (!process.env.VERCEL) {

@@ -1,16 +1,41 @@
 import sqlite3 from 'sqlite3';
 import fs from 'fs';
 import path from 'path';
+import os from 'os';
 import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const DB_DIR = path.join(__dirname, 'data', 'databases');
+const isServerless = Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME);
+const DB_DIR = isServerless
+  ? path.join(os.tmpdir(), 'fullcode_databases')
+  : path.join(__dirname, 'data', 'databases');
 
 // Ensure directory exists
-if (!fs.existsSync(DB_DIR)) {
-  fs.mkdirSync(DB_DIR, { recursive: true });
+try {
+  if (!fs.existsSync(DB_DIR)) {
+    fs.mkdirSync(DB_DIR, { recursive: true });
+  }
+} catch (err) {
+  console.warn('DB directory initialization warning:', err.message);
+}
+
+let isSeeded = false;
+let seedPromise = null;
+
+export async function ensureSeeded() {
+  if (isSeeded) return;
+  if (!seedPromise) {
+    seedPromise = seedSampleDatabases()
+      .then(() => {
+        isSeeded = true;
+      })
+      .catch((err) => {
+        console.warn('Automatic database seed notice:', err.message);
+      });
+  }
+  return seedPromise;
 }
 
 // Active database connection cache
@@ -38,6 +63,8 @@ export function getDbConnection(dbName = 'main_db') {
  * List all available databases with size and table stats
  */
 export async function listDatabases() {
+  await ensureSeeded();
+  if (!fs.existsSync(DB_DIR)) return [];
   const files = fs.readdirSync(DB_DIR).filter((f) => f.endsWith('.sqlite'));
   const databases = [];
 
@@ -190,6 +217,7 @@ function splitSqlStatements(sqlText) {
  * - DROP DATABASE <name>
  */
 export async function executeSqlQuery(initialDbName = 'main_db', sqlQuery) {
+  await ensureSeeded();
   const startTime = performance.now();
   let currentDb = initialDbName || 'main_db';
 

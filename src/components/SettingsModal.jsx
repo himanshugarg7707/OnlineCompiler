@@ -58,6 +58,14 @@ import './SettingsModal.css';
 
 const THEMES = [
   {
+    id: 'custom',
+    name: 'Custom 3-Color Palette',
+    icon: '🎨',
+    description: 'Dynamic user-defined 3-color palette',
+    badge: 'Custom',
+    isCustom: true,
+  },
+  {
     id: 'dark',
     name: 'Full Code Dark',
     icon: '🌌',
@@ -215,6 +223,35 @@ export default function SettingsModal() {
       } else if (config.customPalette) {
         applyCustomPalette(config.customPalette);
       }
+    }
+  };
+
+  const handleLiveColorChange = (key, value) => {
+    let newBg = customBg;
+    let newPrimary = customPrimary;
+    let newSecondary = customSecondary;
+
+    if (key === 'bg') {
+      newBg = value;
+      setCustomBg(value);
+    } else if (key === 'primary') {
+      newPrimary = value;
+      setCustomPrimary(value);
+    } else if (key === 'secondary') {
+      newSecondary = value;
+      setCustomSecondary(value);
+    }
+
+    if (/^#[0-9a-fA-F]{3,8}$/.test(value)) {
+      const palette = { bg: newBg, primary: newPrimary, secondary: newSecondary };
+      const updated = {
+        ...localConfig,
+        theme: 'custom',
+        customPalette: palette,
+      };
+      setLocalConfig(updated);
+      handleUpdateConfig({ theme: 'custom', customPalette: palette });
+      applyCustomPalette(palette);
     }
   };
 
@@ -507,11 +544,21 @@ export default function SettingsModal() {
             <div className="theme-options-grid">
               {THEMES.map((t) => {
                 const isSelected = localConfig.theme === t.id;
+                const bg = t.isCustom ? customBg : t.bgPreview;
+                const primary = t.isCustom ? customPrimary : t.accentPreview;
+                const secondary = t.isCustom ? customSecondary : t.secondaryPreview;
+
                 return (
                   <div
                     key={t.id}
                     className={`theme-card ${isSelected ? 'selected' : ''}`}
-                    onClick={() => handleConfigChange('theme', t.id)}
+                    onClick={() => {
+                      if (t.isCustom) {
+                        handleApplyCustomPalette();
+                      } else {
+                        handleConfigChange('theme', t.id);
+                      }
+                    }}
                   >
                     <div className="theme-card-top-row">
                       <div className="theme-icon-badge">
@@ -537,18 +584,18 @@ export default function SettingsModal() {
                       <div className="theme-color-dots">
                         <span
                           className="theme-dot"
-                          style={{ background: t.bgPreview }}
-                          title={`Background: ${t.bgPreview}`}
+                          style={{ background: bg }}
+                          title={`Background: ${bg}`}
                         />
                         <span
                           className="theme-dot"
-                          style={{ background: t.accentPreview }}
-                          title={`Primary Accent: ${t.accentPreview}`}
+                          style={{ background: primary }}
+                          title={`Primary Accent: ${primary}`}
                         />
                         <span
                           className="theme-dot"
-                          style={{ background: t.secondaryPreview }}
-                          title={`Secondary Highlight: ${t.secondaryPreview}`}
+                          style={{ background: secondary }}
+                          title={`Secondary Highlight: ${secondary}`}
                         />
                       </div>
                       <span className="theme-apply-label">
@@ -577,13 +624,13 @@ export default function SettingsModal() {
                     <input
                       type="color"
                       value={customBg}
-                      onChange={(e) => setCustomBg(e.target.value)}
+                      onChange={(e) => handleLiveColorChange('bg', e.target.value)}
                       className="palette-color-input"
                     />
                     <input
                       type="text"
                       value={customBg}
-                      onChange={(e) => setCustomBg(e.target.value)}
+                      onChange={(e) => handleLiveColorChange('bg', e.target.value)}
                       className="sec-input color-hex-text"
                     />
                   </div>
@@ -595,13 +642,13 @@ export default function SettingsModal() {
                     <input
                       type="color"
                       value={customPrimary}
-                      onChange={(e) => setCustomPrimary(e.target.value)}
+                      onChange={(e) => handleLiveColorChange('primary', e.target.value)}
                       className="palette-color-input"
                     />
                     <input
                       type="text"
                       value={customPrimary}
-                      onChange={(e) => setCustomPrimary(e.target.value)}
+                      onChange={(e) => handleLiveColorChange('primary', e.target.value)}
                       className="sec-input color-hex-text"
                     />
                   </div>
@@ -613,13 +660,13 @@ export default function SettingsModal() {
                     <input
                       type="color"
                       value={customSecondary}
-                      onChange={(e) => setCustomSecondary(e.target.value)}
+                      onChange={(e) => handleLiveColorChange('secondary', e.target.value)}
                       className="palette-color-input"
                     />
                     <input
                       type="text"
                       value={customSecondary}
-                      onChange={(e) => setCustomSecondary(e.target.value)}
+                      onChange={(e) => handleLiveColorChange('secondary', e.target.value)}
                       className="sec-input color-hex-text"
                     />
                   </div>

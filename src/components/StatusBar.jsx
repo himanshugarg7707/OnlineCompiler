@@ -1,21 +1,66 @@
+import { useMemo } from 'react';
 import { useApp } from '../context/AppContext';
-import { Terminal, Plus, ChevronUp, ChevronDown } from 'lucide-react';
+import { Terminal, Plus, ChevronUp, ChevronDown, Palette, Activity } from 'lucide-react';
+import { analyzeComplexity } from '../services/complexityAnalyzer';
+import LanguageIcon from './LanguageIcon';
 import './StatusBar.css';
 
+const THEME_NAMES = {
+  custom: 'Custom (3-Color)',
+  dark: 'Full Code Dark',
+  'baby-pink': 'Baby Pink (Light)',
+  'baby-pink-dark': 'Baby Pink (Dark)',
+  cyberpunk: 'Cyberpunk Neon',
+  monokai: 'Monokai Pro',
+  light: 'Clean Light',
+  nord: 'Nord Frost',
+};
+
 export default function StatusBar() {
-  const { state, handleToggleTerminal } = useApp();
-  const { detectedLanguage, cursorPosition, executionTime, executionMemory, terminalHidden } = state;
+  const { state, dispatch, handleToggleTerminal } = useApp();
+  const { detectedLanguage, cursorPosition, executionTime, executionMemory, terminalHidden, code, files, activeFileId } = state;
+  const activeFile = files?.find((f) => f.id === activeFileId);
+
+  const complexity = useMemo(() => {
+    return analyzeComplexity(code, detectedLanguage);
+  }, [code, detectedLanguage]);
 
   return (
     <footer className="status-bar">
       <div className="status-left">
         <span className="status-item language">
-          {detectedLanguage?.icon || '📄'} {detectedLanguage?.name || 'Code'}
+          <LanguageIcon language={detectedLanguage} filename={activeFile?.name} size={13} />
+          <span>{detectedLanguage?.name || 'Code'}</span>
         </span>
         <span className="status-item">
           Ln {cursorPosition.line}, Col {cursorPosition.column}
         </span>
         <span className="status-item">UTF-8</span>
+
+        {complexity.confidence !== 'none' && (
+          <button
+            className="status-item status-complexity-btn"
+            onClick={() => dispatch({ type: 'SET_TERMINAL_TAB', payload: 'complexity' })}
+            title="Click to open full Big-O Complexity & Optimization tab"
+          >
+            <Activity size={12} className="icon-cyan" />
+            <span>⏱ {complexity.time} · 💾 {complexity.space}</span>
+          </button>
+        )}
+
+        <button
+          className="status-item status-theme-btn"
+          onClick={() => {
+            if (typeof window !== 'undefined') {
+              window.location.hash = '#/settings?tab=themes';
+            }
+            dispatch({ type: 'NAVIGATE_PAGE', payload: 'settings' });
+          }}
+          title="Change Theme & Custom 3-Color Engine"
+        >
+          <Palette size={12} />
+          <span>{THEME_NAMES[state.config?.theme] || 'Theme'}</span>
+        </button>
       </div>
 
       <div className="status-right">

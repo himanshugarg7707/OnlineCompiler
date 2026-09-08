@@ -5,9 +5,11 @@ import {
   getLanguageById,
   getLanguageFromFilename,
   getDefaultFilename,
+  getNextSequentialFilename,
+  getSequentialFileStarterContent,
 } from '../services/languageDetector';
 import { executeCode } from '../services/judge0Service';
-import { explainError, generateInputs, getLogicHint, chatWithAI } from '../services/aiService';
+import { explainError, explainCode, generateInputs, getLogicHint, chatWithAI } from '../services/aiService';
 import { getConfig, updateConfig } from '../services/configService';
 import { decodeSharedWorkspace, clearShareHash } from '../services/shareService';
 import { recordSnapshot } from '../services/historyService';
@@ -134,6 +136,7 @@ let initialFolders = savedFolders;
 let initialActiveId = savedActiveId;
 let initialOpenTabs = savedOpenTabs;
 let initialStdin = loadSavedStdin();
+let initialSharedNotice = false;
 
 if (sharedPayload && Array.isArray(sharedPayload.files) && sharedPayload.files.length > 0) {
   initialFiles = sharedPayload.files.map((sf, idx) => ({
@@ -143,8 +146,10 @@ if (sharedPayload && Array.isArray(sharedPayload.files) && sharedPayload.files.l
     language: getLanguageById(sf.langId) || getLanguageFromFilename(sf.name),
   }));
   initialActiveId = initialFiles[0]?.id;
-  initialOpenTabs = [initialActiveId];
+  // Open ALL shared files into tabs so the recipient sees all files immediately!
+  initialOpenTabs = initialFiles.map((f) => f.id);
   if (sharedPayload.stdin) initialStdin = sharedPayload.stdin;
+  initialSharedNotice = true;
   clearShareHash();
 }
 
@@ -152,9 +157,22 @@ const initialActiveFile = initialFiles.find((f) => f.id === initialActiveId) || 
 const initialConfig = getConfig();
 const initialUser = getActiveUser();
 
+// Check if user should be shown the welcome landing on first arrival
+const shouldShowWelcomeOnArrival = (() => {
+  try {
+    const hasVisited = localStorage.getItem('fullcode_visited_landing_v1') === 'true' || Boolean(initialUser);
+    return !hasVisited && !sharedPayload;
+  } catch {
+    return false;
+  }
+})();
+
 const initialState = {
   activeUser: initialUser,
   authModalOpen: false,
+  welcomeModalOpen: false,
+  workspacesModalOpen: false,
+  sharedNotice: initialSharedNotice,
   files: initialFiles,
   folders: initialFolders,
   openFileIds: initialOpenTabs,
@@ -177,6 +195,7 @@ const initialState = {
   explorerWidth: initialConfig.explorerWidth ?? 240,
   hintModalOpen: false,
   settingsModalOpen: false,
+  templatesModalOpen: false,
   shareModalOpen: false,
   historyModalOpen: false,
   saveAsModalOpen: false,
@@ -200,6 +219,13 @@ const initialState = {
   practiceOpen: false,
   focusMode: false,
   terminalHidden: false,
+  activeTerminalTab: 'output',
+  currentPage: typeof window !== 'undefined' && window.location.hash.includes('settings')
+    ? 'settings'
+    : typeof window !== 'undefined' && (window.location.hash.includes('notebooks') || window.location.hash.includes('setup'))
+      ? 'notebook-setup'
+      : 'editor',
+  fileErrors: {},
 };
 
 function saveStateToStorage(files, activeFileId, stdin, folders, openFileIds) {
@@ -212,6 +238,14 @@ function saveStateToStorage(files, activeFileId, stdin, folders, openFileIds) {
   } catch (e) {
     console.warn('Failed to persist state:', e);
   }
+}
+
+let saveStorageTimeout = null;
+function debouncedSaveStateToStorage(files, activeFileId, stdin, folders, openFileIds) {
+  if (saveStorageTimeout) clearTimeout(saveStorageTimeout);
+  saveStorageTimeout = setTimeout(() => {
+    saveStateToStorage(files, activeFileId, stdin, folders, openFileIds);
+  }, 250);
 }
 
 function reducer(state, action) {
@@ -228,7 +262,7 @@ function reducer(state, action) {
         return file;
       });
 
-      saveStateToStorage(updatedFiles, state.activeFileId, state.stdin, state.folders, state.openFileIds);
+      debouncedSaveStateToStorage(updatedFiles, state.activeFileId, state.stdin, state.folders, state.openFileIds);
 
       return {
         ...state,
@@ -607,6 +641,38 @@ function reducer(state, action) {
       return { ...state, historyModalOpen: !state.historyModalOpen };
     case 'SET_HISTORY_MODAL':
       return { ...state, historyModalOpen: action.payload };
+    case 'SET_WORKSPACES_MODAL':
+      return { ...state, workspacesModalOpen: action.payload };
+    case 'TOGGLE_WORKSPACES_MODAL':
+      return { ...state, workspacesModalOpen: !state.workspacesModalOpen };
+    case 'TOGGLE_TEMPLATES_MODAL':
+      return { ...state, templatesModalOpen: !state.templatesModalOpen };
+    case 'SET_TEMPLATES_MODAL':
+      return { ...state, templatesModalOpen: action.payload };
+    case 'SET_TERMINAL_TAB':
+      return { ...state, activeTerminalTab: action.payload, terminalHidden: false };
+    case 'SET_WELCOME_MODAL':
+      return { ...state, welcomeModalOpen: action.payload };
+    case 'CLEAR_SHARED_NOTICE':
+      return { ...state, sharedNotice: false };
+    case 'LOAD_WORKSPACE_STATE': {
+      const { files, folders, activeFileId, stdin } = action.payload;
+      const validFiles = Array.isArray(files) && files.length > 0 ? files : state.files;
+      const nextActiveId = activeFileId || validFiles[0]?.id;
+      const nextActiveFile = validFiles.find((f) => f.id === nextActiveId) || validFiles[0];
+      const openIds = validFiles.map((f) => f.id);
+      saveStateToStorage(validFiles, nextActiveId, stdin ?? state.stdin, folders || [], openIds);
+      return {
+        ...state,
+        files: validFiles,
+        folders: folders || [],
+        openFileIds: openIds,
+        activeFileId: nextActiveId,
+        code: nextActiveFile ? nextActiveFile.content : state.code,
+        detectedLanguage: nextActiveFile ? nextActiveFile.language : state.detectedLanguage,
+        stdin: stdin !== undefined ? stdin : state.stdin,
+      };
+    }
     case 'SET_SAVE_AS_MODAL':
       return {
         ...state,
@@ -670,9 +736,8 @@ function reducer(state, action) {
     case 'SET_ACTIVE_USER':
       return { ...state, activeUser: action.payload };
     case 'TOGGLE_FOCUS_MODE':
-      return { ...state, focusMode: !state.focusMode };
     case 'SET_FOCUS_MODE':
-      return { ...state, focusMode: action.payload };
+      return { ...state, focusMode: false };
     case 'TOGGLE_TERMINAL':
       return { ...state, terminalHidden: !state.terminalHidden };
     case 'SET_TERMINAL_HIDDEN':
@@ -715,7 +780,7 @@ function reducer(state, action) {
     case 'TOGGLE_SETTINGS':
       return { ...state, settingsModalOpen: !state.settingsModalOpen };
     case 'UPDATE_CONFIG':
-      return { ...state, config: action.payload };
+      return { ...state, config: { ...state.config, ...action.payload } };
     case 'SET_CURSOR':
       return { ...state, cursorPosition: action.payload };
     case 'SHOW_TOAST':
@@ -734,6 +799,28 @@ function reducer(state, action) {
         errorLine: null,
         aiExplanation: '',
       };
+    case 'NAVIGATE_PAGE': {
+      if (typeof window !== 'undefined') {
+        const targetHash = action.payload === 'settings'
+          ? '#/settings'
+          : action.payload === 'notebook-setup'
+            ? '#/notebooks'
+            : '#/';
+        if (window.location.hash !== targetHash) {
+          window.location.hash = targetHash;
+        }
+      }
+      return { ...state, currentPage: action.payload };
+    }
+    case 'SET_FILE_ERRORS': {
+      return {
+        ...state,
+        fileErrors: {
+          ...state.fileErrors,
+          [action.payload.fileId]: action.payload.errors,
+        },
+      };
+    }
     default:
       return state;
   }
@@ -752,6 +839,19 @@ export function AppProvider({ children }) {
       clearCustomPaletteOverrides();
     }
   }, [state.config?.theme, state.config?.customPalette]);
+
+  // Synchronize URL hash with multi-page router state
+  useEffect(() => {
+    const onHashChange = () => {
+      const hash = window.location.hash;
+      let page = 'editor';
+      if (hash.includes('settings')) page = 'settings';
+      else if (hash.includes('notebooks') || hash.includes('setup')) page = 'notebook-setup';
+      dispatch({ type: 'NAVIGATE_PAGE', payload: page });
+    };
+    window.addEventListener('hashchange', onHashChange);
+    return () => window.removeEventListener('hashchange', onHashChange);
+  }, []);
 
   const showToast = useCallback((message, duration = 3000) => {
     dispatch({ type: 'SHOW_TOAST', payload: message });
@@ -773,6 +873,29 @@ export function AppProvider({ children }) {
       payload: { name, content, folder, openTab },
     });
   }, []);
+
+  // Create sequential file (e.g. file_01.java, file_02.java) via Ctrl+N / Cmd+N
+  const handleCreateSequentialFile = useCallback(() => {
+    const { fullName, baseName, ext } = getNextSequentialFilename(
+      state.files,
+      state.activeFileId,
+      state.detectedLanguage
+    );
+
+    const initialContent = getSequentialFileStarterContent(baseName, ext);
+
+    dispatch({
+      type: 'ADD_FILE',
+      payload: {
+        name: fullName,
+        content: initialContent,
+        folder: null,
+        openTab: true,
+      },
+    });
+
+    showToast(`Created ${fullName} 📄`);
+  }, [state.files, state.activeFileId, state.detectedLanguage, showToast]);
 
   const handleSelectFile = useCallback((id) => {
     dispatch({ type: 'SELECT_FILE', payload: id });
@@ -1016,10 +1139,15 @@ export function AppProvider({ children }) {
 
       dispatch({ type: 'SET_EXECUTION_RESULT', payload: result });
 
-      if (result.error && state.config.mockAI) {
-        explainError(codeToRun, result.error, state.detectedLanguage.name).then((explanation) => {
-          dispatch({ type: 'SET_AI_EXPLANATION', payload: explanation });
-        });
+      if (result.error) {
+        explainError(codeToRun, result.error, state.detectedLanguage?.name)
+          .then((res) => {
+            const explanationText = typeof res === 'string' ? res : (res?.content || res?.markdown || res?.explanation || '');
+            if (explanationText) {
+              dispatch({ type: 'SET_AI_EXPLANATION', payload: explanationText });
+            }
+          })
+          .catch(() => {});
       }
     } catch (err) {
       dispatch({
@@ -1033,7 +1161,37 @@ export function AppProvider({ children }) {
         },
       });
     }
-  }, [state.files, state.activeFileId, state.selectedCode, state.stdin, state.detectedLanguage, state.config.mockAI, showToast]);
+  }, [state.files, state.activeFileId, state.selectedCode, state.stdin, state.detectedLanguage, showToast]);
+
+  const handleExplainCode = useCallback(async (forcedMode = null) => {
+    const activeFile = state.files.find((f) => f.id === state.activeFileId) || state.files[0];
+    if (!activeFile) return;
+    const hasSelection = Boolean(state.selectedCode && state.selectedCode.trim());
+    const codeToExplain = hasSelection ? state.selectedCode.trim() : (activeFile.content || '');
+
+    try {
+      showToast('Generating AI explanation... 🧠');
+      dispatch({ type: 'SET_AI_EXPLANATION', payload: '⏳ **Analyzing code structure and logic...**' });
+
+      const hasError = Boolean(state.stderr || state.compileOutput);
+      const shouldExplainError = forcedMode === 'error' || (forcedMode !== 'code' && hasError);
+
+      if (shouldExplainError) {
+        const err = state.stderr || state.compileOutput;
+        const res = await explainError(codeToExplain, err, state.detectedLanguage?.name || activeFile.language?.name);
+        const text = typeof res === 'string' ? res : (res?.content || res?.markdown || res?.explanation || '');
+        dispatch({ type: 'SET_AI_EXPLANATION', payload: text });
+      } else {
+        const res = await explainCode(codeToExplain, state.detectedLanguage?.name || activeFile.language?.name);
+        const text = typeof res === 'string' ? res : (res?.content || res?.markdown || res?.explanation || String(res || ''));
+        dispatch({ type: 'SET_AI_EXPLANATION', payload: text });
+      }
+      showToast('AI Explanation ready! ✨');
+    } catch (err) {
+      showToast(`AI Explanation error: ${err.message}`);
+      dispatch({ type: 'SET_AI_EXPLANATION', payload: `❌ **Failed to generate explanation:** ${err.message}` });
+    }
+  }, [state.files, state.activeFileId, state.selectedCode, state.stderr, state.compileOutput, state.detectedLanguage, showToast]);
 
   const handleFormatCode = useCallback(() => {
     const activeFile = state.files.find((f) => f.id === state.activeFileId) || state.files[0];
@@ -1057,13 +1215,41 @@ export function AppProvider({ children }) {
     const activeFile = state.files.find((f) => f.id === state.activeFileId) || state.files[0];
     try {
       showToast('Generating smart inputs with AI...');
-      const inputs = await generateInputs(activeFile.content, state.detectedLanguage.name);
-      dispatch({ type: 'SET_STDIN', payload: inputs });
-      showToast('Sample inputs generated! ✨');
+      const genResult = await generateInputs(activeFile.content, state.detectedLanguage?.name);
+      const newInput = typeof genResult === 'string' ? genResult : (genResult?.input || '');
+      const newDesc = genResult?.description || '';
+
+      dispatch({ type: 'SET_STDIN', payload: newInput });
+      if (newDesc) {
+        dispatch({ type: 'SET_INPUT_DESCRIPTION', payload: newDesc });
+      }
+
+      showToast('New input generated! Running code... ✨');
+
+      // Immediately run code with fresh input so the output changes live
+      dispatch({ type: 'SET_EXECUTION_STATUS', payload: 'running' });
+      const hasSelection = Boolean(state.selectedCode && state.selectedCode.trim());
+      const codeToRun = hasSelection ? state.selectedCode.trim() : activeFile.content;
+
+      // Preprocess Java if needed
+      let processedCode = codeToRun;
+      if (state.detectedLanguage?.id === 62) {
+        processedCode = codeToRun
+          .replace(/\bpublic\s+class\b/g, 'class')
+          .replace(/^\s*package\s+[\w.]+;\s*$/gm, '// package stripped');
+      }
+
+      const result = await executeCode(
+        processedCode,
+        state.detectedLanguage?.id,
+        newInput
+      );
+
+      dispatch({ type: 'SET_EXECUTION_RESULT', payload: result });
     } catch (err) {
       showToast(`Error: ${err.message}`);
     }
-  }, [state.files, state.activeFileId, state.detectedLanguage, showToast]);
+  }, [state.files, state.activeFileId, state.detectedLanguage, state.selectedCode, showToast]);
 
   const handleGetHint = useCallback(async () => {
     const activeFile = state.files.find((f) => f.id === state.activeFileId) || state.files[0];
@@ -1315,7 +1501,6 @@ export function AppProvider({ children }) {
 
     const mergedFolders = Array.from(new Set([...state.folders, ...incomingFolders]));
     const nextActiveId = mergedFiles[0]?.id || state.activeFileId;
-    const nextActiveFile = mergedFiles.find((f) => f.id === nextActiveId) || mergedFiles[0];
 
     saveStateToStorage(mergedFiles, nextActiveId, state.stdin, mergedFolders, [nextActiveId]);
 
@@ -1360,9 +1545,9 @@ export function AppProvider({ children }) {
     }
   }, [handleJoinCollabRoom, state.collabRoomId, showToast]);
 
-  const handleUpdateConfig = useCallback((newConfig) => {
-    updateConfig(newConfig);
-    dispatch({ type: 'UPDATE_CONFIG', payload: newConfig });
+  const handleUpdateConfig = useCallback((updates) => {
+    const merged = updateConfig(updates);
+    dispatch({ type: 'UPDATE_CONFIG', payload: merged });
   }, []);
 
   const handleReorderTabs = useCallback((sourceId, targetId) => {
@@ -1377,6 +1562,11 @@ export function AppProvider({ children }) {
     dispatch({ type: 'TOGGLE_TERMINAL' });
   }, []);
 
+  const handleLoadWorkspaceState = useCallback((workspace) => {
+    if (!workspace) return;
+    dispatch({ type: 'LOAD_WORKSPACE_STATE', payload: workspace });
+  }, []);
+
   const value = {
     state,
     collabRoomId: state.collabRoomId,
@@ -1384,6 +1574,7 @@ export function AppProvider({ children }) {
     dispatch,
     handleSelectLanguage,
     handleAddFile,
+    handleCreateSequentialFile,
     handleSelectFile,
     handleCloseTab,
     handleCloseFile,
@@ -1393,9 +1584,12 @@ export function AppProvider({ children }) {
     handleDeleteFolder,
     handleSaveActiveFile,
     handleDownloadWorkspace,
+    handleLoadWorkspaceState,
     handleRunCode,
     handleFormatCode,
     handleGenerateInputs,
+    handleGenerateInput: handleGenerateInputs,
+    handleExplainCode,
     handleGetHint,
     handleSendMessage,
     handleUpdateConfig,
@@ -1411,6 +1605,49 @@ export function AppProvider({ children }) {
     handleReorderTabs,
     handleToggleFocusMode,
     handleToggleTerminal,
+    handleImportZip: async (fileBlobOrBuffer) => {
+      try {
+        showToast('Unpacking ZIP archive... 📦');
+        const zip = new JSZip();
+        const loadedZip = await zip.loadAsync(fileBlobOrBuffer);
+
+        const incomingFiles = [];
+        const entries = Object.keys(loadedZip.files);
+
+        for (const relativePath of entries) {
+          const zipEntry = loadedZip.files[relativePath];
+          if (!zipEntry.dir) {
+            const text = await zipEntry.async('text');
+            const lang = getLanguageFromFilename(relativePath) || defaultLang;
+            incomingFiles.push({
+              id: `file_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+              name: relativePath,
+              content: text,
+              language: lang,
+            });
+          }
+        }
+
+        if (incomingFiles.length === 0) {
+          showToast('ZIP archive contains no readable code files');
+          return;
+        }
+
+        incomingFiles.forEach((f) => {
+          dispatch({
+            type: 'ADD_FILE',
+            payload: { name: f.name, content: f.content, folder: null, openTab: true },
+          });
+        });
+
+        showToast(`Imported ${incomingFiles.length} files from ZIP! 🚀`);
+      } catch (err) {
+        console.error('Failed to import ZIP:', err);
+        showToast(`Error unpacking ZIP: ${err.message}`);
+      }
+    },
+    navigateToPage: (page) => dispatch({ type: 'NAVIGATE_PAGE', payload: page }),
+    setFileErrors: (fileId, errors) => dispatch({ type: 'SET_FILE_ERRORS', payload: { fileId, errors } }),
     showToast,
   };
 

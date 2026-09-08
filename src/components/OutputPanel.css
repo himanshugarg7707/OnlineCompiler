@@ -23,6 +23,14 @@
   display: flex;
   align-items: center;
   gap: 2px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  flex: 1;
+  min-width: 0;
+}
+
+.tab-list::-webkit-scrollbar {
+  display: none;
 }
 
 .tab-btn {
@@ -502,3 +510,169 @@
   color: var(--accent-red);
   background: rgba(248, 81, 73, 0.1);
 }
+
+/* ─── Terminal In Use / File Binding ────────────────────────────────────────── */
+.terminal-file-binding-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(0, 212, 255, 0.06);
+  border: 1px solid rgba(0, 212, 255, 0.2);
+  border-radius: var(--radius-sm);
+  padding: 2px 8px;
+  font-size: 11.5px;
+  max-width: 260px;
+}
+
+.binding-label {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.binding-select-wrap {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.binding-file-icon {
+  font-size: 12px;
+  line-height: 1;
+}
+
+.binding-file-dropdown {
+  background: transparent;
+  border: none;
+  color: var(--accent-cyan);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  outline: none;
+  font-family: var(--font-mono);
+  max-width: 140px;
+  text-overflow: ellipsis;
+}
+
+.binding-file-dropdown option {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+}
+
+.terminal-in-use-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border-bottom: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.06));
+  margin-bottom: 10px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+}
+
+.in-use-left {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.in-use-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #10b981;
+  box-shadow: 0 0 6px rgba(16, 185, 129, 0.6);
+  animation: pulse-glow 2s infinite;
+}
+
+.in-use-text {
+  color: var(--text-secondary);
+}
+
+.in-use-text strong {
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+}
+
+.in-use-lang {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.in-use-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.btn-in-use-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: 11px;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.btn-in-use-action:hover {
+  background: rgba(0, 212, 255, 0.1);
+  border-color: var(--accent-cyan);
+  color: var(--accent-cyan);
+}
+
+.terminal-file-tag-pill {
+  display: inline-flex;
+  padding: 2px 7px;
+  background: rgba(0, 212, 255, 0.12);
+  border: 1px solid rgba(0, 212, 255, 0.3);
+  border-radius: 10px;
+  color: var(--accent-cyan);
+  font-size: 11px;
+  font-family: var(--font-mono);
+  font-weight: 600;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .execution-status .language-indicator,
+  .execution-status .execution-time {
+    display: none;
+  }
+  .tab-btn {
+    padding: var(--sp-1) var(--sp-2);
+    font-size: 11px;
+  }
+  .terminal-file-binding-badge .binding-label {
+    display: none;
+  }
+  .terminal-file-binding-badge {
+    padding: 2px 6px;
+    max-width: 140px;
+  }
+}
+
+@media (max-width: 560px) {
+  .output-tabs {
+    padding: 0 4px;
+    gap: 4px;
+  }
+  .terminal-file-binding-badge {
+    display: none; /* Already prominently visible inside the output view's .terminal-in-use-banner */
+  }
+  .btn-hide-terminal span {
+    display: none;
+  }
+  .btn-hide-terminal {
+    padding: 3px 6px;
+  }
+}
+
+

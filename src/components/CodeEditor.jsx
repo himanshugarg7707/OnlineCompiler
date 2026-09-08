@@ -1,7 +1,10 @@
-import { useRef, useCallback, useEffect } from 'react';
+import { useRef, useCallback, useEffect, useState } from 'react';
 import Editor from '@monaco-editor/react';
 import { useApp } from '../context/AppContext';
 import { registerSnippets, recordVariablesFromCode } from '../services/snippets';
+import { validateCodeSyntax } from '../services/syntaxValidatorService';
+import ComplexityPanel from './ComplexityPanel';
+import { AlertCircle } from 'lucide-react';
 import FileTabs from './FileTabs';
 import './CodeEditor.css';
 
@@ -31,19 +34,20 @@ function getLuminance(hex) {
 function defineCustomMonacoTheme(monaco, palette) {
   if (!palette || !palette.bg) return;
   const isDark = getLuminance(palette.bg) < 140;
+  const cleanHex = (h) => (h ? String(h).replace('#', '') : '');
 
   monaco.editor.defineTheme('fullcode-custom', {
     base: isDark ? 'vs-dark' : 'vs',
     inherit: true,
     rules: [
       { token: 'comment', foreground: isDark ? '64748b' : '94a3b8', fontStyle: 'italic' },
-      { token: 'keyword', foreground: palette.primary || '#00d4ff', fontStyle: 'bold' },
+      { token: 'keyword', foreground: cleanHex(palette.primary) || '00d4ff', fontStyle: 'bold' },
       { token: 'string', foreground: isDark ? '34d399' : '16a34a' },
       { token: 'number', foreground: isDark ? 'fb923c' : 'ea580c' },
-      { token: 'type', foreground: palette.secondary || '#8b5cf6' },
-      { token: 'function', foreground: palette.primary || '#00d4ff' },
-      { token: 'variable', foreground: isDark ? '#f8fafc' : '#0f172a' },
-      { token: 'operator', foreground: palette.primary || '#00d4ff' },
+      { token: 'type', foreground: cleanHex(palette.secondary) || '8b5cf6' },
+      { token: 'function', foreground: cleanHex(palette.primary) || '00d4ff' },
+      { token: 'variable', foreground: isDark ? 'f8fafc' : '0f172a' },
+      { token: 'operator', foreground: cleanHex(palette.primary) || '00d4ff' },
     ],
     colors: {
       'editor.background': palette.bg,
@@ -60,11 +64,18 @@ function defineCustomMonacoTheme(monaco, palette) {
 }
 
 export default function CodeEditor() {
-  const { state, handleCodeChange, handleSaveActiveFile, dispatch } = useApp();
+  const { state, handleCodeChange, handleSaveActiveFile, handleCreateSequentialFile, setFileErrors, dispatch } = useApp();
   const { code, detectedLanguage, errorLine, config } = state;
+  const [liveErrors, setLiveErrors] = useState([]);
   const editorRef = useRef(null);
   const monacoRef = useRef(null);
   const decorationsRef = useRef([]);
+  const isInternalChangeRef = useRef(false);
+  const lastActiveFileIdRef = useRef(state.activeFileId);
+  const handleCreateSeqFileRef = useRef(handleCreateSequentialFile);
+  handleCreateSeqFileRef.current = handleCreateSequentialFile;
+  const handleSaveActiveFileRef = useRef(handleSaveActiveFile);
+  handleSaveActiveFileRef.current = handleSaveActiveFile;
 
   const activeMonacoTheme = MONACO_THEMES[config?.theme] || 'fullcode-dark';
 
@@ -320,7 +331,12 @@ export default function CodeEditor() {
 
     // Keybindings: Cmd+S or Ctrl+S to Save file to disk
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
-      handleSaveActiveFile();
+      handleSaveActiveFileRef.current?.();
+    });
+
+    // Keybindings: Cmd+N or Ctrl+N to create sequential file (e.g. file_01.java, file_02.java)
+    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyN, () => {
+      handleCreateSeqFileRef.current?.();
     });
 
     // Track cursor position
@@ -379,6 +395,62 @@ export default function CodeEditor() {
     }
   }, [detectedLanguage.monacoLanguage]);
 
+  // Synchronize editor content when changed from EXTERNAL sources (switching tabs, formatting, template load)
+  useEffect(() => {
+    if (!editorRef.current) return;
+    const model = editorRef.current.getModel();
+    if (!model) return;
+
+    const fileChanged = state.activeFileId !== lastActiveFileIdRef.current;
+    lastActiveFileIdRef.current = state.activeFileId;
+
+    if (fileChanged) {
+      editorRef.current.setValue(code || '');
+      isInternalChangeRef.current = false;
+      return;
+    }
+
+    if (isInternalChangeRef.current) {
+      // Change originated from user typing inside editor — do not overwrite model or reset cursor!
+      isInternalChangeRef.current = false;
+      return;
+    }
+
+    // External change (e.g. format code, load template/question, undo/redo from outside)
+    const currentModelValue = model.getValue();
+    if (code !== currentModelValue) {
+      const position = editorRef.current.getPosition();
+      editorRef.current.setValue(code || '');
+      if (position && position.lineNumber <= model.getLineCount()) {
+        editorRef.current.setPosition(position);
+      }
+    }
+  }, [code, state.activeFileId]);
+
+  // Real-time syntax diagnostics & Monaco error squiggles
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      const monaco = monacoRef.current || window.monaco;
+      if (!editorRef.current || !monaco) return;
+      const model = editorRef.current.getModel();
+      if (!model) return;
+
+      const langName = detectedLanguage?.name || detectedLanguage?.id || '';
+      const errors = validateCodeSyntax(code || '', langName);
+      setLiveErrors(errors);
+
+      // Set Monaco Model Markers for red squiggles & tooltips
+      monaco.editor.setModelMarkers(model, 'syntax-validator', errors);
+
+      // Update in AppContext
+      if (state.activeFileId) {
+        setFileErrors?.(state.activeFileId, errors);
+      }
+    }, 280);
+
+    return () => clearTimeout(timer);
+  }, [code, detectedLanguage, state.activeFileId, setFileErrors]);
+
   // Update error decorations
   useEffect(() => {
     const monaco = monacoRef.current || window.monaco;
@@ -416,7 +488,7 @@ export default function CodeEditor() {
     tabSize: config.tabSize,
     wordWrap: config.wordWrap ? 'on' : 'off',
     minimap: { enabled: config.minimap },
-    lineNumbers: config.lineNumbers ? 'on' : 'off',
+    lineNumbers: config.lineNumbers !== false ? 'on' : 'off',
     fontFamily: config.fontFamily || "'JetBrains Mono', 'Fira Code', monospace",
     fontLigatures: true,
     cursorBlinking: 'smooth',
@@ -432,7 +504,7 @@ export default function CodeEditor() {
       indentation: true,
     },
     suggestOnTriggerCharacters: true,
-    acceptSuggestionOnEnter: 'on',
+    acceptSuggestionOnEnter: 'smart',
     tabCompletion: 'on',
     quickSuggestions: {
       other: true,
@@ -450,12 +522,26 @@ export default function CodeEditor() {
 
   const handleEditorChange = (value) => {
     const newCode = value || '';
+    isInternalChangeRef.current = true;
     dispatch({ type: 'SET_CODE', payload: newCode });
     handleCodeChange?.(newCode);
 
     // Record dynamic user variable identifiers for instant autocomplete
     recordVariablesFromCode(newCode, detectedLanguage.name);
   };
+
+  useEffect(() => {
+    const handleJump = (e) => {
+      const line = Number(e.detail?.line);
+      if (line && editorRef.current) {
+        editorRef.current.revealLineInCenter(line);
+        editorRef.current.setPosition({ lineNumber: line, column: 1 });
+        editorRef.current.focus();
+      }
+    };
+    window.addEventListener('editor-jump-to-line', handleJump);
+    return () => window.removeEventListener('editor-jump-to-line', handleJump);
+  }, []);
 
   return (
     <div className="code-editor-container">
@@ -467,7 +553,7 @@ export default function CodeEditor() {
         <Editor
           height="100%"
           language={detectedLanguage.monacoLanguage}
-          value={code}
+          defaultValue={code}
           theme={activeMonacoTheme}
           options={editorOptions}
           onChange={handleEditorChange}
@@ -479,6 +565,29 @@ export default function CodeEditor() {
             </div>
           }
         />
+
+        {/* Floating Complexity Pill (Bottom Right) */}
+        <ComplexityPanel />
+
+        {/* Floating Problems & Error Jumper Pill */}
+        {liveErrors.length > 0 && (
+          <button
+            className="editor-problems-pill animate-slide-up"
+            onClick={() => {
+              const first = liveErrors[0];
+              if (first && editorRef.current) {
+                editorRef.current.revealLineInCenter(first.startLineNumber);
+                editorRef.current.setPosition({ lineNumber: first.startLineNumber, column: first.startColumn });
+                editorRef.current.focus();
+              }
+            }}
+            title="Click to jump to first syntax error"
+          >
+            <AlertCircle size={13} className="problems-icon" />
+            <span className="problems-count">{liveErrors.length} {liveErrors.length === 1 ? 'Error' : 'Errors'}</span>
+            <span className="problems-detail">L{liveErrors[0].startLineNumber}: {liveErrors[0].message}</span>
+          </button>
+        )}
       </div>
     </div>
   );

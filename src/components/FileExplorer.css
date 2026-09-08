@@ -1,22 +1,27 @@
 /* ─── File Explorer Component ─────────────────────────────────────────── */
 
-.file-explorer {
+.file-explorer,
+.file-explorer-sidebar {
   display: flex;
   flex-direction: column;
   height: 100%;
   width: 100%;
+  min-width: 0;
+  flex: 1;
   background: var(--bg-secondary);
-  border-right: 1px solid var(--border-primary);
   overflow: hidden;
   user-select: none;
   position: relative;
   z-index: 15;
+  box-sizing: border-box;
 }
 
 /* Header */
 .explorer-header {
   height: 40px;
   min-height: 40px;
+  width: 100%;
+  box-sizing: border-box;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -95,6 +100,8 @@
 
 /* Search Box */
 .explorer-search {
+  width: 100%;
+  box-sizing: border-box;
   padding: 6px 10px;
   border-bottom: 1px solid var(--border-primary);
   display: flex;
@@ -110,6 +117,7 @@
 
 .explorer-search-input {
   flex: 1;
+  width: 100%;
   background: transparent;
   border: none;
   outline: none;
@@ -140,6 +148,8 @@
 /* Files & Folders List */
 .explorer-files-list {
   flex: 1;
+  width: 100%;
+  box-sizing: border-box;
   overflow-y: auto;
   overflow-x: hidden;
   padding: 4px 0;
@@ -288,6 +298,10 @@
   color: var(--text-secondary);
   font-size: 12.5px;
   font-family: var(--font-mono);
+  width: 100%;
+  box-sizing: border-box;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .explorer-file-item.child {
@@ -333,6 +347,7 @@
 
 .file-name {
   flex: 1;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -345,6 +360,10 @@
   background: var(--accent-cyan);
   box-shadow: 0 0 6px var(--accent-cyan);
   flex-shrink: 0;
+}
+
+.explorer-file-item:hover .active-dot {
+  display: none;
 }
 
 /* Item Action Buttons on hover */
@@ -549,51 +568,6 @@
   text-align: center;
 }
 
-/* Import buttons row */
-.explorer-footer-buttons.import-row {
-  border-top: 1px solid var(--border-primary);
-  padding-top: 6px;
-}
-
-.btn-import-file,
-.btn-import-folder {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 5px;
-  padding: 6px 8px;
-  background: transparent;
-  border: 1px dashed var(--border-secondary);
-  border-radius: var(--radius-sm);
-  color: var(--text-secondary);
-  font-size: 11px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all var(--transition-fast);
-  flex: 1;
-  white-space: nowrap;
-}
-
-.btn-import-file:hover {
-  background: rgba(0, 212, 255, 0.1);
-  border-color: var(--accent-cyan);
-  border-style: solid;
-  color: var(--accent-cyan);
-}
-
-.btn-import-folder:hover {
-  background: rgba(180, 128, 255, 0.1);
-  border-color: var(--accent-purple);
-  border-style: solid;
-  color: var(--accent-purple);
-}
-
-[data-theme="baby-pink"] .btn-import-folder:hover {
-  background: rgba(236, 72, 153, 0.1);
-  border-color: var(--accent-cyan);
-  color: var(--accent-cyan);
-}
-
 .file-lock-badge {
   color: var(--accent-red);
   margin-left: 4px;
@@ -601,3 +575,5 @@
   align-items: center;
   flex-shrink: 0;
 }
+
+

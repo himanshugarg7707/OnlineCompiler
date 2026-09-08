@@ -44,6 +44,13 @@
   --shadow-glow-purple: 0 0 20px rgba(180, 128, 255, 0.2), 0 0 40px rgba(180, 128, 255, 0.1);
   --shadow-glow-green: 0 0 20px rgba(63, 185, 80, 0.2);
 
+  /* Theme Adaptive Run Button */
+  --btn-run-bg: linear-gradient(135deg, #10b981 0%, #06b6d4 100%);
+  --btn-run-color: #ffffff;
+  --btn-run-glow: 0 0 20px rgba(16, 185, 129, 0.4);
+  --btn-run-hover-shadow: 0 0 28px rgba(16, 185, 129, 0.6), 0 0 10px rgba(6, 182, 212, 0.5);
+  --btn-run-border: 1px solid rgba(16, 185, 129, 0.6);
+
   /* Spacing */
   --sp-1: 4px;
   --sp-2: 8px;
@@ -117,6 +124,13 @@
   --shadow-lg: 0 8px 32px rgba(219, 39, 119, 0.16);
   --shadow-glow-cyan: 0 0 20px rgba(236, 72, 153, 0.3), 0 0 40px rgba(244, 114, 182, 0.15);
   --shadow-glow-purple: 0 0 20px rgba(217, 70, 239, 0.25);
+
+  /* Theme Adaptive Run Button */
+  --btn-run-bg: linear-gradient(135deg, #ec4899 0%, #f43f5e 100%);
+  --btn-run-color: #ffffff;
+  --btn-run-glow: 0 0 20px rgba(236, 72, 153, 0.45);
+  --btn-run-hover-shadow: 0 0 28px rgba(236, 72, 153, 0.65), 0 0 12px rgba(244, 63, 94, 0.5);
+  --btn-run-border: 1px solid rgba(236, 72, 153, 0.6);
 }
 
 /* ─── Baby Pink Dark (Obsidian Rose) Theme ──────────────────────────────── */
@@ -156,6 +170,13 @@
   --shadow-lg: 0 8px 32px rgba(244, 114, 182, 0.15);
   --shadow-glow-cyan: 0 0 24px rgba(244, 114, 182, 0.35), 0 0 48px rgba(232, 121, 249, 0.15);
   --shadow-glow-purple: 0 0 24px rgba(232, 121, 249, 0.3);
+
+  /* Theme Adaptive Run Button */
+  --btn-run-bg: linear-gradient(135deg, #f472b6 0%, #c084fc 100%);
+  --btn-run-color: #ffffff;
+  --btn-run-glow: 0 0 22px rgba(244, 114, 182, 0.45);
+  --btn-run-hover-shadow: 0 0 30px rgba(192, 132, 252, 0.6);
+  --btn-run-border: 1px solid rgba(244, 114, 182, 0.6);
 }
 
 /* ─── Cyberpunk Neon Theme ────────────────────────────────────────────── */
@@ -185,6 +206,13 @@
   --gradient-primary: linear-gradient(135deg, #00f0ff 0%, #b400ff 50%, #ff007f 100%);
   --gradient-secondary: linear-gradient(135deg, #ff007f 0%, #b400ff 100%);
   --shadow-glow-cyan: 0 0 24px rgba(0, 240, 255, 0.4), 0 0 48px rgba(180, 0, 255, 0.2);
+
+  /* Theme Adaptive Run Button */
+  --btn-run-bg: linear-gradient(135deg, #ffe600 0%, #00f0ff 100%);
+  --btn-run-color: #050505;
+  --btn-run-glow: 0 0 22px rgba(255, 230, 0, 0.55);
+  --btn-run-hover-shadow: 0 0 32px rgba(0, 240, 255, 0.75), 0 0 16px rgba(255, 230, 0, 0.8);
+  --btn-run-border: 1px solid #ffe600;
 }
 
 /* ─── Monokai Pro Theme ───────────────────────────────────────────────── */
@@ -213,6 +241,13 @@
 
   --gradient-primary: linear-gradient(135deg, #a6e22e 0%, #66d9ef 100%);
   --gradient-secondary: linear-gradient(135deg, #f92672 0%, #fd971f 100%);
+
+  /* Theme Adaptive Run Button */
+  --btn-run-bg: linear-gradient(135deg, #a6e22e 0%, #82b31a 100%);
+  --btn-run-color: #1e1f1c;
+  --btn-run-glow: 0 0 20px rgba(166, 226, 46, 0.45);
+  --btn-run-hover-shadow: 0 0 28px rgba(166, 226, 46, 0.65);
+  --btn-run-border: 1px solid rgba(166, 226, 46, 0.7);
 }
 
 /* ─── Clean Light Theme ───────────────────────────────────────────────── */
@@ -245,6 +280,13 @@
   --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08);
   --shadow-lg: 0 8px 30px rgba(0, 0, 0, 0.12);
   --shadow-glow-cyan: 0 0 20px rgba(2, 132, 199, 0.2);
+
+  /* Theme Adaptive Run Button */
+  --btn-run-bg: linear-gradient(135deg, #2563eb 0%, #059669 100%);
+  --btn-run-color: #ffffff;
+  --btn-run-glow: 0 0 16px rgba(37, 99, 235, 0.35);
+  --btn-run-hover-shadow: 0 0 24px rgba(5, 150, 105, 0.45);
+  --btn-run-border: 1px solid rgba(37, 99, 235, 0.5);
 }
 
 /* ─── Nord Frost Theme ────────────────────────────────────────────────── */
@@ -273,6 +315,13 @@
 
   --gradient-primary: linear-gradient(135deg, #88c0d0 0%, #81a1c1 50%, #b48ead 100%);
   --gradient-secondary: linear-gradient(135deg, #b48ead 0%, #d08770 100%);
+
+  /* Theme Adaptive Run Button */
+  --btn-run-bg: linear-gradient(135deg, #88c0d0 0%, #a3be8c 100%);
+  --btn-run-color: #242933;
+  --btn-run-glow: 0 0 20px rgba(136, 192, 208, 0.4);
+  --btn-run-hover-shadow: 0 0 28px rgba(163, 190, 140, 0.6);
+  --btn-run-border: 1px solid rgba(136, 192, 208, 0.6);
 }
 
 /* ─── Reset ────────────────────────────────────────────────────────────── */

@@ -16,15 +16,14 @@ import {
   Check,
   X,
   FilePlus,
-  Archive,
-  FolderInput,
-  FileUp,
   Lock,
   FileText,
+  AlertCircle,
+  FolderInput,
 } from 'lucide-react';
 import { isItemProtected, isItemUnlocked } from '../services/securityService';
 import PasswordPromptModal from './PasswordPromptModal';
-import ImportTargetModal from './ImportTargetModal';
+import LanguageIcon from './LanguageIcon';
 import './FileExplorer.css';
 
 /**
@@ -96,6 +95,7 @@ export default function FileExplorer() {
     state,
     handleAddFile,
     handleSelectFile,
+    handleCreateSequentialFile,
     handleCloseFile,
     handleRenameFile,
     handleAddFolder,
@@ -107,7 +107,7 @@ export default function FileExplorer() {
     showToast,
   } = useApp();
 
-  const { files, folders, activeFileId } = state;
+  const { files, folders, activeFileId, fileErrors = {} } = state;
 
   // Search query
   const [searchQuery, setSearchQuery] = useState('');
@@ -128,14 +128,8 @@ export default function FileExplorer() {
   // Password Security Prompt Modal State
   const [securityTarget, setSecurityTarget] = useState(null);
 
-  // Import Target Modal State
-  const [importModal, setImportModal] = useState({ isOpen: false, mode: 'files' });
-  const [pendingImportTarget, setPendingImportTarget] = useState('');
-
   const addInputRef = useRef(null);
   const editInputRef = useRef(null);
-  const fileInputRef = useRef(null);
-  const folderInputRef = useRef(null);
 
   useEffect(() => {
     if (creationTarget) {
@@ -177,6 +171,9 @@ export default function FileExplorer() {
       return;
     }
     handleSelectFile(file.id);
+    if (typeof window !== 'undefined' && window.innerWidth <= 768) {
+      dispatch({ type: 'TOGGLE_EXPLORER' });
+    }
   };
 
   const handleFolderClick = (folderPath) => {
@@ -212,14 +209,6 @@ export default function FileExplorer() {
 
   const startAddFolder = (targetFolder = '') => {
     setCreationTarget({ type: 'folder', targetFolder });
-    setNewItemName('');
-    if (targetFolder) {
-      setCollapsedFolders((prev) => ({ ...prev, [targetFolder]: false }));
-    }
-  };
-
-  const startAddNote = (targetFolder = '') => {
-    setCreationTarget({ type: 'note', targetFolder });
     setNewItemName('');
     if (targetFolder) {
       setCollapsedFolders((prev) => ({ ...prev, [targetFolder]: false }));
@@ -308,81 +297,7 @@ export default function FileExplorer() {
     setEditingFolderName('');
   };
 
-  // Import Handlers with Target Destination
-  const handleOpenImport = (mode) => {
-    setImportModal({ isOpen: true, mode });
-  };
 
-  const handleProceedImport = (targetPath) => {
-    setPendingImportTarget(targetPath || '');
-    if (importModal.mode === 'folder') {
-      folderInputRef.current?.click();
-    } else {
-      fileInputRef.current?.click();
-    }
-  };
-
-  const onFilesSelected = async (e) => {
-    const selectedFiles = Array.from(e.target.files || []);
-    if (selectedFiles.length === 0) return;
-
-    showToast(`Importing ${selectedFiles.length} file(s)... 📂`);
-    const isTextFile = (name) => {
-      const ext = name.split('.').pop()?.toLowerCase();
-      const binaryExts = new Set(['png', 'jpg', 'jpeg', 'gif', 'ico', 'pdf', 'zip', 'tar', 'exe', 'bin', 'pyc']);
-      return !binaryExts.has(ext);
-    };
-
-    let importedCount = 0;
-    for (let i = 0; i < selectedFiles.length; i++) {
-      const file = selectedFiles[i];
-      if (file.name.startsWith('.') || !isTextFile(file.name)) continue;
-
-      try {
-        const text = await file.text();
-        const baseName = file.name;
-        const finalPath = pendingImportTarget ? `${pendingImportTarget}/${baseName}` : baseName;
-        handleAddFile(finalPath, text, undefined, i === 0);
-        importedCount++;
-      } catch (err) {
-        console.warn(`Failed reading file ${file.name}:`, err);
-      }
-    }
-
-    if (pendingImportTarget) {
-      handleAddFolder(pendingImportTarget);
-    }
-    showToast(`Successfully imported ${importedCount} file(s) into ${pendingImportTarget || 'root'} 🚀`);
-    e.target.value = '';
-    setPendingImportTarget('');
-  };
-
-  const onFolderSelected = async (e) => {
-    const selectedFiles = Array.from(e.target.files || []);
-    if (selectedFiles.length === 0) return;
-
-    showToast(`Importing folder tree (${selectedFiles.length} files)... 📁`);
-    let importedCount = 0;
-
-    for (let i = 0; i < selectedFiles.length; i++) {
-      const file = selectedFiles[i];
-      const relPath = file.webkitRelativePath || file.name;
-      if (relPath.includes('node_modules') || relPath.includes('.git') || file.name.startsWith('.')) continue;
-
-      try {
-        const text = await file.text();
-        const finalPath = pendingImportTarget ? `${pendingImportTarget}/${relPath}` : relPath;
-        handleAddFile(finalPath, text, undefined, i === 0);
-        importedCount++;
-      } catch (err) {
-        console.warn(`Failed to read ${relPath}:`, err);
-      }
-    }
-
-    showToast(`Imported folder structure (${importedCount} files) 🚀`);
-    e.target.value = '';
-    setPendingImportTarget('');
-  };
 
   // Filter checker
   const matchesSearch = useCallback(
@@ -475,14 +390,6 @@ export default function FileExplorer() {
                   title={`New file in ${folderNode.name}/`}
                 >
                   <Plus size={11} />
-                </button>
-
-                <button
-                  className="file-action-btn"
-                  onClick={() => startAddNote(folderPath)}
-                  title={`New note in ${folderNode.name}/`}
-                >
-                  <FileText size={11} />
                 </button>
 
                 <button
@@ -585,7 +492,9 @@ export default function FileExplorer() {
                   onDoubleClick={(e) => startEditFile(e, file)}
                   title={`${file.name} — ${file.language?.name || 'File'}`}
                 >
-                  <span className="file-icon">{file.language?.icon || '📄'}</span>
+                  <span className="file-icon">
+                    <LanguageIcon language={file.language} filename={file.name} size={15} />
+                  </span>
 
                   {isEditingFile ? (
                     <div className="file-rename-container" onClick={(e) => e.stopPropagation()}>
@@ -665,7 +574,7 @@ export default function FileExplorer() {
   };
 
   return (
-    <aside className="file-explorer-sidebar">
+    <aside className="file-explorer file-explorer-sidebar">
       {/* Explorer Header */}
       <div className="explorer-header">
         <div className="explorer-title-group">
@@ -676,26 +585,31 @@ export default function FileExplorer() {
         <div className="explorer-header-actions">
           <button
             className="explorer-action-btn"
-            onClick={() => startAddFile('')}
-            title="New File in Root (+)"
+            onClick={handleCreateSequentialFile}
+            title="New File (Ctrl+N / Cmd+N)"
           >
-            <Plus size={14} />
-          </button>
-
-          <button
-            className="explorer-action-btn"
-            onClick={() => startAddNote('')}
-            title="New Note / Text File (📝+)"
-          >
-            <FileText size={14} />
+            <FilePlus size={14} />
           </button>
 
           <button
             className="explorer-action-btn"
             onClick={() => startAddFolder('')}
-            title="New Folder in Root (📁+)"
+            title="New Folder (📁+)"
           >
             <FolderPlus size={14} />
+          </button>
+
+          <button
+            className="explorer-action-btn"
+            onClick={() => {
+              if (typeof window !== 'undefined') {
+                window.location.hash = '#/settings?tab=import';
+              }
+              dispatch({ type: 'NAVIGATE_PAGE', payload: 'settings' });
+            }}
+            title="Import Folder or Files (Settings > Import)"
+          >
+            <FolderInput size={14} />
           </button>
 
           <button
@@ -746,7 +660,9 @@ export default function FileExplorer() {
               onDoubleClick={(e) => startEditFile(e, file)}
               title={`${file.name} — ${file.language?.name || 'File'}`}
             >
-              <span className="file-icon">{file.language?.icon || '📄'}</span>
+              <span className="file-icon">
+                <LanguageIcon language={file.language} filename={file.name} size={15} />
+              </span>
 
               {isEditing ? (
                 <div className="file-rename-container" onClick={(e) => e.stopPropagation()}>
@@ -853,101 +769,12 @@ export default function FileExplorer() {
         )}
       </div>
 
-      {/* Explorer Footer */}
-      <div className="explorer-footer">
-        <div className="explorer-footer-buttons">
-          <button
-            className="btn-new-file-bottom"
-            onClick={() => startAddFile('')}
-            title="Create new code file"
-          >
-            <Plus size={13} />
-            <span>+ File</span>
-          </button>
-
-          <button
-            className="btn-new-note-bottom"
-            onClick={() => startAddNote('')}
-            title="Create new Notes / Text file"
-          >
-            <FileText size={13} />
-            <span>+ Note</span>
-          </button>
-
-          <button
-            className="btn-new-folder-bottom"
-            onClick={() => startAddFolder('')}
-            title="Create new folder (📁+)"
-          >
-            <FolderPlus size={13} />
-            <span>+ Folder</span>
-          </button>
-
-          <button
-            className="btn-download-workspace"
-            onClick={() => handleDownloadWorkspace(null)}
-            title="Download full project folder as .ZIP"
-          >
-            <Archive size={13} />
-            <span>ZIP</span>
-          </button>
-        </div>
-
-        <div className="explorer-footer-buttons import-row">
-          <button
-            className="btn-import-file"
-            onClick={() => handleOpenImport('files')}
-            title="Import file(s) into workspace"
-          >
-            <FileUp size={13} />
-            <span>Import Files</span>
-          </button>
-
-          <button
-            className="btn-import-folder"
-            onClick={() => handleOpenImport('folder')}
-            title="Import a folder into workspace"
-          >
-            <FolderInput size={13} />
-            <span>Import Folder</span>
-          </button>
-        </div>
-
-        <span className="explorer-hint">Cmd+S: Save file • Multi-level folder support</span>
-      </div>
-
-      {/* Hidden File / Folder Inputs */}
-      <input
-        ref={fileInputRef}
-        type="file"
-        multiple
-        style={{ display: 'none' }}
-        onChange={onFilesSelected}
-      />
-      <input
-        ref={folderInputRef}
-        type="file"
-        webkitdirectory="true"
-        directory="true"
-        multiple
-        style={{ display: 'none' }}
-        onChange={onFolderSelected}
-      />
-
       {/* Password Security Unlock Modal */}
       <PasswordPromptModal
         isOpen={Boolean(securityTarget)}
         targetItem={securityTarget}
         onClose={() => setSecurityTarget(null)}
         onUnlocked={handleUnlockedItem}
-      />
-
-      {/* Import Target Destination Modal */}
-      <ImportTargetModal
-        isOpen={importModal.isOpen}
-        mode={importModal.mode}
-        onProceed={handleProceedImport}
-        onClose={() => setImportModal({ isOpen: false, mode: 'files' })}
       />
     </aside>
   );

@@ -4,8 +4,13 @@
 const CONFIG_KEY = 'codeforge_config';
 
 const DEFAULT_CONFIG = {
-  // Theme settings ('dark' | 'baby-pink' | 'cyberpunk' | 'monokai' | 'light' | 'nord')
+  // Theme settings ('dark' | 'baby-pink' | 'cyberpunk' | 'monokai' | 'light' | 'nord' | 'custom')
   theme: 'dark',
+  customPalette: {
+    bg: '#0f172a',
+    primary: '#00d4ff',
+    secondary: '#b480ff',
+  },
 
   // API Keys (Optional)
   claudeApiKey: '',
@@ -17,9 +22,10 @@ const DEFAULT_CONFIG = {
   mockExecution: false,
 
   // Editor settings
-  fontSize: 15,
+  fontSize: 16,
   minimap: true,
   wordWrap: 'off',
+  lineNumbers: true,
 
   // UI settings
   sidebarOpen: false,

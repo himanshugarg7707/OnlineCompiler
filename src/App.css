@@ -22,11 +22,11 @@
 .explorer-container {
   height: 100%;
   display: flex;
+  flex-direction: column;
   overflow: hidden;
-  min-width: 160px;
-  max-width: 450px;
   position: relative;
   z-index: 15;
+  background: var(--bg-secondary);
 }
 
 .practice-container {
@@ -42,18 +42,19 @@
 /* ─── Draggable Horizontal Resizer (File Explorer width) ──────────────── */
 
 .horizontal-resizer {
-  width: 6px;
-  min-width: 6px;
+  width: 9px;
+  min-width: 9px;
   background: var(--bg-secondary);
-  border-left: 1px solid var(--border-primary);
   border-right: 1px solid var(--border-primary);
   cursor: col-resize;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
   position: relative;
-  z-index: 20;
+  z-index: 25;
   user-select: none;
+  touch-action: none;
   transition: background var(--transition-fast), border-color var(--transition-fast);
 }
 
@@ -70,18 +71,138 @@
 }
 
 .horizontal-resizer-handle {
-  width: 2px;
-  height: 32px;
+  width: 4px;
+  height: 38px;
   border-radius: var(--radius-full);
   background: var(--border-secondary);
+  border: 1px solid var(--border-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
   transition: all var(--transition-fast);
+  box-shadow: 0 0 4px rgba(0, 0, 0, 0.25);
+  cursor: col-resize;
+}
+
+.resizer-dots-grip {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  pointer-events: none;
+}
+
+.resizer-dots-grip span {
+  display: block;
+  width: 2px;
+  height: 2px;
+  border-radius: 50%;
+  background: var(--text-primary);
+  opacity: 0.65;
 }
 
 .horizontal-resizer:hover .horizontal-resizer-handle,
 .horizontal-resizer.dragging .horizontal-resizer-handle {
   background: var(--accent-cyan);
-  height: 48px;
-  box-shadow: 0 0 8px var(--accent-cyan);
+  border-color: var(--accent-cyan);
+  height: 52px;
+  box-shadow: 0 0 10px var(--accent-cyan);
+}
+
+.horizontal-resizer:hover .resizer-dots-grip span,
+.horizontal-resizer.dragging .resizer-dots-grip span {
+  opacity: 1;
+  background: #ffffff;
+}
+
+/* Quick 1-click Collapse Slider Button */
+.btn-quick-collapse-slider {
+  position: absolute;
+  top: calc(50% + 36px);
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-primary);
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+  opacity: 0;
+  transform: scale(0.85);
+  transition: all var(--transition-fast);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+  z-index: 30;
+}
+
+.horizontal-resizer:hover .btn-quick-collapse-slider,
+.horizontal-resizer.dragging .btn-quick-collapse-slider {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.btn-quick-collapse-slider:hover {
+  background: var(--accent-cyan);
+  border-color: var(--accent-cyan);
+  color: #000;
+  box-shadow: 0 0 10px var(--accent-cyan);
+}
+
+/* Collapsed Explorer Left Rail */
+.explorer-collapsed-rail {
+  width: 32px;
+  min-width: 32px;
+  height: 100%;
+  background: var(--bg-secondary);
+  border-right: 1px solid var(--border-primary);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-top: 14px;
+  gap: 16px;
+  cursor: pointer;
+  user-select: none;
+  z-index: 20;
+  transition: all var(--transition-fast);
+}
+
+.explorer-collapsed-rail:hover {
+  background: var(--bg-tertiary);
+  border-color: var(--accent-cyan);
+}
+
+.rail-folder-icon {
+  color: var(--accent-cyan);
+}
+
+.rail-vertical-text {
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  transform: rotate(180deg);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  color: var(--text-muted);
+  transition: color var(--transition-fast);
+}
+
+.explorer-collapsed-rail:hover .rail-vertical-text {
+  color: var(--accent-cyan);
+}
+
+.rail-expand-arrow {
+  color: var(--text-muted);
+  margin-top: auto;
+  margin-bottom: 16px;
+  transition: transform var(--transition-fast);
+}
+
+.explorer-collapsed-rail:hover .rail-expand-arrow {
+  color: var(--accent-cyan);
+  transform: translateX(2px);
 }
 
 /* While resizing horizontally */
@@ -93,6 +214,11 @@ body.resizing-horizontal {
 body.resizing-horizontal * {
   user-select: none !important;
   cursor: col-resize !important;
+  pointer-events: none !important;
+}
+
+body.resizing-horizontal .horizontal-resizer {
+  pointer-events: auto !important;
 }
 
 /* ─── Main Content (Editor + Terminal) ────────────────────────────────── */
@@ -266,3 +392,65 @@ body.resizing-vertical * {
 .app-container > * {
   position: relative;
 }
+
+/* ─── Responsive Adjustments for Mobile & Tablets ──────────────────────── */
+
+.explorer-mobile-backdrop {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .explorer-mobile-backdrop {
+    display: block;
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.65);
+    backdrop-filter: blur(4px);
+    z-index: 85;
+    animation: fadeIn 0.2s ease;
+  }
+
+  .explorer-container {
+    position: absolute !important;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: min(300px, 85vw) !important;
+    z-index: 95;
+    background: var(--bg-secondary);
+    border-right: 1px solid var(--border-primary);
+    box-shadow: 6px 0 28px rgba(0, 0, 0, 0.75);
+    animation: slideInLeft 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .horizontal-resizer {
+    display: none !important;
+  }
+
+  .practice-container {
+    position: absolute !important;
+    top: 0;
+    bottom: 0;
+    right: 0;
+    width: min(340px, 90vw) !important;
+    z-index: 95;
+    background: var(--bg-secondary);
+    border-left: 1px solid var(--border-primary);
+    box-shadow: -6px 0 28px rgba(0, 0, 0, 0.75);
+  }
+
+  .practice-resizer {
+    display: none !important;
+  }
+}
+
+@keyframes slideInLeft {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(0); }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+

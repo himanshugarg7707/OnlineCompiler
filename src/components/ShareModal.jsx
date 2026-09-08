@@ -16,6 +16,7 @@ import {
   Lock,
 } from 'lucide-react';
 import { isItemProtected } from '../services/securityService';
+import LanguageIcon from './LanguageIcon';
 import './ShareModal.css';
 
 export default function ShareModal({ isOpen, onClose }) {
@@ -144,7 +145,9 @@ export default function ShareModal({ isOpen, onClose }) {
                         checked={isChecked}
                         onChange={() => toggleSelectFile(file.id)}
                       />
-                      <span className="file-icon-mini">{file.language?.icon || '📄'}</span>
+                      <span className="file-icon-mini">
+                        <LanguageIcon language={file.language} filename={file.name} size={13} />
+                      </span>
                       <span className="file-name-text">{file.name}</span>
                       {isLocked && (
                         <span className="file-locked-tag" title="Password lock preserved">

@@ -6,28 +6,33 @@ import {
   FileCode,
   Edit2,
   Download,
-  Archive,
+  FolderKanban,
   Lock,
-  Maximize2,
-  Minimize2,
+  ZoomIn,
+  ZoomOut,
 } from 'lucide-react';
 import { isItemProtected, isItemUnlocked } from '../services/securityService';
 import PasswordPromptModal from './PasswordPromptModal';
+import LanguageIcon from './LanguageIcon';
 import './FileTabs.css';
 
 export default function FileTabs() {
   const {
     state,
+    dispatch,
     handleAddFile,
+    handleCreateSequentialFile,
     handleSelectFile,
     handleCloseTab,
     handleRenameFile,
     handleSaveActiveFile,
     handleDownloadWorkspace,
     handleReorderTabs,
-    handleToggleFocusMode,
+    handleUpdateConfig,
   } = useApp();
-  const { files, openFileIds, activeFileId, focusMode } = state;
+  const { files, openFileIds, activeFileId, config } = state;
+
+  const currentFontSize = config?.fontSize || 16;
 
   const openFiles = (openFileIds || [])
     .map((id) => files.find((f) => f.id === id))
@@ -187,7 +192,9 @@ export default function FileTabs() {
               onDragEnd={handleDragEnd}
               title={`${file.name} (${file.language.name}) — Drag to reorder, double click to rename`}
             >
-              <span className="file-tab-icon">{file.language.icon || '📄'}</span>
+              <span className="file-tab-icon">
+                <LanguageIcon language={file.language} filename={file.name} size={14} />
+              </span>
 
               {isEditing ? (
                 <input
@@ -265,16 +272,6 @@ export default function FileTabs() {
       </div>
 
       <div className="file-tabs-right-actions">
-        {/* Focus Mode Button */}
-        <button
-          className={`btn-tab-action btn-focus-toggle ${focusMode ? 'active' : ''}`}
-          onClick={handleToggleFocusMode}
-          title={focusMode ? 'Exit Code Focus Mode' : 'Enter Code Focus Mode (Zen Mode)'}
-        >
-          {focusMode ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
-          <span>{focusMode ? 'Exit Focus' : 'Focus'}</span>
-        </button>
-
         <button
           className="btn-tab-action"
           onClick={() => handleSaveActiveFile()}
@@ -286,17 +283,17 @@ export default function FileTabs() {
 
         <button
           className="btn-tab-action"
-          onClick={() => handleDownloadWorkspace(null)}
-          title="Download entire workspace as .ZIP"
+          onClick={() => dispatch({ type: 'TOGGLE_WORKSPACES_MODAL' })}
+          title="Saved Workspaces Manager (Save & Load Projects)"
         >
-          <Archive size={13} />
-          <span>ZIP</span>
+          <FolderKanban size={13} />
+          <span>Workspaces</span>
         </button>
 
         <button
           className="btn-new-file"
-          onClick={handleStartAdd}
-          title="Add new file (+)"
+          onClick={handleCreateSequentialFile}
+          title="Add new file (Ctrl+N / Cmd+N)"
         >
           <Plus size={14} />
           <span>New File</span>

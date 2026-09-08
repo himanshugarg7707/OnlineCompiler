@@ -24,7 +24,7 @@ import {
 import './AuthModal.css';
 
 export default function AuthModal({ isOpen, onClose }) {
-  const { state, handleSwitchUser, handleLogoutUser, showToast } = useApp();
+  const { state, dispatch, handleSwitchUser, handleLogoutUser, showToast } = useApp();
   const { activeUser } = state;
 
   const existingUsers = useMemo(() => {
@@ -76,10 +76,11 @@ export default function AuthModal({ isOpen, onClose }) {
     }
 
     handleSwitchUser(res.user);
-    showToast(`Welcome, ${res.user.username}! 🎉 (Initials: ${res.user.avatarInitials})`);
+    showToast(`Welcome, ${res.user.username}! Let's pick your subject notebook 📚`);
     onClose();
     setUsername('');
     setPassword('');
+    dispatch({ type: 'NAVIGATE_PAGE', payload: 'notebook-setup' });
   };
 
   const handleQuickSwitch = (targetUser) => {

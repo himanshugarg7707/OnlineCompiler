@@ -5,14 +5,13 @@ import {
   Code2,
   FolderTree,
   BookOpen,
-  Share2,
-  History,
+  FolderKanban,
   AlignLeft,
-  LogIn,
   UserPlus,
   Radio,
-  Maximize2,
-  Minimize2,
+  Palette,
+  LayoutTemplate,
+  GraduationCap,
 } from 'lucide-react';
 import LanguageSelector from './LanguageSelector';
 import './Header.css';
@@ -24,50 +23,12 @@ export default function Header() {
     dispatch,
     handleRunCode,
     handleFormatCode,
-    handleToggleFocusMode,
   } = useApp();
-  const { executionStatus, explorerOpen, activeUser, focusMode, files, activeFileId } = state;
+  const { executionStatus, explorerOpen, activeUser, files, activeFileId } = state;
 
   const isRunning = executionStatus === 'compiling' || executionStatus === 'running';
   const hasSelection = Boolean(state.selectedCode && state.selectedCode.trim());
   const activeFile = files.find((f) => f.id === activeFileId) || files[0];
-
-  // Pure Focus Mode (Full Navbar Hidden, 100% Editor Space, Just Run Button & Exit)
-  if (focusMode) {
-    return (
-      <div className="focus-floating-controller animate-slide-up">
-        {/* Run Code Button */}
-        <button
-          className={`btn-run focus-run-btn ${isRunning ? 'running' : ''} ${hasSelection ? 'has-selection' : ''}`}
-          onClick={handleRunCode}
-          disabled={isRunning}
-          title={hasSelection ? 'Run selected query (Ctrl+Enter)' : 'Run code (Ctrl+Enter)'}
-        >
-          {isRunning ? (
-            <>
-              <div className="spinner" />
-              <span>{executionStatus === 'compiling' ? 'Compiling...' : 'Running...'}</span>
-            </>
-          ) : (
-            <>
-              <Play size={14} fill="currentColor" />
-              <span>{hasSelection ? 'Run Selection' : 'Run'}</span>
-            </>
-          )}
-        </button>
-
-        {/* Exit Focus Button */}
-        <button
-          className="btn-exit-focus-pill"
-          onClick={handleToggleFocusMode}
-          title="Exit Focus Mode (Esc)"
-        >
-          <Minimize2 size={13} />
-          <span>Exit</span>
-        </button>
-      </div>
-    );
-  }
 
   // Standard Header
   return (
@@ -92,19 +53,9 @@ export default function Header() {
       </div>
 
       <div className="header-right">
-        {/* Focus Mode Button */}
-        <button
-          className="btn-hint btn-ghost btn-focus-header"
-          onClick={handleToggleFocusMode}
-          title="Enter Code Focus Mode (Zen distraction-free view)"
-        >
-          <Maximize2 size={15} />
-          <span>Focus</span>
-        </button>
-
         {/* Format Code */}
         <button
-          className="btn-hint btn-ghost"
+          className="btn-hint btn-ghost btn-format-header"
           onClick={handleFormatCode}
           title="Format Code (Shift+Alt+F)"
         >
@@ -112,9 +63,19 @@ export default function Header() {
           <span>Format</span>
         </button>
 
+        {/* Code Templates Modal Button */}
+        <button
+          className="btn-hint btn-ghost btn-templates-header"
+          onClick={() => dispatch({ type: 'TOGGLE_TEMPLATES_MODAL' })}
+          title="DSA Code Templates & Algorithms Library"
+        >
+          <LayoutTemplate size={15} />
+          <span>Templates</span>
+        </button>
+
         {/* Live Collaboration Modal Button */}
         <button
-          className={`btn-hint btn-ghost ${collabRoomId ? 'collab-live-btn' : ''}`}
+          className={`btn-hint btn-ghost btn-live-header ${collabRoomId ? 'collab-live-btn' : ''}`}
           onClick={() => dispatch({ type: 'TOGGLE_COLLAB_MODAL' })}
           title={collabRoomId ? `Connected to Room: ${collabRoomId} (Click to manage)` : 'Live Room Collaboration'}
         >
@@ -122,25 +83,26 @@ export default function Header() {
           <span>{collabRoomId ? collabRoomId : 'Live'}</span>
         </button>
 
-        {/* Version History Modal Button */}
+        {/* Subject Notebooks Hub Button */}
         <button
-          className="btn-hint btn-ghost"
-          onClick={() => dispatch({ type: 'TOGGLE_HISTORY_MODAL' })}
-          title="Local Version History & Snapshots"
+          className="btn-hint btn-ghost btn-notebooks-header"
+          onClick={() => dispatch({ type: 'NAVIGATE_PAGE', payload: 'notebook-setup' })}
+          title="Subject Notebooks & Course Workspaces Setup"
         >
-          <History size={15} />
-          <span>History</span>
+          <GraduationCap size={15} />
+          <span>Notebooks</span>
         </button>
 
-        {/* Share Link Modal Button */}
+        {/* Workspaces Manager Button */}
         <button
-          className="btn-hint btn-ghost"
-          onClick={() => dispatch({ type: 'TOGGLE_SHARE_MODAL' })}
-          title="Share Workspace & Code Link"
+          className="btn-hint btn-ghost btn-workspaces-header"
+          onClick={() => dispatch({ type: 'TOGGLE_WORKSPACES_MODAL' })}
+          title="Saved Workspaces & Projects Manager"
         >
-          <Share2 size={15} />
-          <span>Share</span>
+          <FolderKanban size={15} />
+          <span>Workspaces</span>
         </button>
+
 
         {/* Practice Questions */}
         <button
@@ -172,11 +134,25 @@ export default function Header() {
           )}
         </button>
 
-        {/* Settings Modal Button */}
+        {/* Quick Theme Switcher Button */}
         <button
           className="btn-icon"
-          onClick={() => dispatch({ type: 'TOGGLE_SETTINGS' })}
-          title="Settings, Themes & Security"
+          onClick={() => {
+            if (typeof window !== 'undefined') {
+              window.location.hash = '#/settings?tab=themes';
+            }
+            dispatch({ type: 'NAVIGATE_PAGE', payload: 'settings' });
+          }}
+          title="Change Theme & Custom 3-Color Palette"
+        >
+          <Palette size={18} />
+        </button>
+
+        {/* Dedicated Settings Page Button */}
+        <button
+          className="btn-icon"
+          onClick={() => dispatch({ type: 'NAVIGATE_PAGE', payload: 'settings' })}
+          title="Settings, Themes, Audio & ZIP Hub"
         >
           <Settings size={18} />
         </button>
@@ -185,17 +161,17 @@ export default function Header() {
         {activeUser ? (
           <div
             className="header-user-avatar-badge"
-            onClick={() => dispatch({ type: 'SET_AUTH_MODAL', payload: true })}
+            onClick={() => dispatch({ type: 'SET_WELCOME_MODAL', payload: true })}
             style={{ background: activeUser.avatarColor || 'var(--accent-cyan)' }}
-            title={`Logged in as ${activeUser.username} (${activeUser.avatarInitials}) — Click to open Profile & Account Modal`}
+            title={`Logged in as ${activeUser.username} (${activeUser.avatarInitials}) — Click to view Account & Features`}
           >
             <span>{activeUser.avatarInitials}</span>
           </div>
         ) : (
           <button
             className="btn-header-login"
-            onClick={() => dispatch({ type: 'SET_AUTH_MODAL', payload: true })}
-            title="Sign Up / Login (Save & isolate workspaces)"
+            onClick={() => dispatch({ type: 'SET_WELCOME_MODAL', payload: true })}
+            title="Sign Up / Features (Why Full Code vs VS Code)"
           >
             <UserPlus size={14} className="login-icon-glow" />
             <span>Sign Up</span>
