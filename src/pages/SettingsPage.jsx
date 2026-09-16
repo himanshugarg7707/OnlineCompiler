@@ -288,6 +288,7 @@ export default function SettingsPage() {
 
   const folderInputRef = useRef(null);
   const fileInputRef = useRef(null);
+  const importZipInputRef = useRef(null);
   // Security Vault & Password Locking State
   const [securityLocks, setSecurityLocks] = useState(getSecurityLocks);
   const [lockSubTab, setLockSubTab] = useState('files'); // 'files' | 'folders' | 'notebooks'
