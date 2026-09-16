@@ -208,7 +208,7 @@ export default function FileTabs() {
                   onClick={(e) => e.stopPropagation()}
                 />
               ) : (
-                <span className="file-tab-name">{file.name}</span>
+                <span className="file-tab-name">{file.name.includes('/') ? file.name.split('/').pop() : file.name}</span>
               )}
 
               {isFileLocked && (
@@ -292,8 +292,8 @@ export default function FileTabs() {
 
         <button
           className="btn-new-file"
-          onClick={handleCreateSequentialFile}
-          title="Add new file (Ctrl+N / Cmd+N)"
+          onClick={handleStartAdd}
+          title="Add new file (Enter file name)"
         >
           <Plus size={14} />
           <span>New File</span>

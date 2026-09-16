@@ -604,6 +604,8 @@ export default function OutputPanel() {
     inputDescription,
     aiExplanation,
     sqlData,
+    plots,
+    htmlOutput,
     detectedLanguage,
     files,
     activeFileId,
@@ -650,66 +652,70 @@ export default function OutputPanel() {
           })}
         </div>
 
-        {/* Active File Binding Pill & Selector */}
-        <div className="terminal-file-binding-badge" title="This terminal is currently executing and showing output for this file">
-          <span className="binding-label">In use with:</span>
-          <div className="binding-select-wrap">
-            <span className="binding-file-icon">
-              <LanguageIcon language={activeFile?.language} filename={activeFile?.name} size={14} />
-            </span>
-            <select
-              className="binding-file-dropdown"
-              value={activeFileId}
-              onChange={(e) => handleSelectFile(e.target.value)}
-              title="Change the target file bound to this terminal"
-            >
-              {files.map((f) => (
-                <option key={f.id} value={f.id}>
-                  {f.name}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-
-        {/* Status indicator */}
-        <div className="execution-status">
-          {isRunning && (
-            <div className="status-running">
-              <div className="spinner" />
-              <span>
-                {executionStatus === 'compiling' ? 'Compiling...' : 'Running...'}
+        {/* Terminal Options / Status Area */}
+        <div className="terminal-options-area">
+          {/* Active File Binding Pill & Selector */}
+          <div className="terminal-file-binding-badge" title="This terminal is currently executing and showing output for this file">
+            <span className="binding-label">In use with:</span>
+            <div className="binding-select-wrap">
+              <span className="binding-file-icon">
+                <LanguageIcon language={activeFile?.language} filename={activeFile?.name} size={13} />
               </span>
+              <select
+                className="binding-file-dropdown"
+                value={activeFileId}
+                onChange={(e) => handleSelectFile(e.target.value)}
+                title="Change the target file bound to this terminal"
+              >
+                {files.map((f) => (
+                  <option key={f.id} value={f.id}>
+                    {f.name}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown size={11} className="binding-select-arrow" />
             </div>
-          )}
-          {executionStatus === 'success' && (
-            <div className="status-success">
-              <span className="status-dot green" />
-              <span>Done</span>
-              {executionTime && <span className="status-time">{executionTime}s</span>}
-              {executionMemory && (
-                <span className="status-memory">
-                  {(executionMemory / 1024).toFixed(1)}MB
-                </span>
-              )}
-            </div>
-          )}
-          {executionStatus === 'error' && (
-            <div className="status-error">
-              <span className="status-dot red" />
-              <span>Error</span>
-            </div>
-          )}
+          </div>
 
-          {/* Hide / Collapse Terminal Button */}
-          <button
-            className="btn-hide-terminal"
-            onClick={handleToggleTerminal}
-            title="Hide Terminal & Output Panel"
-          >
-            <ChevronDown size={14} />
-            <span>Hide</span>
-          </button>
+          {/* Status indicator & Controls */}
+          <div className="execution-status">
+            {isRunning && (
+              <div className="status-running">
+                <div className="spinner" />
+                <span className="status-text">
+                  {executionStatus === 'compiling' ? 'Compiling...' : 'Running...'}
+                </span>
+              </div>
+            )}
+            {executionStatus === 'success' && (
+              <div className="status-success">
+                <span className="status-dot green" />
+                <span className="status-text">Done</span>
+                {executionTime && <span className="status-time">{executionTime}s</span>}
+                {executionMemory && (
+                  <span className="status-memory">
+                    {(executionMemory / 1024).toFixed(1)}MB
+                  </span>
+                )}
+              </div>
+            )}
+            {executionStatus === 'error' && (
+              <div className="status-error">
+                <span className="status-dot red" />
+                <span className="status-text">Error</span>
+              </div>
+            )}
+
+            {/* Hide / Collapse Terminal Button */}
+            <button
+              className="btn-hide-terminal"
+              onClick={handleToggleTerminal}
+              title="Hide Terminal & Output Panel"
+            >
+              <ChevronDown size={13} />
+              <span className="btn-hide-text">Hide</span>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -761,7 +767,7 @@ export default function OutputPanel() {
                     : '🚀 Executing...'}
                 </span>
               </div>
-            ) : output || hasError ? (
+            ) : output || hasError || (plots && plots.length > 0) || htmlOutput ? (
               <div className="output-results-wrapper">
                 {/* If SQL table data returned, show visual table grid */}
                 {sqlData && sqlData.rows && sqlData.rows.length > 0 && (
@@ -860,6 +866,37 @@ export default function OutputPanel() {
                     </div>
                   )}
                 </pre>
+
+                {/* Render Matplotlib Figures / Visualizations */}
+                {plots && plots.length > 0 && (
+                  <div className="output-plots-gallery animate-fade-in" style={{ marginTop: '14px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', fontWeight: '600', color: 'var(--color-primary, #38bdf8)' }}>
+                      <span>📈 Visual Output ({plots.length} {plots.length === 1 ? 'figure' : 'figures'})</span>
+                    </div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px' }}>
+                      {plots.map((plotSrc, idx) => (
+                        <div key={idx} style={{ background: '#090d16', padding: '10px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.08)' }}>
+                          <img src={plotSrc} alt={`Plot ${idx + 1}`} style={{ maxWidth: '100%', maxHeight: '420px', borderRadius: '6px', display: 'block' }} />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Render Interactive Folium Map or HTML Visualization */}
+                {htmlOutput && (
+                  <div className="output-html-preview animate-fade-in" style={{ marginTop: '14px', borderRadius: '8px', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.08)' }}>
+                    <div style={{ padding: '8px 12px', background: '#1e293b', fontSize: '12px', fontWeight: '600', color: '#38bdf8' }}>
+                      🗺️ Interactive Map / HTML Preview
+                    </div>
+                    <iframe
+                      srcDoc={htmlOutput}
+                      title="Map Visualization"
+                      style={{ width: '100%', height: '360px', border: 'none', background: '#ffffff' }}
+                      sandbox="allow-scripts allow-same-origin"
+                    />
+                  </div>
+                )}
               </div>
             ) : (
               <div className="output-placeholder">

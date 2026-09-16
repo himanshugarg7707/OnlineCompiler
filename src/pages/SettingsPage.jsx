@@ -34,7 +34,21 @@ import {
   ArrowRight,
   Folder,
   FolderPlus,
+  Lock,
+  Unlock,
+  KeyRound,
+  ShieldCheck,
 } from 'lucide-react';
+import {
+  getSecurityLocks,
+  lockFile,
+  removeFileLock,
+  lockFolder,
+  removeFolderLock,
+  lockNotebook,
+  removeNotebookLock,
+} from '../services/securityService';
+import { getSavedNotebooks } from '../services/notebooksService';
 import { applyCustomPalette, clearCustomPaletteOverrides } from '../services/themeService';
 import { getHistorySnapshots, deleteSnapshot, clearAllHistory } from '../services/historyService';
 import {
@@ -273,7 +287,74 @@ export default function SettingsPage() {
 
   const folderInputRef = useRef(null);
   const fileInputRef = useRef(null);
-  const importZipInputRef = useRef(null);
+  // Security Vault & Password Locking State
+  const [securityLocks, setSecurityLocks] = useState(getSecurityLocks);
+  const [lockSubTab, setLockSubTab] = useState('files'); // 'files' | 'folders' | 'notebooks'
+  const [lockModal, setLockModal] = useState(null); // { type, item, mode: 'lock' | 'unlock' }
+  const [lockPassword, setLockPassword] = useState('');
+  const [lockConfirmPassword, setLockConfirmPassword] = useState('');
+  const [lockError, setLockError] = useState('');
+
+  const savedNotebooks = useMemo(() => {
+    try {
+      return getSavedNotebooks() || [];
+    } catch {
+      return [];
+    }
+  }, [activeTab]);
+
+  const handleOpenLockModal = (type, item, mode) => {
+    setLockModal({ type, item, mode });
+    setLockPassword('');
+    setLockConfirmPassword('');
+    setLockError('');
+  };
+
+  const handleConfirmLockAction = async () => {
+    if (!lockModal) return;
+    const { type, item, mode } = lockModal;
+
+    if (!lockPassword.trim()) {
+      setLockError('Password cannot be empty');
+      return;
+    }
+
+    if (mode === 'lock' && lockPassword !== lockConfirmPassword) {
+      setLockError('Passwords do not match');
+      return;
+    }
+
+    try {
+      if (mode === 'lock') {
+        if (type === 'file') {
+          const updatedFile = await lockFile(item, lockPassword);
+          const newFiles = (files || []).map((f) => (f.id === item.id ? updatedFile : f));
+          dispatch({ type: 'SET_FILES', payload: newFiles });
+        } else if (type === 'folder') {
+          await lockFolder(item.id, item.name, lockPassword);
+        } else if (type === 'notebook') {
+          await lockNotebook(item.id, item.title, lockPassword);
+        }
+        showToast(`🔒 "${item.name || item.title}" is now password-protected & encrypted!`);
+      } else {
+        // Unlock / Remove lock
+        if (type === 'file') {
+          const restoredFile = await removeFileLock(item, lockPassword);
+          const newFiles = (files || []).map((f) => (f.id === item.id ? restoredFile : f));
+          dispatch({ type: 'SET_FILES', payload: newFiles });
+        } else if (type === 'folder') {
+          await removeFolderLock(item.id, lockPassword);
+        } else if (type === 'notebook') {
+          await removeNotebookLock(item.id, lockPassword);
+        }
+        showToast(`🔓 Lock removed from "${item.name || item.title}"!`);
+      }
+      setSecurityLocks(getSecurityLocks());
+      setLockModal(null);
+    } catch (err) {
+      setLockError(err.message || 'Action failed. Please check password.');
+    }
+  };
 
   useEffect(() => {
     getStorageEstimate().then(setStorageInfo);
@@ -1407,7 +1488,7 @@ export default function SettingsPage() {
 
                   <div className="custom-color-control-box">
                     <div className="color-control-header">
-                      <span className="color-step-num" style={{ background: 'rgba(0, 212, 255, 0.2)', color: '#00d4ff' }}>2</span>
+                      <span className="color-step-num" style={{ background: 'color-mix(in srgb, var(--accent-cyan) 20%, transparent)', color: 'var(--accent-cyan)' }}>2</span>
                       <label className="color-control-label">Primary Accent</label>
                     </div>
                     <p className="color-control-hint">Buttons, tabs, active borders & glow</p>
@@ -1826,6 +1907,211 @@ export default function SettingsPage() {
                 </div>
               </div>
 
+              <div className="vault-security-card animate-scale-in">
+                <div className="vault-card-header">
+                  <div className="vault-header-title">
+                    <div className="card-icon-wrap vault-icon-wrap">
+                      <KeyRound size={22} />
+                    </div>
+                    <div>
+                      <h3>Item Password Protection & Encryption Vault</h3>
+                      <p className="vault-subtitle">
+                        Lock individual files, folders, or subject notebooks with a secret password. Contents are encrypted using AES-GCM and remain protected even during live room broadcasts and workspace sharing.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="vault-subtabs">
+                    <button
+                      className={`vault-tab-btn ${lockSubTab === 'files' ? 'active' : ''}`}
+                      onClick={() => setLockSubTab('files')}
+                    >
+                      <FileCode size={14} />
+                      <span>Files ({files.length})</span>
+                    </button>
+                    <button
+                      className={`vault-tab-btn ${lockSubTab === 'folders' ? 'active' : ''}`}
+                      onClick={() => setLockSubTab('folders')}
+                    >
+                      <Folder size={14} />
+                      <span>Folders ({folders?.length || 0})</span>
+                    </button>
+                    <button
+                      className={`vault-tab-btn ${lockSubTab === 'notebooks' ? 'active' : ''}`}
+                      onClick={() => setLockSubTab('notebooks')}
+                    >
+                      <GraduationCap size={14} />
+                      <span>Notebooks ({savedNotebooks.length})</span>
+                    </button>
+                  </div>
+                </div>
+
+                <div className="vault-items-list">
+                  {lockSubTab === 'files' && (
+                    <div className="vault-table">
+                      {files.map((file) => {
+                        const isLocked = Boolean(file.isLocked || securityLocks.files[file.id]?.locked);
+                        return (
+                          <div key={file.id} className="vault-row">
+                            <div className="vault-row-left">
+                              <FileCode size={16} className={isLocked ? 'vault-icon-locked' : 'vault-icon-normal'} />
+                              <div className="vault-row-meta">
+                                <span className="vault-item-name">{file.name}</span>
+                                <span className="vault-item-sub">
+                                  {file.language || 'Plain text'} • {(file.content?.length || 0)} chars
+                                </span>
+                              </div>
+                            </div>
+
+                            <div className="vault-row-right">
+                              {isLocked ? (
+                                <span className="badge-locked">
+                                  <Lock size={12} />
+                                  <span>AES-GCM Encrypted</span>
+                                </span>
+                              ) : (
+                                <span className="badge-unlocked">
+                                  <Unlock size={12} />
+                                  <span>Unlocked</span>
+                                </span>
+                              )}
+
+                              {isLocked ? (
+                                <button
+                                  className="btn-vault-action unlock"
+                                  onClick={() => handleOpenLockModal('file', file, 'unlock')}
+                                >
+                                  <Unlock size={13} />
+                                  <span>Unlock / Decrypt</span>
+                                </button>
+                              ) : (
+                                <button
+                                  className="btn-vault-action lock"
+                                  onClick={() => handleOpenLockModal('file', file, 'lock')}
+                                >
+                                  <Lock size={13} />
+                                  <span>Lock with Password</span>
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {lockSubTab === 'folders' && (
+                    <div className="vault-table">
+                      {(folders || []).length === 0 ? (
+                        <div className="vault-empty-text">No folders created in the current workspace.</div>
+                      ) : (
+                        (folders || []).map((folder) => {
+                          const isLocked = Boolean(securityLocks.folders[folder.id]?.locked);
+                          return (
+                            <div key={folder.id} className="vault-row">
+                              <div className="vault-row-left">
+                                <Folder size={16} className={isLocked ? 'vault-icon-locked' : 'vault-icon-normal'} />
+                                <div className="vault-row-meta">
+                                  <span className="vault-item-name">{folder.name}</span>
+                                  <span className="vault-item-sub">Folder ID: {folder.id}</span>
+                                </div>
+                              </div>
+
+                              <div className="vault-row-right">
+                                {isLocked ? (
+                                  <span className="badge-locked">
+                                    <Lock size={12} />
+                                    <span>Folder Locked</span>
+                                  </span>
+                                ) : (
+                                  <span className="badge-unlocked">
+                                    <Unlock size={12} />
+                                    <span>Unlocked</span>
+                                  </span>
+                                )}
+
+                                {isLocked ? (
+                                  <button
+                                    className="btn-vault-action unlock"
+                                    onClick={() => handleOpenLockModal('folder', folder, 'unlock')}
+                                  >
+                                    <Unlock size={13} />
+                                    <span>Unlock Folder</span>
+                                  </button>
+                                ) : (
+                                  <button
+                                    className="btn-vault-action lock"
+                                    onClick={() => handleOpenLockModal('folder', folder, 'lock')}
+                                  >
+                                    <Lock size={13} />
+                                    <span>Lock with Password</span>
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  )}
+
+                  {lockSubTab === 'notebooks' && (
+                    <div className="vault-table">
+                      {savedNotebooks.length === 0 ? (
+                        <div className="vault-empty-text">No subject notebooks created yet.</div>
+                      ) : (
+                        savedNotebooks.map((nb) => {
+                          const isLocked = Boolean(securityLocks.notebooks[nb.id]?.locked);
+                          return (
+                            <div key={nb.id} className="vault-row">
+                              <div className="vault-row-left">
+                                <GraduationCap size={16} className={isLocked ? 'vault-icon-locked' : 'vault-icon-normal'} />
+                                <div className="vault-row-meta">
+                                  <span className="vault-item-name">{nb.title}</span>
+                                  <span className="vault-item-sub">{nb.subjectId} • {nb.files?.length || 0} notes</span>
+                                </div>
+                              </div>
+
+                              <div className="vault-row-right">
+                                {isLocked ? (
+                                  <span className="badge-locked">
+                                    <Lock size={12} />
+                                    <span>Notebook Locked</span>
+                                  </span>
+                                ) : (
+                                  <span className="badge-unlocked">
+                                    <Unlock size={12} />
+                                    <span>Unlocked</span>
+                                  </span>
+                                )}
+
+                                {isLocked ? (
+                                  <button
+                                    className="btn-vault-action unlock"
+                                    onClick={() => handleOpenLockModal('notebook', nb, 'unlock')}
+                                  >
+                                    <Unlock size={13} />
+                                    <span>Unlock Notebook</span>
+                                  </button>
+                                ) : (
+                                  <button
+                                    className="btn-vault-action lock"
+                                    onClick={() => handleOpenLockModal('notebook', nb, 'lock')}
+                                  >
+                                    <Lock size={13} />
+                                    <span>Lock with Password</span>
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+
               <div className="settings-cards-grid">
                 <div className="feature-card">
                   <div className="card-top">
@@ -1874,6 +2160,80 @@ export default function SettingsPage() {
                   </div>
                 </div>
               </div>
+
+              {/* Password Encryption / Decryption Modal */}
+              {lockModal && (
+                <div className="modal-overlay" onClick={() => setLockModal(null)}>
+                  <div className="vault-modal-content animate-scale-in" onClick={(e) => e.stopPropagation()}>
+                    <div className="vault-modal-header">
+                      <div className="vault-modal-icon">
+                        {lockModal.mode === 'lock' ? <Lock size={20} /> : <Unlock size={20} />}
+                      </div>
+                      <div>
+                        <h3>
+                          {lockModal.mode === 'lock' ? 'Lock & Encrypt Item' : 'Unlock & Decrypt Item'}
+                        </h3>
+                        <p className="vault-modal-sub">
+                          {lockModal.item.name || lockModal.item.title}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="vault-modal-body">
+                      {lockModal.mode === 'lock' && (
+                        <div className="vault-security-notice">
+                          <ShieldCheck size={16} className="notice-icon" />
+                          <span>
+                            This item will be encrypted using AES-GCM. You will need this password to view or edit the contents.
+                          </span>
+                        </div>
+                      )}
+
+                      <div className="vault-input-group">
+                        <label>Secret Password / PIN</label>
+                        <input
+                          type="password"
+                          className="vault-password-input"
+                          placeholder="Enter secret password..."
+                          value={lockPassword}
+                          onChange={(e) => setLockPassword(e.target.value)}
+                          autoFocus
+                        />
+                      </div>
+
+                      {lockModal.mode === 'lock' && (
+                        <div className="vault-input-group">
+                          <label>Confirm Password</label>
+                          <input
+                            type="password"
+                            className="vault-password-input"
+                            placeholder="Confirm secret password..."
+                            value={lockConfirmPassword}
+                            onChange={(e) => setLockConfirmPassword(e.target.value)}
+                          />
+                        </div>
+                      )}
+
+                      {lockError && <div className="vault-error-msg">{lockError}</div>}
+                    </div>
+
+                    <div className="vault-modal-actions">
+                      <button
+                        className="btn-cyber-secondary"
+                        onClick={() => setLockModal(null)}
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        className="btn-vault-confirm"
+                        onClick={handleConfirmLockAction}
+                      >
+                        {lockModal.mode === 'lock' ? 'Lock & Encrypt' : 'Verify & Unlock'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </main>

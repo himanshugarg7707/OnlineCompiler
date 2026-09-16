@@ -6,6 +6,7 @@ import { validateCodeSyntax } from '../services/syntaxValidatorService';
 import ComplexityPanel from './ComplexityPanel';
 import { AlertCircle } from 'lucide-react';
 import FileTabs from './FileTabs';
+import JupyterNotebookEditor from './JupyterNotebookEditor';
 import './CodeEditor.css';
 
 let snippetsRegistered = false;
@@ -543,50 +544,66 @@ export default function CodeEditor() {
     return () => window.removeEventListener('editor-jump-to-line', handleJump);
   }, []);
 
+  const activeFile = state.files.find((f) => f.id === state.activeFileId) || state.files[0];
+  const isNotebook = Boolean(
+    activeFile?.name?.endsWith('.ipynb') ||
+    detectedLanguage?.monacoLanguage === 'ipynb' ||
+    detectedLanguage?.id === 710
+  );
+
   return (
     <div className="code-editor-container">
       {/* File Tabs Navigation Bar */}
       <FileTabs />
 
-      {/* Monaco Code Editor */}
+      {/* Monaco Code Editor or Interactive Jupyter Notebook */}
       <div className="editor-wrapper">
-        <Editor
-          height="100%"
-          language={detectedLanguage.monacoLanguage}
-          defaultValue={code}
-          theme={activeMonacoTheme}
-          options={editorOptions}
-          onChange={handleEditorChange}
-          onMount={handleEditorDidMount}
-          loading={
-            <div className="editor-loading">
-              <div className="spinner" />
-              <span>Loading Full Code Editor...</span>
-            </div>
-          }
-        />
-
-        {/* Floating Complexity Pill (Bottom Right) */}
-        <ComplexityPanel />
-
-        {/* Floating Problems & Error Jumper Pill */}
-        {liveErrors.length > 0 && (
-          <button
-            className="editor-problems-pill animate-slide-up"
-            onClick={() => {
-              const first = liveErrors[0];
-              if (first && editorRef.current) {
-                editorRef.current.revealLineInCenter(first.startLineNumber);
-                editorRef.current.setPosition({ lineNumber: first.startLineNumber, column: first.startColumn });
-                editorRef.current.focus();
+        {isNotebook ? (
+          <JupyterNotebookEditor
+            file={activeFile}
+            onContentChange={handleEditorChange}
+          />
+        ) : (
+          <>
+            <Editor
+              height="100%"
+              language={detectedLanguage.monacoLanguage}
+              defaultValue={code}
+              theme={activeMonacoTheme}
+              options={editorOptions}
+              onChange={handleEditorChange}
+              onMount={handleEditorDidMount}
+              loading={
+                <div className="editor-loading">
+                  <div className="spinner" />
+                  <span>Loading Full Code Editor...</span>
+                </div>
               }
-            }}
-            title="Click to jump to first syntax error"
-          >
-            <AlertCircle size={13} className="problems-icon" />
-            <span className="problems-count">{liveErrors.length} {liveErrors.length === 1 ? 'Error' : 'Errors'}</span>
-            <span className="problems-detail">L{liveErrors[0].startLineNumber}: {liveErrors[0].message}</span>
-          </button>
+            />
+
+            {/* Floating Complexity Pill (Bottom Right) */}
+            <ComplexityPanel />
+
+            {/* Floating Problems & Error Jumper Pill */}
+            {liveErrors.length > 0 && (
+              <button
+                className="editor-problems-pill animate-slide-up"
+                onClick={() => {
+                  const first = liveErrors[0];
+                  if (first && editorRef.current) {
+                    editorRef.current.revealLineInCenter(first.startLineNumber);
+                    editorRef.current.setPosition({ lineNumber: first.startLineNumber, column: first.startColumn });
+                    editorRef.current.focus();
+                  }
+                }}
+                title="Click to jump to first syntax error"
+              >
+                <AlertCircle size={13} className="problems-icon" />
+                <span className="problems-count">{liveErrors.length} {liveErrors.length === 1 ? 'Error' : 'Errors'}</span>
+                <span className="problems-detail">L{liveErrors[0].startLineNumber}: {liveErrors[0].message}</span>
+              </button>
+            )}
+          </>
         )}
       </div>
     </div>

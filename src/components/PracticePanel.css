@@ -919,3 +919,70 @@
   color: var(--text-muted);
 }
 
+/* AI PDF Exam Callout Banner */
+.practice-exam-callout-card {
+  margin: 10px 14px 4px 14px;
+  padding: 10px 12px;
+  background: linear-gradient(135deg, rgba(0, 212, 255, 0.08), rgba(180, 128, 255, 0.08));
+  border: 1px solid rgba(0, 212, 255, 0.35);
+  border-radius: var(--radius-md, 8px);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  transition: all var(--transition-fast, 0.2s);
+}
+
+.practice-exam-callout-card:hover {
+  background: linear-gradient(135deg, rgba(0, 212, 255, 0.16), rgba(180, 128, 255, 0.16));
+  border-color: var(--accent-cyan, #00d4ff);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(0, 212, 255, 0.2);
+}
+
+.exam-callout-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  background: rgba(0, 212, 255, 0.18);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent-cyan, #00d4ff);
+  flex-shrink: 0;
+}
+
+.exam-callout-text {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.exam-callout-text strong {
+  font-size: 12px;
+  color: var(--text-primary, #e6edf3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.exam-callout-text span {
+  font-size: 10.5px;
+  color: var(--text-secondary, #8b949e);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.exam-callout-arrow {
+  color: var(--accent-cyan, #00d4ff);
+  flex-shrink: 0;
+  transition: transform 0.2s ease;
+}
+
+.practice-exam-callout-card:hover .exam-callout-arrow {
+  transform: translateX(3px);
+}
+

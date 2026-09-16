@@ -166,23 +166,33 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 5px 8px;
+  padding: 5px 8px 5px 6px;
   cursor: pointer;
   position: relative;
-  transition: background var(--transition-fast);
+  transition: all var(--transition-fast);
   color: var(--text-primary);
-  font-size: 12px;
+  font-size: 13px;
   user-select: none;
-  border-radius: var(--radius-xs);
-  margin: 1px 4px;
+  border-radius: 6px;
+  margin: 3px 4px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.07);
 }
 
 .explorer-folder-header:hover {
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+[data-theme="baby-pink"] .explorer-folder-header {
+  background: rgba(244, 114, 182, 0.12);
+  border-color: rgba(244, 114, 182, 0.28);
+  color: #831843;
 }
 
 [data-theme="baby-pink"] .explorer-folder-header:hover {
-  background: rgba(244, 114, 182, 0.15);
+  background: rgba(244, 114, 182, 0.22);
+  border-color: rgba(244, 114, 182, 0.45);
 }
 
 .folder-header-left {
@@ -206,17 +216,19 @@
   align-items: center;
   justify-content: center;
   color: var(--text-muted);
-  width: 14px;
+  width: 16px;
+  height: 16px;
   flex-shrink: 0;
+  transition: transform var(--transition-fast);
 }
 
 .folder-icon {
-  color: var(--accent-purple);
+  color: #f59e0b;
   flex-shrink: 0;
 }
 
 .folder-icon.open {
-  color: var(--accent-cyan);
+  color: #fbbf24;
 }
 
 [data-theme="baby-pink"] .folder-icon {
@@ -224,26 +236,33 @@
 }
 
 [data-theme="baby-pink"] .folder-icon.open {
-  color: #f43f5e;
+  color: #db2777;
 }
 
 .folder-name {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-family: var(--font-mono);
-  font-size: 12px;
-  font-weight: 600;
+  font-family: var(--font-ui), var(--font-mono);
+  font-size: 12.5px;
+  font-weight: 700;
+  letter-spacing: 0.25px;
 }
 
 .folder-badge {
   font-size: 9px;
-  padding: 1px 5px;
+  padding: 1px 6px;
   border-radius: var(--radius-full);
   background: var(--bg-tertiary);
   color: var(--text-muted);
-  font-weight: 600;
+  font-weight: 700;
   border: 1px solid var(--border-primary);
+}
+
+[data-theme="baby-pink"] .folder-badge {
+  background: rgba(244, 114, 182, 0.25);
+  color: #831843;
+  border-color: rgba(244, 114, 182, 0.4);
 }
 
 .folder-actions {
@@ -260,20 +279,56 @@
   display: none;
 }
 
+/* ─── Tree Guide Lines (Indent Guides) ─── */
 .folder-children-group {
   display: flex;
   flex-direction: column;
   position: relative;
-  border-left: 1px solid rgba(255, 255, 255, 0.06);
-  margin-left: 14px;
+  border-left: 1.5px solid rgba(255, 255, 255, 0.2);
+  margin-left: 18px; /* sits precisely beneath center of the 16px chevron */
+  padding-left: 0;
+  transition: border-color 0.2s ease;
+}
+
+.folder-children-group:hover {
+  border-left-color: rgba(0, 212, 255, 0.7);
 }
 
 [data-theme="baby-pink"] .folder-children-group {
-  border-left-color: rgba(244, 114, 182, 0.25);
+  border-left-color: rgba(219, 39, 119, 0.55);
+}
+
+[data-theme="baby-pink"] .folder-children-group:hover {
+  border-left-color: rgba(219, 39, 119, 0.95);
+}
+
+/* Branch connector notch from vertical tree line to each child item */
+.folder-children-group > .explorer-file-item::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 9px;
+  height: 1.5px;
+  background: rgba(255, 255, 255, 0.2);
+  pointer-events: none;
+  transition: background-color 0.2s ease;
+}
+
+[data-theme="baby-pink"] .folder-children-group > .explorer-file-item::before {
+  background: rgba(219, 39, 119, 0.55);
+}
+
+.folder-children-group:hover > .explorer-file-item::before {
+  background: rgba(0, 212, 255, 0.7);
+}
+
+[data-theme="baby-pink"] .folder-children-group:hover > .explorer-file-item::before {
+  background: rgba(219, 39, 119, 0.95);
 }
 
 .explorer-empty-folder-hint {
-  padding: 4px 8px;
+  padding: 4px 14px;
   font-size: 10.5px;
   color: var(--text-muted);
   font-style: italic;
@@ -286,57 +341,58 @@
   color: var(--accent-cyan);
 }
 
-/* File Item Row */
+/* ─── File Item Rows ─── */
 .explorer-file-item {
   display: flex;
   align-items: center;
   gap: 7px;
-  padding: 6px 10px 6px 14px;
+  padding: 5px 8px 5px 28px; /* Default for root files: aligns with folder icon! */
+  margin: 1px 4px;
+  border-radius: 5px;
   cursor: pointer;
   position: relative;
-  transition: background var(--transition-fast);
+  transition: all var(--transition-fast);
   color: var(--text-secondary);
   font-size: 12.5px;
   font-family: var(--font-mono);
-  width: 100%;
+  width: calc(100% - 8px);
   box-sizing: border-box;
   min-width: 0;
   overflow: hidden;
+  border: 1px solid transparent;
 }
 
+/* Nested files inside a folder: snug padding right next to the tree guide line */
 .explorer-file-item.child {
-  padding-left: 10px;
+  padding-left: 14px;
 }
 
 .explorer-file-item:hover {
-  background: rgba(255, 255, 255, 0.04);
+  background: rgba(255, 255, 255, 0.05);
   color: var(--text-primary);
+  border-color: rgba(255, 255, 255, 0.08);
 }
 
 [data-theme="baby-pink"] .explorer-file-item:hover {
-  background: rgba(244, 114, 182, 0.15);
+  background: rgba(244, 114, 182, 0.16);
+  border-color: rgba(244, 114, 182, 0.25);
+  color: #1f2937;
 }
 
 .explorer-file-item.active {
-  background: rgba(0, 212, 255, 0.1);
+  background: rgba(0, 212, 255, 0.12);
   color: var(--text-primary);
-  font-weight: 500;
+  font-weight: 600;
+  box-shadow: inset 3px 0 0 var(--accent-cyan);
+  border-color: rgba(0, 212, 255, 0.2);
 }
 
 [data-theme="baby-pink"] .explorer-file-item.active {
-  background: rgba(236, 72, 153, 0.18);
-  color: var(--text-primary);
-}
-
-.explorer-file-item.active::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  width: 3px;
-  background: var(--accent-cyan);
-  border-radius: 0 2px 2px 0;
+  background: rgba(236, 72, 153, 0.2);
+  color: #831843;
+  font-weight: 600;
+  box-shadow: inset 3px 0 0 #ec4899;
+  border-color: rgba(236, 72, 153, 0.35);
 }
 
 .file-icon {

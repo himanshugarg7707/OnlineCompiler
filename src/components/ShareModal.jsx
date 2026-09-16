@@ -27,10 +27,15 @@ export default function ShareModal({ isOpen, onClose }) {
   const [selectedFileIds, setSelectedFileIds] = useState(() => files.map((f) => f.id));
   const [copied, setCopied] = useState(false);
 
-  // Files to include in share
+  // Files to include in share (locked files are protected with encryption)
   const filesToShare = useMemo(() => {
-    if (shareScope === 'all') return files;
-    return files.filter((f) => selectedFileIds.includes(f.id));
+    const list = shareScope === 'all' ? files : files.filter((f) => selectedFileIds.includes(f.id));
+    return list.map((f) => ({
+      ...f,
+      content: f.isLocked
+        ? (f.content?.startsWith('ENC::') ? f.content : '🔒 [ENCRYPTED: Password Protected File]')
+        : f.content,
+    }));
   }, [files, shareScope, selectedFileIds]);
 
   const activeSharedId = filesToShare.some((f) => f.id === activeFileId)

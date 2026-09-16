@@ -8,6 +8,7 @@ import {
   getNextSequentialFilename,
   getSequentialFileStarterContent,
 } from '../services/languageDetector';
+import { sanitizeFilenameIdentifier, syncJavaClassWithFilename } from '../services/identifierSanitizer';
 import { executeCode } from '../services/judge0Service';
 import { explainError, explainCode, generateInputs, getLogicHint, chatWithAI } from '../services/aiService';
 import { getConfig, updateConfig } from '../services/configService';
@@ -182,6 +183,8 @@ const initialState = {
   output: '',
   stderr: '',
   compileOutput: '',
+  plots: [],
+  htmlOutput: '',
   executionStatus: 'idle', // idle | compiling | running | success | error
   executionTime: null,
   executionMemory: null,
@@ -224,7 +227,13 @@ const initialState = {
     ? 'settings'
     : typeof window !== 'undefined' && (window.location.hash.includes('notebooks') || window.location.hash.includes('setup'))
       ? 'notebook-setup'
-      : 'editor',
+      : typeof window !== 'undefined' && (window.location.hash.includes('exam') || window.location.hash.includes('test'))
+        ? 'exam'
+        : typeof window !== 'undefined' && window.location.hash.includes('templates')
+          ? 'templates'
+          : typeof window !== 'undefined' && window.location.hash.includes('practice')
+            ? 'practice'
+            : 'editor',
   fileErrors: {},
 };
 
@@ -312,7 +321,9 @@ function reducer(state, action) {
       const shouldOpen = openTab !== false;
 
       let rawName = inputName || getDefaultFilename(state.detectedLanguage.id);
-      let targetName = folder ? `${folder}/${rawName}` : rawName;
+      // Auto-sanitize invalid filename identifiers (e.g. "01java.java" -> "java_01.java")
+      const { sanitizedPath: sanitizedRawName } = sanitizeFilenameIdentifier(rawName);
+      let targetName = folder ? `${folder}/${sanitizedRawName}` : sanitizedRawName;
 
       // Ensure unique filename
       let uniqueName = targetName;
@@ -329,7 +340,11 @@ function reducer(state, action) {
 
       const langFromExt = getLanguageFromFilename(uniqueName);
       const fileLang = langFromExt || state.detectedLanguage;
-      const fileContent = inputContent !== undefined ? inputContent : getStarterTemplate(fileLang.id);
+      let fileContent = inputContent !== undefined ? inputContent : getStarterTemplate(fileLang.id);
+      // If Java file, sync the class name to match sanitized filename
+      if (fileLang?.id === 62) {
+        fileContent = syncJavaClassWithFilename(fileContent, uniqueName);
+      }
 
       const newFile = {
         id: `file-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
@@ -475,14 +490,22 @@ function reducer(state, action) {
       const trimmed = newName.trim();
       if (!trimmed) return state;
 
-      const langFromExt = getLanguageFromFilename(trimmed);
+      // Auto-sanitize invalid filename identifiers (e.g. "01java.java" -> "java_01.java")
+      const { sanitizedPath: sanitizedNewName } = sanitizeFilenameIdentifier(trimmed);
+      const langFromExt = getLanguageFromFilename(sanitizedNewName);
 
       const updatedFiles = state.files.map((file) => {
         if (file.id === id) {
+          let content = file.content;
+          const newLang = langFromExt || file.language;
+          if (newLang?.id === 62) {
+            content = syncJavaClassWithFilename(content, sanitizedNewName);
+          }
           return {
             ...file,
-            name: trimmed,
-            language: langFromExt || file.language,
+            name: sanitizedNewName,
+            content,
+            language: newLang,
           };
         }
         return file;
@@ -591,6 +614,8 @@ function reducer(state, action) {
         output: action.payload.output ?? action.payload.stdout ?? '',
         stderr: action.payload.error ?? action.payload.stderr ?? '',
         compileOutput: action.payload.compilerWarnings ?? action.payload.compile_output ?? '',
+        plots: action.payload.plots || [],
+        htmlOutput: action.payload.html || '',
         executionTime: action.payload.time,
         executionMemory: action.payload.memory,
         errorLine: action.payload.errorLine,
@@ -805,7 +830,13 @@ function reducer(state, action) {
           ? '#/settings'
           : action.payload === 'notebook-setup'
             ? '#/notebooks'
-            : '#/';
+            : (action.payload === 'exam' || action.payload === 'exam-test')
+              ? '#/exam'
+              : action.payload === 'templates'
+                ? '#/templates'
+                : action.payload === 'practice'
+                  ? '#/practice'
+                  : '#/';
         if (window.location.hash !== targetHash) {
           window.location.hash = targetHash;
         }
@@ -847,6 +878,9 @@ export function AppProvider({ children }) {
       let page = 'editor';
       if (hash.includes('settings')) page = 'settings';
       else if (hash.includes('notebooks') || hash.includes('setup')) page = 'notebook-setup';
+      else if (hash.includes('exam') || hash.includes('test')) page = 'exam';
+      else if (hash.includes('templates')) page = 'templates';
+      else if (hash.includes('practice')) page = 'practice';
       dispatch({ type: 'NAVIGATE_PAGE', payload: page });
     };
     window.addEventListener('hashchange', onHashChange);

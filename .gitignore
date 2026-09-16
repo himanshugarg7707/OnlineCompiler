@@ -24,7 +24,6 @@ dist-ssr
 *.sw?
 .vercel
 
-# Database WAL files
-server/data/databases/*.sqlite-wal
-server/data/databases/*.sqlite-shm
+# Database files
+server/data/databases/*.sqlite*
 .env*

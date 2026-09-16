@@ -78,7 +78,7 @@ export async function executeCode(code, languageId, stdin = '', allFiles = []) {
     return { ...cached, time: '0.001', cached: true };
   }
 
-  // 1. Python — Use in-browser WebAssembly with NumPy
+  // 1. Python — Use in-browser WebAssembly with NumPy, Pandas, Matplotlib
   if (languageId === 71) {
     try {
       const res = await executePythonInBrowser(code, stdin);
@@ -88,6 +88,34 @@ export async function executeCode(code, languageId, stdin = '', allFiles = []) {
       console.warn('Pyodide failed, trying Godbolt cloud compiler:', e);
       // Fallback: try Godbolt, then Wandbox
       return cloudExecuteWithFallback(code, languageId, stdin);
+    }
+  }
+
+  // 1b. Jupyter Notebook (.ipynb) — Run all code cells in Pyodide
+  if (languageId === 710) {
+    try {
+      let combinedCode = code;
+      try {
+        const parsed = JSON.parse(code);
+        if (parsed && Array.isArray(parsed.cells)) {
+          combinedCode = parsed.cells
+            .filter((c) => c.cell_type === 'code')
+            .map((c) => (Array.isArray(c.source) ? c.source.join('') : c.source || ''))
+            .join('\n\n# --- Next Cell ---\n');
+        }
+      } catch (err) {
+        // Raw code fallback
+      }
+      return await executePythonInBrowser(combinedCode, stdin);
+    } catch (e) {
+      return {
+        success: false,
+        output: '',
+        error: e.message || 'Notebook execution failed',
+        time: '0.000',
+        memory: 0,
+        statusCode: 1,
+      };
     }
   }
 
@@ -108,32 +136,60 @@ export async function executeCode(code, languageId, stdin = '', allFiles = []) {
     return launchCssInBrowser(code, allFiles);
   }
 
-  // 5. SQL — Instant In-Browser & Persistent Multi-Database SQL Engine
+  // 5. SQL — Native SQLite Backend Engine with In-Browser Fallback
   if (languageId === 82) {
-    try {
-      const result = await executeSqlInBrowser(code);
-      if (result) {
-        clientExecutionCache.set(cacheKey, result);
-        return result;
-      }
-    } catch (err) {
-      console.warn('In-browser SQL error, trying backend API:', err.message);
+    let activeDatabase = undefined;
+    if (typeof localStorage !== 'undefined') {
+      activeDatabase = localStorage.getItem('fullcode_active_db') || undefined;
     }
 
+    // Try native backend SQLite first (full SQL support: DDL, DML, joins, aggregates like sum/count/avg)
     try {
       const response = await fetch('/api/execute', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code, languageId: 82 }),
+        body: JSON.stringify({ code, languageId: 82, database: activeDatabase }),
       });
       if (response.ok) {
         const result = await response.json();
-        if (result && !result.useClientRunner) {
-          clientExecutionCache.set(cacheKey, result);
+        if (result && typeof result.success === 'boolean') {
+          if (result.sqlData?.database && typeof localStorage !== 'undefined') {
+            localStorage.setItem('fullcode_active_db', result.sqlData.database);
+          }
+          // Notify DatabasePanel to refresh database explorer and sync active database
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(
+              new CustomEvent('database-updated', {
+                detail: {
+                  database: result.sqlData?.database,
+                  table: result.sqlData?.previewTable,
+                },
+              })
+            );
+          }
           return result;
         }
       }
-    } catch {}
+    } catch (err) {
+      console.warn('Backend SQL API unreachable, using in-browser SQL runner:', err.message);
+    }
+
+    // In-browser SQL runner fallback (offline / serverless)
+    try {
+      const result = await executeSqlInBrowser(code);
+      if (result) {
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(
+            new CustomEvent('database-updated', {
+              detail: { database: result.sqlData?.database },
+            })
+          );
+        }
+        return result;
+      }
+    } catch (err) {
+      console.warn('In-browser SQL error:', err.message);
+    }
   }
 
   // 6. Cloud Compiled Languages — Godbolt (primary) → Wandbox (fallback)

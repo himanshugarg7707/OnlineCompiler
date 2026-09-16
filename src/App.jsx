@@ -21,6 +21,9 @@ import TemplatesModal from './components/TemplatesModal';
 import SharedWorkspaceBanner from './components/SharedWorkspaceBanner';
 import SettingsPage from './pages/SettingsPage';
 import NotebookSetupPage from './pages/NotebookSetupPage';
+import ExamTestPage from './pages/ExamTestPage';
+import TemplatesPage from './pages/TemplatesPage';
+import PracticePage from './pages/PracticePage';
 import { FolderTree, ChevronLeft, ChevronRight } from 'lucide-react';
 import './App.css';
 
@@ -471,6 +474,15 @@ function AppRouter() {
   }
   if (state.currentPage === 'notebook-setup') {
     return <NotebookSetupPage />;
+  }
+  if (state.currentPage === 'exam' || state.currentPage === 'exam-test') {
+    return <ExamTestPage />;
+  }
+  if (state.currentPage === 'templates') {
+    return <TemplatesPage />;
+  }
+  if (state.currentPage === 'practice') {
+    return <PracticePage />;
   }
   return <AppContent />;
 }

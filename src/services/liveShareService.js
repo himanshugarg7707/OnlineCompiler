@@ -374,8 +374,11 @@ export function broadcastWorkspaceChanges(currentUser, files, folders, note = ''
     files: files.map((f) => ({
       id: f.id,
       name: f.name,
-      content: f.content,
+      content: f.isLocked
+        ? (f.content && f.content.startsWith('ENC::') ? f.content : '🔒 [ENCRYPTED: Password Protected File]')
+        : f.content,
       language: f.language,
+      isLocked: Boolean(f.isLocked),
     })),
     folders: folders || [],
     note: note || `Updated ${files.length} workspace file(s)`,

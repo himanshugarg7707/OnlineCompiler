@@ -463,6 +463,18 @@ const LANGUAGE_PATTERNS = [
     ],
     weight: 0.5,
   },
+  {
+    id: 710,
+    name: 'Jupyter Notebook',
+    monacoLanguage: 'ipynb',
+    icon: '🪐',
+    patterns: [
+      /"nbformat"\s*:\s*\d+/,
+      /"cells"\s*:\s*\[/,
+      /"cell_type"\s*:\s*"(code|markdown)"/,
+    ],
+    weight: 2,
+  },
 ];
 
 const DEFAULT_LANGUAGE = {
@@ -546,6 +558,73 @@ export function detectLanguage(code) {
   }
 
   return { ...DEFAULT_LANGUAGE, confidence: 0 };
+}
+
+/**
+ * Generate standard Jupyter Notebook (v4) JSON template
+ */
+export function createDefaultNotebookJson() {
+  return JSON.stringify(
+    {
+      cells: [
+        {
+          cell_type: 'markdown',
+          metadata: {},
+          source: [
+            '# 🪐 Jupyter Notebook\n',
+            'Interactive computing environment powered by Pyodide WebAssembly.\n',
+            'Directly supports **NumPy**, **Pandas**, **Matplotlib**, and interactive data exploration.'
+          ]
+        },
+        {
+          cell_type: 'code',
+          execution_count: null,
+          metadata: {},
+          outputs: [],
+          source: [
+            'import numpy as np\n',
+            'import pandas as pd\n',
+            'import matplotlib.pyplot as plt\n',
+            '\n',
+            'print("NumPy version:", np.__version__)\n',
+            'print("Pandas version:", pd.__version__)\n',
+            '\n',
+            '# Create a sample DataFrame\n',
+            'data = {\n',
+            '    "Language": ["Python", "JavaScript", "C++", "Java", "Rust"],\n',
+            '    "Popularity": [95, 88, 76, 82, 70]\n',
+            '}\n',
+            'df = pd.DataFrame(data)\n',
+            'print("\\nPopular Languages DataFrame:")\n',
+            'print(df)\n',
+            '\n',
+            '# Render a clean plot\n',
+            'plt.figure(figsize=(6, 3))\n',
+            'plt.bar(df["Language"], df["Popularity"], color=["#38bdf8", "#818cf8", "#34d399", "#f59e0b", "#f472b6"])\n',
+            'plt.title("Programming Languages Popularity")\n',
+            'plt.ylabel("Score (%)")\n',
+            'plt.tight_layout()\n',
+            'plt.show()'
+          ]
+        }
+      ],
+      metadata: {
+        language_info: {
+          name: 'python',
+          version: '3.11'
+        },
+        kernelspec: {
+          display_name: 'Python 3 (Pyodide WebAssembly)',
+          language: 'python',
+          name: 'python3'
+        }
+      },
+      nbformat: 4,
+      nbformat_minor: 5
+    },
+    null,
+    2
+  );
 }
 
 /**
@@ -658,6 +737,7 @@ Write your notes, explanations, ideas, or documentation here...
 - Note 1: 
 - Note 2: 
 `,
+    710: createDefaultNotebookJson(),
   };
 
   return templates[languageId] || templates[71];
@@ -730,6 +810,7 @@ const EXTENSION_MAP = {
   md: 99,
   markdown: 99,
   log: 99,
+  ipynb: 710,
 };
 
 const DEFAULT_EXTENSIONS = {
@@ -753,6 +834,7 @@ const DEFAULT_EXTENSIONS = {
   0: 'index.html',
   1: 'styles.css',
   99: 'notes.txt',
+  710: 'notebook.ipynb',
 };
 
 /**
@@ -858,6 +940,9 @@ export function getSequentialFileStarterContent(baseName, ext) {
   }
   if (ext === 'js') {
     return `// ${baseName}.js\n\n`;
+  }
+  if (ext === 'ipynb') {
+    return createDefaultNotebookJson();
   }
   return '';
 }

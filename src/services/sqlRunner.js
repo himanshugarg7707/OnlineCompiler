@@ -136,6 +136,25 @@ function seedDefaultDatabases() {
     { id: 3, username: 'alex', role: 'developer', rating: 1850 },
   ];
   mainDb.tables.users.autoIncrementSeq = 4;
+
+  mainDb.createTable('employees', [
+    { name: 'id', type: 'INTEGER', isPk: true },
+    { name: 'name', type: 'TEXT', notNull: true },
+    { name: 'department', type: 'TEXT' },
+    { name: 'salary', type: 'INTEGER' },
+  ]);
+  mainDb.tables.employees.rows = [
+    { id: 1, name: 'Alex Mercer', department: 'Engineering', salary: 95000 },
+    { id: 2, name: 'Sarah Connor', department: 'Management', salary: 120000 },
+    { id: 3, name: 'Bruce Wayne', department: 'Executive', salary: 250000 },
+    { id: 4, name: 'Peter Parker', department: 'Engineering', salary: 85000 },
+    { id: 5, name: 'Clark Kent', department: 'Editorial', salary: 75000 },
+    { id: 6, name: 'Diana Prince', department: 'Operations', salary: 110000 },
+    { id: 7, name: 'Tony Stark', department: 'Engineering', salary: 300000 },
+    { id: 8, name: 'Barry Allen', department: 'Research', salary: 90000 },
+  ];
+  mainDb.tables.employees.autoIncrementSeq = 9;
+
   inMemoryDatabases.set('main_db', mainDb);
 
   persistDatabases();
@@ -463,7 +482,131 @@ export async function executeSqlInBrowser(sqlQuery) {
       continue;
     }
 
-    // 9. SELECT
+    // 9. DELETE FROM
+    const deleteMatch = stmt.match(/^DELETE\s+FROM\s+([a-zA-Z0-9_"-]+)([\s\S]*)/i);
+    if (deleteMatch) {
+      const activeDb = inMemoryDatabases.get(currentActiveDbName);
+      const tableName = deleteMatch[1].replace(/["'`]/g, '').toLowerCase();
+      const restClause = deleteMatch[2].trim();
+      const table = activeDb?.getTable(tableName);
+
+      if (!table) {
+        return {
+          success: false,
+          output: '',
+          error: `Table '${tableName}' does not exist in database '${currentActiveDbName}'.`,
+          time: '0.001',
+          memory: 1024,
+          statusCode: 1,
+        };
+      }
+
+      let deletedCount = 0;
+      const whereMatch = restClause.match(/WHERE\s+([\s\S]+?)(?=(?:\s+(?:ORDER|GROUP|LIMIT)\b)|$)/i);
+      if (whereMatch) {
+        const condStr = whereMatch[1].trim();
+        const condMatch = condStr.match(/([a-zA-Z0-9_]+)\s*(=|!=|>|<|>=|<=)\s*(.+)/);
+        if (condMatch) {
+          const field = condMatch[1].trim();
+          const op = condMatch[2].trim();
+          const targetVal = parseLiteral(condMatch[3].trim());
+
+          const initialLen = table.rows.length;
+          table.rows = table.rows.filter((r) => {
+            const actual = r[field];
+            if (op === '=') return String(actual) !== String(targetVal);
+            if (op === '!=') return String(actual) === String(targetVal);
+            if (op === '>') return !(Number(actual) > Number(targetVal));
+            if (op === '<') return !(Number(actual) < Number(targetVal));
+            if (op === '>=') return !(Number(actual) >= Number(targetVal));
+            if (op === '<=') return !(Number(actual) <= Number(targetVal));
+            return false;
+          });
+          deletedCount = initialLen - table.rows.length;
+        }
+      } else {
+        deletedCount = table.rows.length;
+        table.rows = [];
+      }
+
+      persistDatabases();
+      executionLogs.push(`🗑️ ${deletedCount} row(s) deleted from '${tableName}'.`);
+      finalResult = {
+        success: true,
+        columns: table.columns.map((c) => c.name),
+        rows: [...table.rows],
+        rowCount: table.rows.length,
+        type: 'MUTATION_PREVIEW',
+        previewTable: tableName,
+      };
+      continue;
+    }
+
+    // 10. UPDATE
+    const updateMatch = stmt.match(/^UPDATE\s+([a-zA-Z0-9_"-]+)\s+SET\s+([\s\S]+?)(?:\s+WHERE\s+([\s\S]+))?$/i);
+    if (updateMatch) {
+      const activeDb = inMemoryDatabases.get(currentActiveDbName);
+      const tableName = updateMatch[1].replace(/["'`]/g, '').toLowerCase();
+      const setClause = updateMatch[2].trim();
+      const whereClause = updateMatch[3] ? updateMatch[3].trim() : '';
+      const table = activeDb?.getTable(tableName);
+
+      if (!table) {
+        return {
+          success: false,
+          output: '',
+          error: `Table '${tableName}' does not exist in database '${currentActiveDbName}'.`,
+          time: '0.001',
+          memory: 1024,
+          statusCode: 1,
+        };
+      }
+
+      const updates = setClause.split(',').map((p) => {
+        const [k, v] = p.split('=');
+        return { field: k.trim().replace(/["'`]/g, ''), val: parseLiteral(v.trim()) };
+      });
+
+      let updatedCount = 0;
+      table.rows.forEach((r) => {
+        let matches = true;
+        if (whereClause) {
+          const condMatch = whereClause.match(/([a-zA-Z0-9_]+)\s*(=|!=|>|<|>=|<=)\s*(.+)/);
+          if (condMatch) {
+            const field = condMatch[1].trim();
+            const op = condMatch[2].trim();
+            const targetVal = parseLiteral(condMatch[3].trim());
+            const actual = r[field];
+            if (op === '=') matches = String(actual) === String(targetVal);
+            else if (op === '!=') matches = String(actual) !== String(targetVal);
+            else if (op === '>') matches = Number(actual) > Number(targetVal);
+            else if (op === '<') matches = Number(actual) < Number(targetVal);
+            else if (op === '>=') matches = Number(actual) >= Number(targetVal);
+            else if (op === '<=') matches = Number(actual) <= Number(targetVal);
+          }
+        }
+        if (matches) {
+          updates.forEach((u) => {
+            r[u.field] = u.val;
+          });
+          updatedCount++;
+        }
+      });
+
+      persistDatabases();
+      executionLogs.push(`✏️ ${updatedCount} row(s) updated in '${tableName}'.`);
+      finalResult = {
+        success: true,
+        columns: table.columns.map((c) => c.name),
+        rows: [...table.rows],
+        rowCount: table.rows.length,
+        type: 'MUTATION_PREVIEW',
+        previewTable: tableName,
+      };
+      continue;
+    }
+
+    // 11. SELECT
     const selectMatch = stmt.match(/^SELECT\s+([\s\S]+?)\s+FROM\s+([a-zA-Z0-9_"-]+)([\s\S]*)/i);
     if (selectMatch) {
       const activeDb = inMemoryDatabases.get(currentActiveDbName);
@@ -486,7 +629,7 @@ export async function executeSqlInBrowser(sqlQuery) {
       let resultRows = [...table.rows];
 
       // Handle simple WHERE clause
-      const whereMatch = restClause.match(/WHERE\s+([^ORDER|GROUP|LIMIT]+)/i);
+      const whereMatch = restClause.match(/WHERE\s+([\s\S]+?)(?=(?:\s+(?:ORDER|GROUP|LIMIT)\b)|$)/i);
       if (whereMatch) {
         const condition = whereMatch[1].trim();
         const eqMatch = condition.match(/([a-zA-Z0-9_]+)\s*(=|!=|>|<|>=|<=)\s*(.+)/);
@@ -497,15 +640,47 @@ export async function executeSqlInBrowser(sqlQuery) {
 
           resultRows = resultRows.filter((r) => {
             const actual = r[field];
-            if (op === '=') return actual === targetVal;
-            if (op === '!=') return actual !== targetVal;
-            if (op === '>') return actual > targetVal;
-            if (op === '<') return actual < targetVal;
-            if (op === '>=') return actual >= targetVal;
-            if (op === '<=') return actual <= targetVal;
+            if (op === '=') return String(actual) === String(targetVal);
+            if (op === '!=') return String(actual) !== String(targetVal);
+            if (op === '>') return Number(actual) > Number(targetVal);
+            if (op === '<') return Number(actual) < Number(targetVal);
+            if (op === '>=') return Number(actual) >= Number(targetVal);
+            if (op === '<=') return Number(actual) <= Number(targetVal);
             return true;
           });
         }
+      }
+
+      // Check for aggregates like sum(col), count(*), count(col), avg(col), min(col), max(col)
+      const aggMatch = columnsClause.match(/^(SUM|COUNT|AVG|MIN|MAX)\s*\(([^)]+)\)$/i);
+      if (aggMatch) {
+        const func = aggMatch[1].toUpperCase();
+        const arg = aggMatch[2].trim().replace(/["'`]/g, '');
+
+        let aggVal = 0;
+        if (func === 'COUNT') {
+          aggVal = resultRows.length;
+        } else if (func === 'SUM') {
+          aggVal = resultRows.reduce((acc, r) => acc + (Number(r[arg]) || 0), 0);
+        } else if (func === 'AVG') {
+          const total = resultRows.reduce((acc, r) => acc + (Number(r[arg]) || 0), 0);
+          aggVal = resultRows.length ? Number((total / resultRows.length).toFixed(2)) : 0;
+        } else if (func === 'MIN') {
+          const nums = resultRows.map((r) => Number(r[arg])).filter((n) => !isNaN(n));
+          aggVal = nums.length ? Math.min(...nums) : 0;
+        } else if (func === 'MAX') {
+          const nums = resultRows.map((r) => Number(r[arg])).filter((n) => !isNaN(n));
+          aggVal = nums.length ? Math.max(...nums) : 0;
+        }
+
+        finalResult = {
+          success: true,
+          columns: [columnsClause],
+          rows: [{ [columnsClause]: aggVal }],
+          rowCount: 1,
+          type: 'SELECT',
+        };
+        continue;
       }
 
       // Handle LIMIT

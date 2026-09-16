@@ -22,6 +22,7 @@ import {
   FolderInput,
 } from 'lucide-react';
 import { isItemProtected, isItemUnlocked } from '../services/securityService';
+import { sanitizeFilenameIdentifier } from '../services/identifierSanitizer';
 import PasswordPromptModal from './PasswordPromptModal';
 import LanguageIcon from './LanguageIcon';
 import './FileExplorer.css';
@@ -86,6 +87,23 @@ function buildTreeStructure(files, explicitFolders = []) {
       curr.files.push(file);
     }
   });
+
+  // Recursively sort all subfolders and files A-Z (case-insensitive)
+  const sortTreeNode = (node) => {
+    // Sort files alphabetically by basename
+    node.files.sort((a, b) => {
+      const nameA = (a.name.split('/').pop() || a.name).toLowerCase();
+      const nameB = (b.name.split('/').pop() || b.name).toLowerCase();
+      return nameA.localeCompare(nameB, undefined, { numeric: true });
+    });
+
+    // Recursively sort all subfolder trees
+    Object.keys(node.subfolders).forEach((subKey) => {
+      sortTreeNode(node.subfolders[subKey]);
+    });
+  };
+
+  sortTreeNode(root);
 
   return root;
 }
@@ -226,7 +244,11 @@ export default function FileExplorer() {
         if (type === 'note' && !fileName.includes('.')) {
           fileName = `${fileName}.txt`;
         }
-        const fullPath = targetFolder ? `${targetFolder}/${fileName}` : fileName;
+        const { sanitizedPath, wasAdjusted, originalName } = sanitizeFilenameIdentifier(fileName);
+        if (wasAdjusted) {
+          showToast(`Adjusted identifier: "${originalName}" ➔ "${sanitizedPath}" ⚡`);
+        }
+        const fullPath = targetFolder ? `${targetFolder}/${sanitizedPath}` : sanitizedPath;
         handleAddFile(fullPath);
       } else {
         const fullPath = targetFolder ? `${targetFolder}/${trimmed}` : trimmed;
@@ -264,7 +286,11 @@ export default function FileExplorer() {
       const folderPrefix = file.name.includes('/')
         ? file.name.substring(0, file.name.lastIndexOf('/'))
         : '';
-      const newFullName = folderPrefix ? `${folderPrefix}/${trimmed}` : trimmed;
+      const { sanitizedPath: sanitizedBase, wasAdjusted, originalName } = sanitizeFilenameIdentifier(trimmed);
+      if (wasAdjusted) {
+        showToast(`Adjusted identifier: "${originalName}" ➔ "${sanitizedBase}" ⚡`);
+      }
+      const newFullName = folderPrefix ? `${folderPrefix}/${sanitizedBase}` : sanitizedBase;
       handleRenameFile(file.id, newFullName);
     }
     setEditingFileId(null);
@@ -317,8 +343,10 @@ export default function FileExplorer() {
     const isEditing = editingFolderPath === folderPath;
     const isLocked = isItemProtected(folderPath) && !isItemUnlocked(folderPath);
 
-    // Collect child counts
-    const subfolderKeys = Object.keys(folderNode.subfolders);
+    // Collect child counts (sorted A-Z)
+    const subfolderKeys = Object.keys(folderNode.subfolders).sort((a, b) =>
+      a.toLowerCase().localeCompare(b.toLowerCase(), undefined, { numeric: true })
+    );
     const hasVisibleFiles = folderNode.files.some((f) => matchesSearch(f.name));
     const hasVisibleSubfolders = subfolderKeys.length > 0;
 
@@ -331,7 +359,6 @@ export default function FileExplorer() {
         {/* Folder Header */}
         <div
           className={`explorer-folder-header ${isCollapsed ? 'collapsed' : ''}`}
-          style={{ paddingLeft: `${depth * 14 + 10}px` }}
           onClick={() => handleFolderClick(folderPath)}
           onDoubleClick={(e) => startEditFolder(e, folderPath)}
           title={`Folder: ${folderPath}/`}
@@ -440,7 +467,6 @@ export default function FileExplorer() {
             {creationTarget && creationTarget.targetFolder === folderPath && (
               <div
                 className="explorer-file-item adding child"
-                style={{ paddingLeft: `${(depth + 1) * 14 + 10}px` }}
               >
                 {creationTarget.type === 'folder' ? (
                   <FolderPlus size={13} className="adding-icon" />
@@ -487,7 +513,6 @@ export default function FileExplorer() {
                 <div
                   key={file.id}
                   className={`explorer-file-item child ${isActive ? 'active' : ''}`}
-                  style={{ paddingLeft: `${(depth + 1) * 14 + 10}px` }}
                   onClick={() => handleFileClick(file, folderPath)}
                   onDoubleClick={(e) => startEditFile(e, file)}
                   title={`${file.name} — ${file.language?.name || 'File'}`}
@@ -585,8 +610,8 @@ export default function FileExplorer() {
         <div className="explorer-header-actions">
           <button
             className="explorer-action-btn"
-            onClick={handleCreateSequentialFile}
-            title="New File (Ctrl+N / Cmd+N)"
+            onClick={() => startAddFile('')}
+            title="New File (Enter file name)"
           >
             <FilePlus size={14} />
           </button>
@@ -641,12 +666,12 @@ export default function FileExplorer() {
 
       {/* Recursive Files & Folders Tree */}
       <div className="explorer-files-list">
-        {/* Render Top-level Folders */}
-        {Object.keys(treeRoot.subfolders).map((subKey) =>
-          renderFolderNode(treeRoot.subfolders[subKey], 0)
-        )}
+        {/* Render Top-level Folders (Sorted A-Z) */}
+        {Object.keys(treeRoot.subfolders)
+          .sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase(), undefined, { numeric: true }))
+          .map((subKey) => renderFolderNode(treeRoot.subfolders[subKey], 0))}
 
-        {/* Render Root Files */}
+        {/* Render Root Files (Sorted A-Z) */}
         {treeRoot.files.filter((f) => matchesSearch(f.name)).map((file) => {
           const isActive = file.id === activeFileId;
           const isEditing = editingFileId === file.id;
@@ -655,7 +680,7 @@ export default function FileExplorer() {
           return (
             <div
               key={file.id}
-              className={`explorer-file-item ${isActive ? 'active' : ''}`}
+              className={`explorer-file-item root ${isActive ? 'active' : ''}`}
               onClick={() => handleFileClick(file)}
               onDoubleClick={(e) => startEditFile(e, file)}
               title={`${file.name} — ${file.language?.name || 'File'}`}

@@ -21,6 +21,8 @@ import {
   AlertCircle,
   Clock,
   FlaskConical,
+  FileCheck2,
+  ArrowRight,
 } from 'lucide-react';
 import {
   PRACTICE_LANGUAGES,
@@ -313,7 +315,26 @@ export default function PracticePanel() {
 
       {/* ─── Search & Filters Toolbar (Only on List View) ─── */}
       {!activeQuestion && (
-        <div className="practice-toolbar">
+        <>
+          <div
+            className="practice-exam-callout-card"
+            onClick={() => {
+              if (typeof window !== 'undefined') window.location.hash = '#/exam';
+              dispatch({ type: 'NAVIGATE_PAGE', payload: 'exam' });
+            }}
+            title="Upload Question Paper PDF to generate tests & start proctored exam"
+          >
+            <div className="exam-callout-icon">
+              <FileCheck2 size={18} />
+            </div>
+            <div className="exam-callout-text">
+              <strong>Upload PDF Exam Paper</strong>
+              <span>AI generates test cases & starts proctored exam</span>
+            </div>
+            <ArrowRight size={14} className="exam-callout-arrow" />
+          </div>
+
+          <div className="practice-toolbar">
           <div className="practice-search-box">
             <Search size={13} className="search-icon" />
             <input
@@ -350,7 +371,8 @@ export default function PracticePanel() {
             ))}
           </div>
         </div>
-      )}
+      </>
+    )}
 
       {/* ─── Content Area: List View OR Single Question View ─── */}
       {activeQuestion ? (

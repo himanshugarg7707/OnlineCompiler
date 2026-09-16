@@ -50,6 +50,10 @@ router.post('/', async (req, res) => {
 
       // Format table as visual ascii table for output terminal
       let asciiOutput = '';
+      if (sqlResult.logs && sqlResult.logs.length > 0) {
+        asciiOutput += sqlResult.logs.join('\n') + '\n\n';
+      }
+
       if (sqlResult.rows && sqlResult.rows.length > 0) {
         const cols = sqlResult.columns;
         const colWidths = {};
@@ -67,9 +71,10 @@ router.post('/', async (req, res) => {
           .map((r) => cols.map((c) => String(r[c] ?? 'NULL').padEnd(colWidths[c])).join(' | '))
           .join('\n');
 
-        asciiOutput = `${headerLine}\n${sepLine}\n${rowLines}\n\n(${sqlResult.rowCount} rows returned in ${sqlResult.executionTimeMs}ms)\n`;
+        const previewNote = sqlResult.previewTable ? ` [Previewing '${sqlResult.previewTable}']` : '';
+        asciiOutput += `${headerLine}\n${sepLine}\n${rowLines}\n\n(${sqlResult.rowCount} rows returned in ${sqlResult.executionTimeMs}ms${previewNote})\n`;
       } else {
-        asciiOutput = `✅ Query executed successfully. (0 rows returned in ${sqlResult.executionTimeMs}ms)\n`;
+        asciiOutput += `✅ Query executed successfully. (0 rows returned in ${sqlResult.executionTimeMs}ms)\n`;
       }
 
       const responsePayload = {
@@ -82,7 +87,6 @@ router.post('/', async (req, res) => {
         statusCode: 0,
       };
 
-      // Cache small results
       if (asciiOutput.length < 50000) {
         executionCache.set(cacheKey, responsePayload);
       }

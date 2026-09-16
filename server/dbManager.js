@@ -40,6 +40,28 @@ export async function ensureSeeded() {
 
 // Active database connection cache
 const dbConnections = new Map();
+let lastActiveDatabase = 'main_db';
+
+/**
+ * Locate which database holds a specific table
+ */
+export async function findDatabaseForTable(tableName) {
+  if (!tableName) return null;
+  const cleanTable = tableName.replace(/["'`]/g, '').toLowerCase();
+  const dbs = await listDatabases();
+  for (const d of dbs) {
+    const { db } = getDbConnection(d.name);
+    const hasTable = await new Promise((res) => {
+      db.get(
+        "SELECT name FROM sqlite_master WHERE type IN ('table', 'view') AND LOWER(name) = ?;",
+        [cleanTable],
+        (err, row) => res(Boolean(row))
+      );
+    });
+    if (hasTable) return d.name;
+  }
+  return null;
+}
 
 /**
  * Get or create a sqlite3 database connection
@@ -219,7 +241,7 @@ function splitSqlStatements(sqlText) {
 export async function executeSqlQuery(initialDbName = 'main_db', sqlQuery) {
   await ensureSeeded();
   const startTime = performance.now();
-  let currentDb = initialDbName || 'main_db';
+  let currentDb = (initialDbName && initialDbName !== 'main_db' ? initialDbName : lastActiveDatabase) || 'main_db';
 
   const cleanQuery = (sqlQuery || '').trim();
   if (!cleanQuery) {
@@ -247,16 +269,24 @@ export async function executeSqlQuery(initialDbName = 'main_db', sqlQuery) {
 
   let finalResult = null;
   const executionLogs = [];
+  let lastModifiedTable = null;
 
   for (const stmt of statements) {
     const trimmed = stmt.trim();
     if (!trimmed) continue;
 
     // 1. CREATE DATABASE / CREATE SCHEMA
-    const createDbMatch = trimmed.match(/^CREATE\s+(?:DATABASE|SCHEMA)\s+(?:IF\s+NOT\s+EXISTS\s+)?([a-zA-Z0-9_-]+)/i);
+    const createDbMatch = trimmed.match(/^CREATE\s+(?:DATABASE|SCHEMA)\s+(?:(IF\s+NOT\s+EXISTS)\s+)?([a-zA-Z0-9_-]+)/i);
     if (createDbMatch) {
-      const newDb = createDbMatch[1];
+      const isIfNotExists = Boolean(createDbMatch[1]);
+      const newDb = createDbMatch[2].toLowerCase();
+      if (!isIfNotExists) {
+        // Reset database if re-running CREATE DATABASE
+        await deleteDatabase(newDb);
+      }
       await createDatabase(newDb);
+      currentDb = newDb;
+      lastActiveDatabase = currentDb;
       executionLogs.push(`✅ Database '${newDb}' created.`);
       finalResult = {
         success: true,
@@ -272,10 +302,11 @@ export async function executeSqlQuery(initialDbName = 'main_db', sqlQuery) {
     // 2. USE <db>
     const useDbMatch = trimmed.match(/^USE\s+([a-zA-Z0-9_-]+)/i);
     if (useDbMatch) {
-      const targetDb = useDbMatch[1];
+      const targetDb = useDbMatch[1].toLowerCase();
       // Ensure target database exists
       await createDatabase(targetDb);
-      currentDb = targetDb.toLowerCase();
+      currentDb = targetDb;
+      lastActiveDatabase = currentDb;
       executionLogs.push(`🔄 Database changed to '${currentDb}'.`);
       finalResult = {
         success: true,
@@ -361,6 +392,7 @@ export async function executeSqlQuery(initialDbName = 'main_db', sqlQuery) {
       executionLogs.push(`🗑️ Database '${targetDb}' dropped.`);
       if (currentDb === targetDb.toLowerCase()) {
         currentDb = 'main_db';
+        lastActiveDatabase = 'main_db';
       }
       finalResult = {
         success: true,
@@ -373,18 +405,66 @@ export async function executeSqlQuery(initialDbName = 'main_db', sqlQuery) {
       continue;
     }
 
-    // 7. Regular SQL Execution (SELECT, INSERT, UPDATE, DELETE, CREATE TABLE, etc.)
+    // 7. Handle CREATE TABLE re-runs cleanly + support NOCASE
+    let executionSql = trimmed;
+    const createTableMatch = trimmed.match(/^CREATE\s+TABLE\s+(?:(IF\s+NOT\s+EXISTS)\s+)?([a-zA-Z0-9_"-]+)/i);
+    if (createTableMatch) {
+      const isIfNotExists = Boolean(createTableMatch[1]);
+      const tblName = createTableMatch[2].replace(/["'`]/g, '');
+      lastModifiedTable = tblName;
+      if (!isIfNotExists) {
+        const { db } = getDbConnection(currentDb);
+        await new Promise((res) => db.run(`DROP TABLE IF EXISTS "${tblName}";`, () => res()));
+      }
+      // Inject COLLATE NOCASE for case-insensitive string operations like MySQL
+      executionSql = trimmed.replace(/(VARCHAR\s*\([^)]+\)|TEXT|CHAR\s*\([^)]+\))(?!\s+COLLATE)/gi, '$1 COLLATE NOCASE');
+    }
+
+    // Track table name for INSERT, UPDATE, DELETE
+    const mutationMatch = trimmed.match(/^(?:INSERT\s+INTO|UPDATE|DELETE\s+FROM)\s+([a-zA-Z0-9_"-]+)/i);
+    if (mutationMatch) {
+      lastModifiedTable = mutationMatch[1].replace(/["'`]/g, '');
+    }
+
+    // Auto-locate table across databases if not in currentDb
+    const tableRefMatch = trimmed.match(/\b(?:FROM|INTO|UPDATE|TABLE)\s+([a-zA-Z0-9_"-]+)/i);
+    if (tableRefMatch && !createDbMatch && !useDbMatch) {
+      const referencedTable = tableRefMatch[1].replace(/["'`]/g, '');
+      const { db: testDb } = getDbConnection(currentDb);
+      const existsLocally = await new Promise((res) => {
+        testDb.get(
+          "SELECT name FROM sqlite_master WHERE type IN ('table', 'view') AND LOWER(name) = ?;",
+          [referencedTable.toLowerCase()],
+          (err, row) => res(Boolean(row))
+        );
+      });
+      if (!existsLocally && !createTableMatch) {
+        const altDb = await findDatabaseForTable(referencedTable);
+        if (altDb && altDb !== currentDb) {
+          currentDb = altDb;
+          lastActiveDatabase = altDb;
+          executionLogs.push(`🔄 Context switched to database '${currentDb}' (contains '${referencedTable}').`);
+        }
+      }
+    }
+
+    // Support MySQL-like case-insensitivity on string comparisons in DELETE, UPDATE, SELECT
+    if (/^(DELETE|UPDATE|SELECT)\b/i.test(trimmed)) {
+      executionSql = trimmed.replace(/(=\s*(?:'[^']+'|"[^"]+"))(?!\s+COLLATE)/gi, '$1 COLLATE NOCASE');
+    }
+
+    // 8. Regular SQL Execution (SELECT, INSERT, UPDATE, DELETE, CREATE TABLE, etc.)
     const { db } = getDbConnection(currentDb);
     const isSelect = /^(SELECT|PRAGMA|EXPLAIN|WITH)\b/i.test(trimmed);
 
     const stepResult = await new Promise((resolve) => {
       if (isSelect) {
-        db.all(trimmed, [], (err, rows) => {
+        db.all(executionSql, [], (err, rows) => {
           if (err) {
             return resolve({
               success: false,
               error: err.message,
-              sql: trimmed,
+              sql: executionSql,
               database: currentDb,
             });
           }
@@ -399,22 +479,37 @@ export async function executeSqlQuery(initialDbName = 'main_db', sqlQuery) {
           });
         });
       } else {
-        db.run(trimmed, function (err) {
+        db.run(executionSql, function (err) {
           if (err) {
             return resolve({
               success: false,
               error: err.message,
-              sql: trimmed,
+              sql: executionSql,
               database: currentDb,
             });
           }
+          const changes = this.changes || 0;
+          if (/^INSERT\s+INTO/i.test(trimmed)) {
+            executionLogs.push(`✅ ${changes} row(s) inserted into '${lastModifiedTable || 'table'}'.`);
+          } else if (/^UPDATE/i.test(trimmed)) {
+            executionLogs.push(`✏️ ${changes} row(s) updated in '${lastModifiedTable || 'table'}'.`);
+          } else if (/^DELETE\s+FROM/i.test(trimmed)) {
+            if (changes > 0) {
+              executionLogs.push(`🗑️ ${changes} row(s) deleted from '${lastModifiedTable || 'table'}'.`);
+            } else {
+              executionLogs.push(`⚠️ 0 rows deleted from '${lastModifiedTable || 'table'}' (no records matched WHERE criteria).`);
+            }
+          } else if (/^CREATE\s+TABLE/i.test(trimmed)) {
+            executionLogs.push(`✅ Table '${lastModifiedTable || 'table'}' created in '${currentDb}'.`);
+          }
+
           return resolve({
             success: true,
             columns: ['status', 'rows_affected'],
             rows: [
               {
                 status: 'SUCCESS',
-                rows_affected: this.changes || 0,
+                rows_affected: changes,
               },
             ],
             rowCount: 1,
@@ -430,14 +525,43 @@ export async function executeSqlQuery(initialDbName = 'main_db', sqlQuery) {
       return {
         ...stepResult,
         executionTimeMs: elapsed,
+        logs: executionLogs,
       };
     }
 
-    // Save as finalResult (if user has multiple SELECTs or mutations, last active result is displayed)
+    // Save as finalResult
     finalResult = stepResult;
   }
 
   const elapsed = (performance.now() - startTime).toFixed(2);
+
+  // If user ran mutations without a trailing SELECT, auto-preview the modified table rows
+  if (finalResult && finalResult.type !== 'SELECT' && lastModifiedTable) {
+    const { db } = getDbConnection(currentDb);
+    const previewRows = await new Promise((resolve) => {
+      db.all(`SELECT * FROM "${lastModifiedTable}" LIMIT 50;`, (err, rows) => {
+        resolve(err || !rows ? [] : rows);
+      });
+    });
+    const colInfo = await new Promise((resolve) => {
+      db.all(`PRAGMA table_info("${lastModifiedTable}");`, (err, rows) => {
+        resolve(err || !rows ? [] : rows);
+      });
+    });
+    const cols = colInfo.length > 0
+      ? colInfo.map((c) => c.name)
+      : (previewRows && previewRows.length > 0 ? Object.keys(previewRows[0]) : ['status']);
+
+    finalResult = {
+      success: true,
+      columns: cols,
+      rows: previewRows || [],
+      rowCount: previewRows ? previewRows.length : 0,
+      database: currentDb,
+      previewTable: lastModifiedTable,
+      type: 'MUTATION_PREVIEW',
+    };
+  }
 
   if (!finalResult) {
     finalResult = {
@@ -452,6 +576,7 @@ export async function executeSqlQuery(initialDbName = 'main_db', sqlQuery) {
     ...finalResult,
     executionTimeMs: elapsed,
     database: currentDb,
+    previewTable: lastModifiedTable,
     logs: executionLogs,
   };
 }
@@ -546,8 +671,36 @@ export async function getTableData(dbName = 'main_db', tableName, limit = 100, o
  * Seed initial sample databases if empty
  */
 export async function seedSampleDatabases() {
+  // Always ensure essential default tables exist in main_db
+  const { db: mainDb } = getDbConnection('main_db');
+  await new Promise((resolve) => {
+    mainDb.exec(`
+      CREATE TABLE IF NOT EXISTS users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        username TEXT NOT NULL,
+        role TEXT DEFAULT 'developer',
+        rating INTEGER DEFAULT 1500
+      );
+      CREATE TABLE IF NOT EXISTS employees (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        department TEXT DEFAULT 'Engineering',
+        salary INTEGER NOT NULL
+      );
+      INSERT OR IGNORE INTO employees (id, name, department, salary) VALUES
+        (1, 'Alex Mercer', 'Engineering', 95000),
+        (2, 'Sarah Connor', 'Management', 120000),
+        (3, 'Bruce Wayne', 'Executive', 250000),
+        (4, 'Peter Parker', 'Engineering', 85000),
+        (5, 'Clark Kent', 'Editorial', 75000),
+        (6, 'Diana Prince', 'Operations', 110000),
+        (7, 'Tony Stark', 'Engineering', 300000),
+        (8, 'Barry Allen', 'Research', 90000);
+    `, () => resolve());
+  });
+
   const existing = fs.readdirSync(DB_DIR).filter((f) => f.endsWith('.sqlite'));
-  if (existing.length > 0) return;
+  if (existing.length > 1) return;
 
   console.log('🌱 Seeding sample databases (ecommerce_db, university_db)...');
 
@@ -651,27 +804,6 @@ export async function seedSampleDatabases() {
         ('Database Management Systems', 3, 1),
         ('Linear Algebra', 3, 2),
         ('Quantum Mechanics', 4, 3);
-      `,
-      () => resolve()
-    );
-  });
-
-  // 3. Default main_db
-  const { db: mainDb } = getDbConnection('main_db');
-  await new Promise((resolve) => {
-    mainDb.exec(
-      `
-      CREATE TABLE IF NOT EXISTS users (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        username TEXT NOT NULL,
-        role TEXT DEFAULT 'developer',
-        rating INTEGER DEFAULT 1500
-      );
-
-      INSERT INTO users (username, role, rating) VALUES
-        ('admin', 'system_admin', 2500),
-        ('himanshu', 'lead_architect', 2200),
-        ('alex', 'fullstack_dev', 1850);
       `,
       () => resolve()
     );

@@ -1,3 +1,4 @@
+import { useState, useRef, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import {
   Play,
@@ -12,6 +13,9 @@ import {
   Palette,
   LayoutTemplate,
   GraduationCap,
+  FileCheck2,
+  BookOpenCheck,
+  ChevronDown,
 } from 'lucide-react';
 import LanguageSelector from './LanguageSelector';
 import './Header.css';
@@ -26,51 +30,66 @@ export default function Header() {
   } = useApp();
   const { executionStatus, explorerOpen, activeUser, files, activeFileId } = state;
 
+  const [showPracticeMenu, setShowPracticeMenu] = useState(false);
+  const [showWorkspacesMenu, setShowWorkspacesMenu] = useState(false);
+  const practiceDropdownRef = useRef(null);
+  const workspacesDropdownRef = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (practiceDropdownRef.current && !practiceDropdownRef.current.contains(e.target)) {
+        setShowPracticeMenu(false);
+      }
+      if (workspacesDropdownRef.current && !workspacesDropdownRef.current.contains(e.target)) {
+        setShowWorkspacesMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
   const isRunning = executionStatus === 'compiling' || executionStatus === 'running';
   const hasSelection = Boolean(state.selectedCode && state.selectedCode.trim());
   const activeFile = files.find((f) => f.id === activeFileId) || files[0];
 
   // Standard Header
   return (
-    <header className="header">
+    <header className="header app-header">
+      {/* Left: Brand & File tree toggle */}
       <div className="header-left">
         <button
           className={`btn-icon ${explorerOpen ? 'active' : ''}`}
           onClick={() => dispatch({ type: 'TOGGLE_EXPLORER' })}
-          title="Toggle File Explorer (Ctrl+Shift+E)"
+          title="Toggle File Explorer (Ctrl+B)"
         >
           <FolderTree size={18} />
         </button>
 
-        <div className="logo">
-          <div className="logo-icon">
-            <Code2 size={20} />
+        <div
+          className="brand"
+          onClick={() => dispatch({ type: 'NAVIGATE_PAGE', payload: 'editor' })}
+          title="Full Code IDE — Return to Editor"
+        >
+          <div className="brand-icon">
+            <Code2 size={17} />
           </div>
-          <span className="logo-text">Full Code</span>
+          <span className="brand-title">Full Code</span>
         </div>
 
+        {/* Language Selector */}
         <LanguageSelector />
       </div>
 
-      <div className="header-right">
+      {/* Center: Actions Toolbar */}
+      <div className="header-center">
         {/* Format Code */}
         <button
-          className="btn-hint btn-ghost btn-format-header"
+          className="btn-hint btn-ghost"
           onClick={handleFormatCode}
           title="Format Code (Shift+Alt+F)"
         >
           <AlignLeft size={15} />
           <span>Format</span>
-        </button>
-
-        {/* Code Templates Modal Button */}
-        <button
-          className="btn-hint btn-ghost btn-templates-header"
-          onClick={() => dispatch({ type: 'TOGGLE_TEMPLATES_MODAL' })}
-          title="DSA Code Templates & Algorithms Library"
-        >
-          <LayoutTemplate size={15} />
-          <span>Templates</span>
         </button>
 
         {/* Live Collaboration Modal Button */}
@@ -83,37 +102,129 @@ export default function Header() {
           <span>{collabRoomId ? collabRoomId : 'Live'}</span>
         </button>
 
-        {/* Subject Notebooks Hub Button */}
-        <button
-          className="btn-hint btn-ghost btn-notebooks-header"
-          onClick={() => dispatch({ type: 'NAVIGATE_PAGE', payload: 'notebook-setup' })}
-          title="Subject Notebooks & Course Workspaces Setup"
-        >
-          <GraduationCap size={15} />
-          <span>Notebooks</span>
-        </button>
+        {/* Unified Workspaces & Notebooks Dropdown */}
+        <div className="header-dropdown-wrap" ref={workspacesDropdownRef}>
+          <button
+            className={`btn-hint btn-ghost header-dropdown-btn ${showWorkspacesMenu ? 'active' : ''}`}
+            onClick={() => {
+              setShowWorkspacesMenu((prev) => !prev);
+              setShowPracticeMenu(false);
+            }}
+            title="Saved Workspaces & Subject Course Notebooks"
+          >
+            <FolderKanban size={15} />
+            <span>Workspaces</span>
+            <ChevronDown size={12} className={`dropdown-chevron ${showWorkspacesMenu ? 'open' : ''}`} />
+          </button>
 
-        {/* Workspaces Manager Button */}
-        <button
-          className="btn-hint btn-ghost btn-workspaces-header"
-          onClick={() => dispatch({ type: 'TOGGLE_WORKSPACES_MODAL' })}
-          title="Saved Workspaces & Projects Manager"
-        >
-          <FolderKanban size={15} />
-          <span>Workspaces</span>
-        </button>
+          {showWorkspacesMenu && (
+            <div className="header-dropdown-menu animate-scale-in">
+              <button
+                className="header-menu-item"
+                onClick={() => {
+                  setShowWorkspacesMenu(false);
+                  dispatch({ type: 'TOGGLE_WORKSPACES_MODAL' });
+                }}
+              >
+                <div className="menu-item-icon-box workspaces-icon-box">
+                  <FolderKanban size={16} />
+                </div>
+                <div className="menu-item-text">
+                  <div className="menu-item-title">Saved Workspaces</div>
+                  <div className="menu-item-desc">Manage multi-file workspaces, save & export ZIP</div>
+                </div>
+              </button>
 
+              <button
+                className="header-menu-item"
+                onClick={() => {
+                  setShowWorkspacesMenu(false);
+                  dispatch({ type: 'NAVIGATE_PAGE', payload: 'notebook-setup' });
+                }}
+              >
+                <div className="menu-item-icon-box notebooks-icon-box">
+                  <GraduationCap size={16} />
+                </div>
+                <div className="menu-item-text">
+                  <div className="menu-item-title">Subject Notebooks</div>
+                  <div className="menu-item-desc">Structured course notes, lecture labs & syllabus setup</div>
+                </div>
+              </button>
+            </div>
+          )}
+        </div>
 
-        {/* Practice Questions */}
-        <button
-          className="btn-hint btn-ghost practice-btn"
-          onClick={() => dispatch({ type: 'TOGGLE_PRACTICE' })}
-          title="Practice Questions Lab"
-        >
-          <BookOpen size={15} />
-          <span>Practice</span>
-        </button>
+        {/* Unified Practice, Tests & Templates Hub Dropdown */}
+        <div className="header-dropdown-wrap" ref={practiceDropdownRef}>
+          <button
+            className={`btn-hint btn-ghost practice-tests-btn ${showPracticeMenu ? 'active' : ''}`}
+            onClick={() => {
+              setShowPracticeMenu((prev) => !prev);
+              setShowWorkspacesMenu(false);
+            }}
+            title="Practice Questions, Proctored Tests & Code Templates"
+          >
+            <BookOpenCheck size={15} />
+            <span>Practice & Tests</span>
+            <ChevronDown size={12} className={`dropdown-chevron ${showPracticeMenu ? 'open' : ''}`} />
+          </button>
 
+          {showPracticeMenu && (
+            <div className="header-dropdown-menu animate-scale-in">
+              <button
+                className="header-menu-item"
+                onClick={() => {
+                  setShowPracticeMenu(false);
+                  dispatch({ type: 'NAVIGATE_PAGE', payload: 'practice' });
+                }}
+              >
+                <div className="menu-item-icon-box practice-icon-box">
+                  <BookOpen size={16} />
+                </div>
+                <div className="menu-item-text">
+                  <div className="menu-item-title">DSA Practice Lab</div>
+                  <div className="menu-item-desc">70+ curated coding questions, test cases & hints</div>
+                </div>
+              </button>
+
+              <button
+                className="header-menu-item"
+                onClick={() => {
+                  setShowPracticeMenu(false);
+                  dispatch({ type: 'NAVIGATE_PAGE', payload: 'exam' });
+                }}
+              >
+                <div className="menu-item-icon-box exam-icon-box">
+                  <FileCheck2 size={16} />
+                </div>
+                <div className="menu-item-text">
+                  <div className="menu-item-title">Exam & Test Mode</div>
+                  <div className="menu-item-desc">Proctored test with PDF upload & AI test cases</div>
+                </div>
+              </button>
+
+              <button
+                className="header-menu-item"
+                onClick={() => {
+                  setShowPracticeMenu(false);
+                  dispatch({ type: 'NAVIGATE_PAGE', payload: 'templates' });
+                }}
+              >
+                <div className="menu-item-icon-box templates-icon-box">
+                  <LayoutTemplate size={16} />
+                </div>
+                <div className="menu-item-text">
+                  <div className="menu-item-title">Code Templates & Algorithms</div>
+                  <div className="menu-item-desc">DSA algorithms, data structures & starter code</div>
+                </div>
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Right: Run Code, Theme, Settings, User Account */}
+      <div className="header-right">
         {/* Run Code */}
         <button
           className={`btn-run ${isRunning ? 'running' : ''} ${hasSelection ? 'has-selection' : ''}`}

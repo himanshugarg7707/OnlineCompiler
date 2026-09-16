@@ -99,6 +99,34 @@ export default function DatabasePanel() {
     }
   }, [selectedDb, selectedTable, loadTableData]);
 
+  // Real-time synchronization when user runs SQL queries in editor
+  useEffect(() => {
+    const handleDbUpdated = async (e) => {
+      const { database, table } = e.detail || {};
+      try {
+        const list = await getDatabasesList();
+        setDatabases(list);
+        const targetDb = database || selectedDb;
+        if (targetDb) {
+          setSelectedDb(targetDb);
+          const sch = await getDatabaseSchema(targetDb);
+          setSchema(sch);
+          const targetTbl = table || (sch.tables && sch.tables.length > 0 ? sch.tables[0].tableName : null);
+          if (targetTbl) {
+            setSelectedTable(targetTbl);
+            const data = await getTableRows(targetDb, targetTbl, 50, 0);
+            setTableData(data);
+          }
+        }
+      } catch (err) {
+        console.warn('Database auto-sync notice:', err);
+      }
+    };
+
+    window.addEventListener('database-updated', handleDbUpdated);
+    return () => window.removeEventListener('database-updated', handleDbUpdated);
+  }, [selectedDb]);
+
   const handleCreateDb = async () => {
     if (!newDbName.trim()) return;
     try {
@@ -186,7 +214,11 @@ SELECT * FROM ${selectedTable || 'customers'} LIMIT 10;`;
             <select
               className="db-select"
               value={selectedDb}
-              onChange={(e) => setSelectedDb(e.target.value)}
+              onChange={(e) => {
+                const newDb = e.target.value;
+                setSelectedDb(newDb);
+                loadSchema(newDb);
+              }}
             >
               {databases.map((db) => (
                 <option key={db.name} value={db.name}>
@@ -251,7 +283,10 @@ SELECT * FROM ${selectedTable || 'customers'} LIMIT 10;`;
                 <div key={table.tableName} className="table-tree-node">
                   <div
                     className={`table-tree-item ${isSelected ? 'active' : ''}`}
-                    onClick={() => setSelectedTable(table.tableName)}
+                    onClick={() => {
+                      setSelectedTable(table.tableName);
+                      loadTableData(selectedDb, table.tableName);
+                    }}
                   >
                     <button
                       className="tree-expand-btn"
