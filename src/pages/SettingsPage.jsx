@@ -337,7 +337,8 @@ export default function SettingsPage() {
         } else if (type === 'notebook') {
           await lockNotebook(item.id, item.title, lockPassword);
         }
-        showToast(`🔒 "${item.name || item.title}" is now password-protected & encrypted!`);
+        const itemName = item?.name || item?.title || (typeof item === 'string' ? item : 'Item');
+        showToast(`🔒 "${itemName}" is now password-protected & encrypted!`);
       } else {
         // Unlock / Remove lock
         if (type === 'file') {
@@ -349,7 +350,8 @@ export default function SettingsPage() {
         } else if (type === 'notebook') {
           await removeNotebookLock(item.id, lockPassword);
         }
-        showToast(`🔓 Lock removed from "${item.name || item.title}"!`);
+        const itemName = item?.name || item?.title || (typeof item === 'string' ? item : 'Item');
+        showToast(`🔓 Lock removed from "${itemName}"!`);
       }
       setSecurityLocks(getSecurityLocks());
       setLockModal(null);
@@ -1079,7 +1081,7 @@ export default function SettingsPage() {
                             </span>
                           </div>
                           <div className="staged-file-lang-col">
-                            <span className="lang-tag">{file.language?.name || 'Text'}</span>
+                            <span className="lang-tag">{(typeof file.language === 'object' ? file.language?.name : file.language) || 'Text'}</span>
                           </div>
                           <div className="staged-file-size-col">
                             {formatFileSize(file.size)}
@@ -1952,7 +1954,8 @@ export default function SettingsPage() {
                   {lockSubTab === 'files' && (
                     <div className="vault-table">
                       {files.map((file) => {
-                        const isLocked = Boolean(file.isLocked || securityLocks.files[file.id]?.locked);
+                        const isLocked = Boolean(file.isLocked || securityLocks?.files?.[file.id]?.locked);
+                        const fileLang = (typeof file.language === 'object' ? file.language?.name : file.language) || 'Plain text';
                         return (
                           <div key={file.id} className="vault-row">
                             <div className="vault-row-left">
@@ -1960,7 +1963,7 @@ export default function SettingsPage() {
                               <div className="vault-row-meta">
                                 <span className="vault-item-name">{file.name}</span>
                                 <span className="vault-item-sub">
-                                  {file.language || 'Plain text'} • {(file.content?.length || 0)} chars
+                                  {fileLang} • {(file.content?.length || 0)} chars
                                 </span>
                               </div>
                             </div>
@@ -2007,15 +2010,18 @@ export default function SettingsPage() {
                       {(folders || []).length === 0 ? (
                         <div className="vault-empty-text">No folders created in the current workspace.</div>
                       ) : (
-                        (folders || []).map((folder) => {
-                          const isLocked = Boolean(securityLocks.folders[folder.id]?.locked);
+                        (folders || []).map((folder, fIdx) => {
+                          const fName = typeof folder === 'string' ? folder : (folder?.name || `folder_${fIdx}`);
+                          const fId = typeof folder === 'string' ? folder : (folder?.id || fName);
+                          const isLocked = Boolean(securityLocks?.folders?.[fId]?.locked);
+                          const folderObj = typeof folder === 'string' ? { id: fId, name: fName } : folder;
                           return (
-                            <div key={folder.id} className="vault-row">
+                            <div key={fId} className="vault-row">
                               <div className="vault-row-left">
                                 <Folder size={16} className={isLocked ? 'vault-icon-locked' : 'vault-icon-normal'} />
                                 <div className="vault-row-meta">
-                                  <span className="vault-item-name">{folder.name}</span>
-                                  <span className="vault-item-sub">Folder ID: {folder.id}</span>
+                                  <span className="vault-item-name">{fName}</span>
+                                  <span className="vault-item-sub">Folder: {fName}</span>
                                 </div>
                               </div>
 
@@ -2035,7 +2041,7 @@ export default function SettingsPage() {
                                 {isLocked ? (
                                   <button
                                     className="btn-vault-action unlock"
-                                    onClick={() => handleOpenLockModal('folder', folder, 'unlock')}
+                                    onClick={() => handleOpenLockModal('folder', folderObj, 'unlock')}
                                   >
                                     <Unlock size={13} />
                                     <span>Unlock Folder</span>
@@ -2043,7 +2049,7 @@ export default function SettingsPage() {
                                 ) : (
                                   <button
                                     className="btn-vault-action lock"
-                                    onClick={() => handleOpenLockModal('folder', folder, 'lock')}
+                                    onClick={() => handleOpenLockModal('folder', folderObj, 'lock')}
                                   >
                                     <Lock size={13} />
                                     <span>Lock with Password</span>
@@ -2063,14 +2069,14 @@ export default function SettingsPage() {
                         <div className="vault-empty-text">No subject notebooks created yet.</div>
                       ) : (
                         savedNotebooks.map((nb) => {
-                          const isLocked = Boolean(securityLocks.notebooks[nb.id]?.locked);
+                          const isLocked = Boolean(securityLocks?.notebooks?.[nb.id]?.locked);
                           return (
                             <div key={nb.id} className="vault-row">
                               <div className="vault-row-left">
                                 <GraduationCap size={16} className={isLocked ? 'vault-icon-locked' : 'vault-icon-normal'} />
                                 <div className="vault-row-meta">
-                                  <span className="vault-item-name">{nb.title}</span>
-                                  <span className="vault-item-sub">{nb.subjectId} • {nb.files?.length || 0} notes</span>
+                                  <span className="vault-item-name">{nb.title || 'Untitled Notebook'}</span>
+                                  <span className="vault-item-sub">{nb.subjectId || 'Notebook'} • {nb.files?.length || 0} notes</span>
                                 </div>
                               </div>
 
@@ -2176,7 +2182,7 @@ export default function SettingsPage() {
                           {lockModal.mode === 'lock' ? 'Lock & Encrypt Item' : 'Unlock & Decrypt Item'}
                         </h3>
                         <p className="vault-modal-sub">
-                          {lockModal.item.name || lockModal.item.title}
+                          {lockModal.item?.name || lockModal.item?.title || (typeof lockModal.item === 'string' ? lockModal.item : 'Item')}
                         </p>
                       </div>
                     </div>

@@ -698,6 +698,17 @@ function reducer(state, action) {
         stdin: stdin !== undefined ? stdin : state.stdin,
       };
     }
+    case 'SET_FILES': {
+      const updatedFiles = action.payload;
+      const curActiveFile = updatedFiles.find((f) => f.id === state.activeFileId) || updatedFiles[0];
+      saveStateToStorage(updatedFiles, state.activeFileId, state.stdin, state.folders, state.openFileIds);
+      return {
+        ...state,
+        files: updatedFiles,
+        code: curActiveFile ? curActiveFile.content : state.code,
+        detectedLanguage: curActiveFile ? curActiveFile.language : state.detectedLanguage,
+      };
+    }
     case 'SET_SAVE_AS_MODAL':
       return {
         ...state,

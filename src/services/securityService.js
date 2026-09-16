@@ -92,7 +92,19 @@ export function isItemProtected(key) {
   if (items[key]) return true;
 
   const locks = getSecurityLocks();
-  return Boolean(locks.files[key]?.locked || locks.folders[key]?.locked || locks.notebooks[key]?.locked);
+  if (locks.files?.[key]?.locked || locks.folders?.[key]?.locked || locks.notebooks?.[key]?.locked) {
+    return true;
+  }
+  for (const fId in locks.files || {}) {
+    if (locks.files[fId]?.name === key && locks.files[fId]?.locked) return true;
+  }
+  for (const fldId in locks.folders || {}) {
+    if (locks.folders[fldId]?.name === key && locks.folders[fldId]?.locked) return true;
+  }
+  for (const nbId in locks.notebooks || {}) {
+    if (locks.notebooks[nbId]?.title === key && locks.notebooks[nbId]?.locked) return true;
+  }
+  return false;
 }
 
 /**
@@ -101,14 +113,30 @@ export function isItemProtected(key) {
 export function isItemUnlocked(key) {
   if (!key) return true;
   if (!isItemProtected(key)) return true;
-  return unlockedSessions.has(key);
+  if (unlockedSessions.has(key)) return true;
+  const locks = getSecurityLocks();
+  if (locks.files?.[key]?.name && unlockedSessions.has(locks.files[key].name)) return true;
+  for (const fId in locks.files || {}) {
+    if (locks.files[fId]?.name === key && unlockedSessions.has(fId)) return true;
+  }
+  for (const fldId in locks.folders || {}) {
+    if (locks.folders[fldId]?.name === key && unlockedSessions.has(fldId)) return true;
+  }
+  return false;
 }
 
 /**
  * Lock item in session
  */
 export function lockItemInSession(key) {
-  if (key) unlockedSessions.delete(key);
+  if (key) {
+    unlockedSessions.delete(key);
+    const locks = getSecurityLocks();
+    if (locks.files?.[key]?.name) unlockedSessions.delete(locks.files[key].name);
+    for (const fId in locks.files || {}) {
+      if (locks.files[fId]?.name === key) unlockedSessions.delete(fId);
+    }
+  }
 }
 
 /**
@@ -127,13 +155,45 @@ export function unlockItemInSession(key, password) {
 
   // Check in securityLocks
   const locks = getSecurityLocks();
-  const fileLock = locks.files[key];
-  const folderLock = locks.folders[key];
-  const nbLock = locks.notebooks[key];
-  const found = fileLock || folderLock || nbLock;
+  const fileLock = locks.files?.[key];
+  const folderLock = locks.folders?.[key];
+  const nbLock = locks.notebooks?.[key];
+  let found = fileLock || folderLock || nbLock;
+  let alias = null;
+
+  if (!found) {
+    for (const fId in locks.files || {}) {
+      if (locks.files[fId]?.name === key) {
+        found = locks.files[fId];
+        alias = fId;
+        break;
+      }
+    }
+    if (!found) {
+      for (const fldId in locks.folders || {}) {
+        if (locks.folders[fldId]?.name === key) {
+          found = locks.folders[fldId];
+          alias = fldId;
+          break;
+        }
+      }
+    }
+    if (!found) {
+      for (const nbId in locks.notebooks || {}) {
+        if (locks.notebooks[nbId]?.title === key) {
+          found = locks.notebooks[nbId];
+          alias = nbId;
+          break;
+        }
+      }
+    }
+  } else {
+    alias = found.name || found.title;
+  }
 
   if (found && (found.hash === inputHash || found.hash === password)) {
     unlockedSessions.add(key);
+    if (alias) unlockedSessions.add(alias);
     return true;
   }
 
