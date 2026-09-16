@@ -1,11 +1,99 @@
-import sqlite3 from 'sqlite3';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import { fileURLToPath } from 'url';
+import { createRequire } from 'module';
+
+const require = createRequire(import.meta.url);
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+// ─── Universal Native SQLite Engine Adapter ─────────────────────────────────
+// Uses Node 22+ built-in node:sqlite (zero glibc/native-addon issues on Vercel)
+let DatabaseSync;
+try {
+  ({ DatabaseSync } = require('node:sqlite'));
+} catch {
+  // Node without node:sqlite fallback
+}
+
+class NodeSqliteAdapter {
+  constructor(filename) {
+    this.rawDb = new DatabaseSync(filename);
+  }
+
+  run(sql, params, cb) {
+    if (typeof params === 'function') {
+      cb = params;
+      params = [];
+    }
+    try {
+      // PRAGMA or multi-statement commands without prepare support
+      if (sql.trim().toUpperCase().startsWith('PRAGMA')) {
+        this.rawDb.exec(sql);
+        if (cb) cb.call({ changes: 0, lastID: 0 }, null);
+        return;
+      }
+      const stmt = this.rawDb.prepare(sql);
+      const res = stmt.run(...(params || []));
+      const context = { changes: Number(res.changes || 0), lastID: Number(res.lastInsertRowid || 0) };
+      if (cb) cb.call(context, null);
+    } catch (err) {
+      if (cb) cb(err);
+      else throw err;
+    }
+  }
+
+  all(sql, params, cb) {
+    if (typeof params === 'function') {
+      cb = params;
+      params = [];
+    }
+    try {
+      const stmt = this.rawDb.prepare(sql);
+      const rows = stmt.all(...(params || []));
+      // Normalize rows to standard plain objects
+      const normalized = rows.map((r) => ({ ...r }));
+      if (cb) cb(null, normalized);
+    } catch (err) {
+      if (cb) cb(err, []);
+    }
+  }
+
+  get(sql, params, cb) {
+    if (typeof params === 'function') {
+      cb = params;
+      params = [];
+    }
+    try {
+      const stmt = this.rawDb.prepare(sql);
+      const row = stmt.get(...(params || []));
+      const normalized = row ? { ...row } : null;
+      if (cb) cb(null, normalized);
+    } catch (err) {
+      if (cb) cb(err, null);
+    }
+  }
+
+  exec(sql, cb) {
+    try {
+      this.rawDb.exec(sql);
+      if (cb) cb(null);
+    } catch (err) {
+      if (cb) cb(err);
+    }
+  }
+
+  close(cb) {
+    try {
+      this.rawDb.close();
+      if (cb) cb(null);
+    } catch (err) {
+      if (cb) cb(err);
+    }
+  }
+}
 
 const isServerless = Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME);
 const DB_DIR = isServerless
@@ -71,7 +159,13 @@ export function getDbConnection(dbName = 'main_db') {
   const dbPath = path.join(DB_DIR, `${sanitized}.sqlite`);
 
   if (!dbConnections.has(sanitized)) {
-    const db = new sqlite3.Database(dbPath);
+    let db;
+    if (DatabaseSync) {
+      db = new NodeSqliteAdapter(dbPath);
+    } else {
+      const sqlite3 = require('sqlite3');
+      db = new sqlite3.Database(dbPath);
+    }
     // Enable WAL mode and foreign keys for high performance
     db.run('PRAGMA journal_mode = WAL;');
     db.run('PRAGMA foreign_keys = ON;');
