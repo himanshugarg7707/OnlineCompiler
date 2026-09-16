@@ -38,6 +38,7 @@ import {
   Unlock,
   KeyRound,
   ShieldCheck,
+  GraduationCap,
 } from 'lucide-react';
 import {
   getSecurityLocks,
