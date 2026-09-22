@@ -40,10 +40,15 @@ export function recordVariablesFromCode(codeText) {
   });
 }
 
+// Global registry to prevent registering duplicate completion providers
+const registeredLanguages = new Set();
+
 /**
- * Register completion providers for Monaco editor
+ * Register completion providers for Monaco editor (once per language)
  */
 export function registerSnippets(monaco) {
+  if (!monaco || !monaco.languages) return;
+
   const languages = [
     'python', 'cpp', 'c', 'java', 'javascript', 'typescript',
     'csharp', 'kotlin', 'swift', 'go', 'rust', 'php', 'ruby',
@@ -51,6 +56,9 @@ export function registerSnippets(monaco) {
   ];
 
   languages.forEach((langId) => {
+    if (registeredLanguages.has(langId)) return;
+    registeredLanguages.add(langId);
+
     const staticItems = COMPLETIONS[langId] || [];
 
     monaco.languages.registerCompletionItemProvider(langId, {
@@ -67,48 +75,68 @@ export function registerSnippets(monaco) {
           endColumn: word.endColumn,
         };
 
-        // Record variables from current buffer into global history
-        recordVariablesFromCode(text);
+        // ── Show suggestions starting on first typed character or trigger char ──
+        if (currentWord.length < 1 && !isTriggerChar) {
+          return { suggestions: [] };
+        }
 
-        // 1. Static Snippets and Standard Library Completions (Priority 0000_ so keywords come FIRST!)
-        const staticSuggestions = staticItems.map((s, idx) => ({
-          label: s.label || s.prefix,
-          kind: s.kind ? monaco.languages.CompletionItemKind[s.kind] : monaco.languages.CompletionItemKind.Snippet,
-          documentation: s.doc || s.description,
-          insertText: s.insertText || s.body,
-          insertTextRules: s.insertTextRules ?? monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
-          range,
-          detail: s.detail || (s.kind ? s.kind : 'Snippet'),
-          sortText: `0000_${String(idx).padStart(4, '0')}`,
-        }));
+        const lowerCurrentWord = currentWord.toLowerCase();
 
-        // 2. Extract Dynamic Variable & Function Suggestions (Priority 0050_ so user variables never hijack keywords)
+        // 1. Static Snippets — only return those whose prefix or label starts with the typed text
+        const staticSuggestions = staticItems
+          .filter((s) => {
+            const prefix = (s.prefix || '').toLowerCase();
+            const label = (s.label || '').toLowerCase();
+            return prefix.startsWith(lowerCurrentWord) || label.startsWith(lowerCurrentWord);
+          })
+          .map((s, idx) => ({
+            label: s.label || s.prefix,
+            filterText: s.prefix || s.label,
+            kind: s.kind ? monaco.languages.CompletionItemKind[s.kind] : monaco.languages.CompletionItemKind.Snippet,
+            documentation: s.doc || s.description,
+            insertText: s.insertText || s.body,
+            insertTextRules: s.insertTextRules ?? monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+            range,
+            detail: s.detail || (s.kind ? s.kind : 'Snippet'),
+            sortText: `0000_${String(idx).padStart(4, '0')}`,
+          }));
+
+        // 2. Dynamic Variable & Identifier Suggestions (fast single-pass scan)
         const localVariables = new Map();
-        const matches = text.match(/[a-zA-Z_$][a-zA-Z0-9_$]*/g) || [];
-
-        matches.forEach((identifier) => {
-          if (
-            identifier.length >= 2 &&
-            identifier !== currentWord &&
-            !KEYWORDS_SET.has(identifier) &&
-            !/^\d+$/.test(identifier)
-          ) {
-            const isFunction = new RegExp(`\\b${identifier}\\s*\\(`).test(text);
-            localVariables.set(identifier, isFunction);
+        if (text && text.length < 30000) {
+          const matches = text.match(/[a-zA-Z_$][a-zA-Z0-9_$]*/g) || [];
+          for (let i = 0; i < matches.length; i++) {
+            const identifier = matches[i];
+            if (
+              identifier.length >= 2 &&
+              identifier !== currentWord &&
+              !KEYWORDS_SET.has(identifier) &&
+              !/^\d+$/.test(identifier) &&
+              identifier.toLowerCase().startsWith(lowerCurrentWord)
+            ) {
+              if (!localVariables.has(identifier)) {
+                localVariables.set(identifier, false);
+                if (localVariables.size >= 10) break;
+              }
+            }
           }
-        });
+        }
 
-        // Add variables from global session history if not already present
-        globalVariableHistory.forEach((info, name) => {
-          if (
-            name.length >= 2 &&
-            name !== currentWord &&
-            !KEYWORDS_SET.has(name) &&
-            !localVariables.has(name)
-          ) {
-            localVariables.set(name, info.isFunction);
+        // Add variables from global session history
+        if (localVariables.size < 10) {
+          for (const [name, info] of globalVariableHistory.entries()) {
+            if (
+              name.length >= 2 &&
+              name !== currentWord &&
+              !KEYWORDS_SET.has(name) &&
+              !localVariables.has(name) &&
+              name.toLowerCase().startsWith(lowerCurrentWord)
+            ) {
+              localVariables.set(name, info?.isFunction || false);
+              if (localVariables.size >= 12) break;
+            }
           }
-        });
+        }
 
         const variableSuggestions = Array.from(localVariables.entries()).map(
           ([name, isFunction], idx) => ({
@@ -176,6 +204,15 @@ export const COMPLETIONS = {
     { prefix: 'droptbl', label: 'DROP TABLE', body: 'DROP TABLE IF EXISTS ${1:table_name};', detail: 'Drop table', doc: 'Delete target table' },
     { prefix: 'altertbl', label: 'ALTER TABLE ADD COLUMN', body: 'ALTER TABLE ${1:table_name} ADD COLUMN ${2:col_name} ${3:TEXT};', detail: 'Add column to table', doc: 'Modify table structure' },
     { prefix: 'createidx', label: 'CREATE INDEX', body: 'CREATE INDEX idx_${1:table}_${2:col} ON ${1:table}(${2:col});', detail: 'Create index on column', doc: 'Speed up queries on column' },
+
+    // SQLite Schema & Introspection
+    { prefix: 'schema', label: '.schema (View DDL)', body: '.schema ${1:table_name};', detail: 'SQLite .schema command', doc: 'Print CREATE TABLE DDL for database or specific table' },
+    { prefix: 'pragma', label: 'PRAGMA table_info', body: 'PRAGMA table_info(${1:table_name});', detail: 'Inspect table columns', doc: 'Returns cid, name, type, notnull, dflt_value, pk' },
+    { prefix: 'pragmalt', label: 'PRAGMA table_list', body: 'PRAGMA table_list;', detail: 'List all tables & views', doc: 'Returns schema, name, type, ncol, wr, strict' },
+    { prefix: 'pragmafk', label: 'PRAGMA foreign_key_list', body: 'PRAGMA foreign_key_list(${1:table_name});', detail: 'Inspect foreign keys', doc: 'Returns table foreign key constraints' },
+    { prefix: 'pragmaidx', label: 'PRAGMA index_list', body: 'PRAGMA index_list(${1:table_name});', detail: 'Inspect table indexes', doc: 'Returns indexes created on table' },
+    { prefix: 'sqlitemaster', label: 'SELECT FROM sqlite_master', body: 'SELECT type, name, tbl_name, sql\nFROM sqlite_master\nWHERE type = \'table\' AND name NOT LIKE \'sqlite_%\';', detail: 'Query SQLite Master Schema', doc: 'Inspect SQLite system table catalog' },
+    { prefix: 'showcreate', label: 'SHOW CREATE TABLE', body: 'SHOW CREATE TABLE ${1:table_name};', detail: 'Show Create Table statement', doc: 'Display table DDL definition' },
 
     // Data Manipulation
     { prefix: 'ins', label: 'INSERT INTO VALUES', body: 'INSERT INTO ${1:table_name} (${2:col1, col2}) VALUES\n\t(${3:\'val1\', 100});', detail: 'Insert rows', doc: 'Insert new records into table' },

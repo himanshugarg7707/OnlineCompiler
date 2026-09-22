@@ -20,6 +20,9 @@ import {
   ChevronDown,
   Layers,
   Sparkles,
+  FileCode,
+  Copy,
+  Terminal,
 } from 'lucide-react';
 import './DatabasePanel.css';
 
@@ -36,7 +39,9 @@ export default function DatabasePanel() {
   const [isCreatingDb, setIsCreatingDb] = useState(false);
   const [newDbName, setNewDbName] = useState('');
   const [copiedCode, setCopiedCode] = useState(false);
+  const [copiedDdl, setCopiedDdl] = useState(false);
   const [connectorLang, setConnectorLang] = useState('python');
+  const [viewMode, setViewMode] = useState('data'); // 'data' | 'schema'
 
   // Load databases list
   const refreshDatabases = useCallback(async () => {
@@ -203,6 +208,17 @@ SELECT * FROM ${selectedTable || 'customers'} LIMIT 10;`;
     setTimeout(() => setCopiedCode(false), 2000);
   };
 
+  const currentTableSchema = schema?.tables?.find((t) => t.tableName === selectedTable);
+  const currentTableDdl = currentTableSchema?.sql || '';
+
+  const handleCopyDdl = () => {
+    if (currentTableDdl) {
+      navigator.clipboard.writeText(currentTableDdl);
+      setCopiedDdl(true);
+      setTimeout(() => setCopiedDdl(false), 2000);
+    }
+  };
+
   return (
     <div className="database-panel">
       {/* Sidebar: Databases & Tables */}
@@ -270,8 +286,18 @@ SELECT * FROM ${selectedTable || 'customers'} LIMIT 10;`;
         {/* Tables & Schema Tree */}
         <div className="db-tables-list">
           <div className="db-section-header">
-            <Layers size={13} />
-            <span>TABLES ({schema?.tables?.length || 0})</span>
+            <div className="db-section-title">
+              <Layers size={13} />
+              <span>TABLES ({schema?.tables?.length || 0})</span>
+            </div>
+            <button
+              className="btn-schema-quick"
+              title="Show entire database schema (.schema)"
+              onClick={() => handleOpenQueryInEditor('.schema;')}
+            >
+              <Terminal size={11} />
+              <span>.schema</span>
+            </button>
           </div>
 
           {schema?.tables && schema.tables.length > 0 ? (
@@ -347,12 +373,53 @@ SELECT * FROM ${selectedTable || 'customers'} LIMIT 10;`;
                 <span className="table-title">
                   <strong>{selectedDb}</strong> / {selectedTable}
                 </span>
-                <span className="table-row-count">
-                  Showing {tableData.rows?.length || 0} of {tableData.total || 0} records
-                </span>
+                <div className="view-mode-toggle">
+                  <button
+                    className={`btn-toggle-tab ${viewMode === 'data' ? 'active' : ''}`}
+                    onClick={() => setViewMode('data')}
+                  >
+                    <TableIcon size={12} />
+                    <span>Data ({tableData?.total || tableData?.rows?.length || 0})</span>
+                  </button>
+                  <button
+                    className={`btn-toggle-tab ${viewMode === 'schema' ? 'active' : ''}`}
+                    onClick={() => setViewMode('schema')}
+                  >
+                    <FileCode size={12} />
+                    <span>Schema & DDL</span>
+                  </button>
+                </div>
               </div>
 
               <div className="toolbar-right">
+                <div className="schema-query-shortcuts">
+                  <button
+                    className="btn-schema-shortcut"
+                    onClick={() => handleOpenQueryInEditor(`.schema ${selectedTable};`)}
+                    title="Run .schema query in editor"
+                  >
+                    .schema
+                  </button>
+                  <button
+                    className="btn-schema-shortcut"
+                    onClick={() => handleOpenQueryInEditor(`PRAGMA table_info(${selectedTable});`)}
+                    title="Run PRAGMA table_info in editor"
+                  >
+                    PRAGMA
+                  </button>
+                  <button
+                    className="btn-schema-shortcut"
+                    onClick={() =>
+                      handleOpenQueryInEditor(
+                        `SELECT type, name, sql FROM sqlite_master WHERE tbl_name = '${selectedTable}';`
+                      )
+                    }
+                    title="Query sqlite_master in editor"
+                  >
+                    sqlite_master
+                  </button>
+                </div>
+
                 <button
                   className="btn-toolbar"
                   onClick={() =>
@@ -363,7 +430,7 @@ SELECT * FROM ${selectedTable || 'customers'} LIMIT 10;`;
                   title="Query this table in editor"
                 >
                   <Code size={13} />
-                  <span>Query Table</span>
+                  <span>Query</span>
                 </button>
                 <button
                   className="btn-toolbar"
@@ -375,49 +442,172 @@ SELECT * FROM ${selectedTable || 'customers'} LIMIT 10;`;
               </div>
             </div>
 
-            {/* Table Data Grid */}
-            <div className="table-grid-scroll">
-              {tableData.rows && tableData.rows.length > 0 ? (
-                <table className="db-data-table">
-                  <thead>
-                    <tr>
-                      {tableData.columns.map((col) => (
-                        <th key={col}>{col}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {tableData.rows.map((row, idx) => (
-                      <tr key={idx}>
+            {/* View Mode: Data Grid */}
+            {viewMode === 'data' ? (
+              <div className="table-grid-scroll">
+                {tableData.rows && tableData.rows.length > 0 ? (
+                  <table className="db-data-table">
+                    <thead>
+                      <tr>
                         {tableData.columns.map((col) => (
-                          <td key={col}>
-                            {row[col] === null ? (
-                              <span className="cell-null">NULL</span>
-                            ) : (
-                              String(row[col])
-                            )}
-                          </td>
+                          <th key={col}>{col}</th>
                         ))}
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              ) : (
-                <div className="table-empty-notice">
-                  <span>Table "{selectedTable}" is empty.</span>
+                    </thead>
+                    <tbody>
+                      {tableData.rows.map((row, idx) => (
+                        <tr key={idx}>
+                          {tableData.columns.map((col) => (
+                            <td key={col}>
+                              {row[col] === null ? (
+                                <span className="cell-null">NULL</span>
+                              ) : (
+                                String(row[col])
+                              )}
+                            </td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                ) : (
+                  <div className="table-empty-notice">
+                    <span>Table "{selectedTable}" is empty.</span>
+                    <button
+                      className="btn-insert-sample"
+                      onClick={() =>
+                        handleOpenQueryInEditor(
+                          `INSERT INTO ${selectedTable} DEFAULT VALUES;`
+                        )
+                      }
+                    >
+                      Insert Row
+                    </button>
+                  </div>
+                )}
+              </div>
+            ) : (
+              /* View Mode: Schema & DDL View */
+              <div className="schema-viewer-container animate-slide-up">
+                {/* DDL SQL Card */}
+                <div className="schema-ddl-card">
+                  <div className="schema-card-header">
+                    <div className="schema-card-title">
+                      <FileCode size={14} className="accent-icon" />
+                      <span>SQLite Table DDL (CREATE TABLE)</span>
+                    </div>
+                    <div className="schema-card-actions">
+                      <button className="btn-ddl-action" onClick={handleCopyDdl}>
+                        {copiedDdl ? <Check size={12} /> : <Copy size={12} />}
+                        <span>{copiedDdl ? 'Copied DDL' : 'Copy DDL'}</span>
+                      </button>
+                      <button
+                        className="btn-ddl-action primary"
+                        onClick={() =>
+                          handleOpenQueryInEditor(
+                            currentTableDdl || `-- Schema for ${selectedTable}\n.schema ${selectedTable};`
+                          )
+                        }
+                      >
+                        <Code size={12} />
+                        <span>Open in Editor</span>
+                      </button>
+                    </div>
+                  </div>
+                  <div className="schema-code-block">
+                    <pre>{currentTableDdl || `-- No DDL available for ${selectedTable}`}</pre>
+                  </div>
+                </div>
+
+                {/* Column Specifications Table */}
+                <div className="schema-columns-card">
+                  <div className="schema-card-header">
+                    <div className="schema-card-title">
+                      <Columns size={14} className="accent-icon" />
+                      <span>Column Specifications ({currentTableSchema?.columns?.length || 0} fields)</span>
+                    </div>
+                  </div>
+                  <div className="schema-columns-table-scroll">
+                    <table className="db-data-table schema-table">
+                      <thead>
+                        <tr>
+                          <th>Field Name</th>
+                          <th>Data Type</th>
+                          <th>Primary Key</th>
+                          <th>Nullable</th>
+                          <th>Default Value</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {currentTableSchema?.columns?.map((col) => (
+                          <tr key={col.name}>
+                            <td className="col-name-cell">
+                              <code>{col.name}</code>
+                            </td>
+                            <td>
+                              <span className="col-type-tag">{col.type}</span>
+                            </td>
+                            <td>
+                              {col.isPrimaryKey ? (
+                                <span className="badge-pk">PRIMARY KEY</span>
+                              ) : (
+                                <span className="cell-muted">-</span>
+                              )}
+                            </td>
+                            <td>
+                              {col.notNull ? (
+                                <span className="badge-notnull">NOT NULL</span>
+                              ) : (
+                                <span className="cell-muted">NULL</span>
+                              )}
+                            </td>
+                            <td>
+                              {col.defaultValue !== null && col.defaultValue !== undefined ? (
+                                <code>{String(col.defaultValue)}</code>
+                              ) : (
+                                <span className="cell-muted">NULL</span>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                {/* Interactive Quick Schema Query Runner Chips */}
+                <div className="schema-queries-bar">
+                  <span className="queries-bar-label">Run SQLite Schema Queries:</span>
                   <button
-                    className="btn-insert-sample"
+                    className="btn-query-chip"
+                    onClick={() =>
+                      handleOpenQueryInEditor(`.schema ${selectedTable};\nPRAGMA table_info(${selectedTable});`)
+                    }
+                  >
+                    <Terminal size={12} />
+                    <span>.schema & PRAGMA</span>
+                  </button>
+                  <button
+                    className="btn-query-chip"
                     onClick={() =>
                       handleOpenQueryInEditor(
-                        `INSERT INTO ${selectedTable} DEFAULT VALUES;`
+                        `SELECT sql FROM sqlite_master WHERE tbl_name = '${selectedTable}';`
                       )
                     }
                   >
-                    Insert Row
+                    <Code size={12} />
+                    <span>sqlite_master DDL</span>
+                  </button>
+                  <button
+                    className="btn-query-chip"
+                    onClick={() => handleOpenQueryInEditor(`SHOW CREATE TABLE ${selectedTable};`)}
+                  >
+                    <FileCode size={12} />
+                    <span>SHOW CREATE TABLE</span>
                   </button>
                 </div>
-              )}
-            </div>
+              </div>
+            )}
 
             {/* Cross-Language Connector Footer */}
             <div className="connector-snippet-bar">

@@ -504,21 +504,41 @@ export default function CodeEditor() {
       bracketPairs: true,
       indentation: true,
     },
+    // ── Autocomplete: prevent accidental acceptance when typing fast ──
+    fixedOverflowWidgets: true,
     suggestOnTriggerCharacters: true,
-    acceptSuggestionOnEnter: 'smart',
-    tabCompletion: 'on',
+    // Enter ALWAYS creates a new line — use Tab to accept suggestions
+    acceptSuggestionOnEnter: 'off',
+    // Only Tab-complete snippets, not random variable/keyword matches
+    tabCompletion: 'onlySnippets',
+    // Don't accept suggestions when typing commit characters (., ;, etc.)
+    acceptSuggestionOnCommitCharacter: false,
+    // Instant autocomplete without artificial delays
     quickSuggestions: {
       other: true,
       comments: false,
-      strings: true,
+      strings: false,
     },
+    quickSuggestionsDelay: 10,
+    snippetSuggestions: 'inline',
     suggest: {
       showKeywords: true,
       showSnippets: true,
       showVariables: true,
       showFunctions: true,
-      preview: true,
+      preview: false,
+      showInlineDetails: true,
+      maxVisibleSuggestions: 7,
+      // Filter out low-confidence suggestions
+      filterGraceful: true,
+      // Require typed text to match beginning of suggestion
+      matchOnWordStartOnly: true,
+      // Don't auto-select first item — user must actively choose
+      selectionMode: 'whenQuickSuggestion',
+      localityBonus: true,
     },
+    // Require at least 2 chars before showing word-based suggestions
+    wordBasedSuggestionsMode: 'currentDocument',
   };
 
   const handleEditorChange = (value) => {
@@ -560,6 +580,7 @@ export default function CodeEditor() {
       <div className="editor-wrapper">
         {isNotebook ? (
           <JupyterNotebookEditor
+            key={activeFile?.id}
             file={activeFile}
             onContentChange={handleEditorChange}
           />

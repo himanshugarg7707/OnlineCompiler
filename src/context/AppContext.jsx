@@ -7,6 +7,7 @@ import {
   getDefaultFilename,
   getNextSequentialFilename,
   getSequentialFileStarterContent,
+  createDefaultNotebookJson,
 } from '../services/languageDetector';
 import { sanitizeFilenameIdentifier, syncJavaClassWithFilename } from '../services/identifierSanitizer';
 import { executeCode } from '../services/judge0Service';
@@ -341,6 +342,27 @@ function reducer(state, action) {
       const langFromExt = getLanguageFromFilename(uniqueName);
       const fileLang = langFromExt || state.detectedLanguage;
       let fileContent = inputContent !== undefined ? inputContent : getStarterTemplate(fileLang.id);
+
+      // If notebook (.ipynb), generate differentiated template matching language context
+      if (fileLang?.id === 710 && inputContent === undefined) {
+        let nbLang = 'python';
+        const lowerName = uniqueName.toLowerCase();
+        if (lowerName.includes('java')) {
+          nbLang = 'java';
+        } else if (lowerName.includes('cpp') || lowerName.includes('c++')) {
+          nbLang = 'cpp';
+        } else if (lowerName.includes('js') || lowerName.includes('javascript')) {
+          nbLang = 'javascript';
+        } else if (state.detectedLanguage?.monacoLanguage === 'java' || state.detectedLanguage?.id === 62) {
+          nbLang = 'java';
+        } else if (state.detectedLanguage?.monacoLanguage === 'cpp' || state.detectedLanguage?.id === 54) {
+          nbLang = 'cpp';
+        } else if (state.detectedLanguage?.monacoLanguage === 'javascript' || state.detectedLanguage?.id === 63) {
+          nbLang = 'javascript';
+        }
+        fileContent = createDefaultNotebookJson(nbLang);
+      }
+
       // If Java file, sync the class name to match sanitized filename
       if (fileLang?.id === 62) {
         fileContent = syncJavaClassWithFilename(fileContent, uniqueName);
@@ -898,6 +920,29 @@ export function AppProvider({ children }) {
     return () => window.removeEventListener('hashchange', onHashChange);
   }, []);
 
+  // Listen for individual Jupyter notebook cell outputs to synchronize with Terminal / OutputPanel
+  useEffect(() => {
+    const handleJupyterCellOutput = (e) => {
+      const detail = e?.detail;
+      if (!detail) return;
+      dispatch({
+        type: 'SET_EXECUTION_RESULT',
+        payload: {
+          success: detail.success !== false && !detail.error,
+          output: detail.output || '',
+          error: detail.error || null,
+          time: detail.time || '0.000',
+          memory: detail.memory || 0,
+          statusCode: detail.error ? 1 : 0,
+        },
+      });
+      dispatch({ type: 'SET_EXECUTION_STATUS', payload: 'idle' });
+    };
+
+    window.addEventListener('jupyter-cell-output', handleJupyterCellOutput);
+    return () => window.removeEventListener('jupyter-cell-output', handleJupyterCellOutput);
+  }, []);
+
   const showToast = useCallback((message, duration = 3000) => {
     dispatch({ type: 'SHOW_TOAST', payload: message });
     setTimeout(() => {
@@ -1142,11 +1187,14 @@ export function AppProvider({ children }) {
 
     try {
       const activeFile = state.files.find((f) => f.id === state.activeFileId) || state.files[0];
+
       const hasSelection = Boolean(state.selectedCode && state.selectedCode.trim());
-      const codeToRun = hasSelection ? state.selectedCode.trim() : activeFile.content;
+      const codeToRun = hasSelection ? state.selectedCode.trim() : (activeFile?.content || '');
 
       // Auto-record snapshot in version history
-      recordSnapshot(activeFile.name, codeToRun, state.detectedLanguage?.name, 'Code Run');
+      if (activeFile) {
+        recordSnapshot(activeFile.name, codeToRun, state.detectedLanguage?.name, 'Code Run');
+      }
 
       let effectiveStdin = state.stdin;
 
@@ -1174,6 +1222,19 @@ export function AppProvider({ children }) {
 
         dispatch({ type: 'SET_STDIN', payload: effectiveStdin });
         showToast('Auto-generated input for code execution 💡');
+      }
+
+      // If active file is a Jupyter Notebook, trigger cell in notebook UI AND execute notebook for terminal output
+      if (activeFile?.name?.endsWith('.ipynb') || state.detectedLanguage?.id === 710) {
+        window.dispatchEvent(new CustomEvent('jupyter-run-active-cell'));
+
+        const result = await executeCode(
+          activeFile.content,
+          710,
+          effectiveStdin
+        );
+        dispatch({ type: 'SET_EXECUTION_RESULT', payload: result });
+        return;
       }
 
       const result = await executeCode(

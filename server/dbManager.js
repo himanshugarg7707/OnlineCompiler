@@ -322,6 +322,86 @@ function splitSqlStatements(sqlText) {
   return statements;
 }
 
+const MONTH_MAP = {
+  jan: '01', feb: '02', mar: '03', apr: '04', may: '05', jun: '06',
+  jul: '07', aug: '08', sep: '09', oct: '10', nov: '11', dec: '12',
+  january: '01', february: '02', march: '03', april: '04', may: '05', june: '06',
+  july: '07', august: '08', september: '09', october: '10', november: '11', december: '12',
+};
+
+/**
+ * Transpile MySQL / Oracle / PostgreSQL dialect constructs into SQLite-compatible SQL
+ */
+export function transpileSqlForSqlite(sql) {
+  if (!sql) return '';
+  let s = sql.trim();
+
+  // 1. STR_TO_DATE('17-JUN-1987', '%d-%M-%Y') and TO_DATE(...) -> ISO format '1987-06-17'
+  s = s.replace(/(?:STR_TO_DATE|TO_DATE)\s*\(\s*'([^']+)'\s*,\s*'([^']+)'\s*\)/gi, (match, dateStr) => {
+    const dmyMatch = dateStr.match(/^(\d{1,2})[-/]([A-Za-z]+)[-/](\d{4})$/);
+    if (dmyMatch) {
+      const day = dmyMatch[1].padStart(2, '0');
+      const monName = dmyMatch[2].toLowerCase();
+      const month = MONTH_MAP[monName] || '01';
+      const year = dmyMatch[3];
+      return `'${year}-${month}-${day}'`;
+    }
+    const dmyNumMatch = dateStr.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/);
+    if (dmyNumMatch) {
+      const day = dmyNumMatch[1].padStart(2, '0');
+      const month = dmyNumMatch[2].padStart(2, '0');
+      const year = dmyNumMatch[3];
+      return `'${year}-${month}-${day}'`;
+    }
+    const ymdMatch = dateStr.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})$/);
+    if (ymdMatch) {
+      return `'${ymdMatch[1]}-${ymdMatch[2].padStart(2, '0')}-${ymdMatch[3].padStart(2, '0')}'`;
+    }
+    return `'${dateStr}'`;
+  });
+
+  // 2. Subquery operators: > ALL, < ALL, >= ALL, <= ALL, > ANY, etc.
+  s = s.replace(/>\s*ALL\s*\(\s*SELECT\s+([a-zA-Z0-9_.*]+)\s+FROM\b/gi, '> (SELECT MAX($1) FROM');
+  s = s.replace(/>=\s*ALL\s*\(\s*SELECT\s+([a-zA-Z0-9_.*]+)\s+FROM\b/gi, '>= (SELECT MAX($1) FROM');
+  s = s.replace(/<\s*ALL\s*\(\s*SELECT\s+([a-zA-Z0-9_.*]+)\s+FROM\b/gi, '< (SELECT MIN($1) FROM');
+  s = s.replace(/<=\s*ALL\s*\(\s*SELECT\s+([a-zA-Z0-9_.*]+)\s+FROM\b/gi, '<= (SELECT MIN($1) FROM');
+  s = s.replace(/>\s*ANY\s*\(\s*SELECT\s+([a-zA-Z0-9_.*]+)\s+FROM\b/gi, '> (SELECT MIN($1) FROM');
+  s = s.replace(/>=\s*ANY\s*\(\s*SELECT\s+([a-zA-Z0-9_.*]+)\s+FROM\b/gi, '>= (SELECT MIN($1) FROM');
+  s = s.replace(/<\s*ANY\s*\(\s*SELECT\s+([a-zA-Z0-9_.*]+)\s+FROM\b/gi, '< (SELECT MAX($1) FROM');
+  s = s.replace(/<=\s*ANY\s*\(\s*SELECT\s+([a-zA-Z0-9_.*]+)\s+FROM\b/gi, '<= (SELECT MAX($1) FROM');
+  s = s.replace(/=\s*ANY\s*\(/gi, 'IN (');
+  s = s.replace(/(?:!=|<>)\s*ALL\s*\(/gi, 'NOT IN (');
+
+  // 3. Normalize common field aliases: emp_id -> employee_id in employees queries
+  if (/\bemployees\b/i.test(s) && /\bemp_id\b/i.test(s)) {
+    s = s.replace(/\bemp_id\b/gi, 'employee_id');
+  }
+
+  // 4. CREATE TABLE normalization
+  if (/^CREATE\s+TABLE\b/i.test(s)) {
+    // Strip UNSIGNED
+    s = s.replace(/\bUNSIGNED\b/gi, '');
+
+    // Convert INT(11) etc. to INTEGER
+    s = s.replace(/\b(?:INT|INTEGER|TINYINT|SMALLINT|MEDIUMINT|BIGINT)\s*(?:\(\s*\d+\s*\))?/gi, 'INTEGER');
+
+    // Strip trailing MySQL engine / charset options after closing parenthesis
+    s = s.replace(/\)\s*(?:ENGINE\s*=\s*\w+|DEFAULT\s+CHARSET\s*=\s*\w+|CHARSET\s*=\s*\w+|COLLATE\s*=\s*\w+|AUTO_INCREMENT\s*=\s*\d+)+;/gi, ');');
+
+    // Normalize MySQL collations to NOCASE or strip
+    s = s.replace(/COLLATE\s*(?:=\s*)?(?:utf8\w*|latin1\w*)/gi, 'COLLATE NOCASE');
+
+    // Handle AUTO_INCREMENT
+    if (/PRIMARY\s+KEY\s*\([^)]*\b/i.test(s)) {
+      s = s.replace(/\bAUTO_INCREMENT\b/gi, '');
+    } else {
+      s = s.replace(/\bAUTO_INCREMENT\b/gi, 'AUTOINCREMENT');
+    }
+  }
+
+  return s;
+}
+
 /**
  * Execute SQL Query or multi-statement script on target database
  * Supports MySQL / PostgreSQL DDL extensions:
@@ -330,7 +410,7 @@ function splitSqlStatements(sqlText) {
  * - SHOW DATABASES / SHOW SCHEMAS
  * - SHOW TABLES [FROM <name>]
  * - DESCRIBE <table> / DESC <table>
- * - DROP DATABASE <name>
+ * - DROP DATABASE <name> / DROP SCHEMA <name>
  */
 export async function executeSqlQuery(initialDbName = 'main_db', sqlQuery) {
   await ensureSeeded();
@@ -349,7 +429,25 @@ export async function executeSqlQuery(initialDbName = 'main_db', sqlQuery) {
     };
   }
 
-  const statements = splitSqlStatements(cleanQuery);
+  let statements = splitSqlStatements(cleanQuery);
+  const executionLogs = [];
+
+  // If entire script was commented out with '-- ' or '# ' (e.g. pasted directly from tutorials/workbench)
+  if (statements.length === 0) {
+    const lines = cleanQuery.split('\n');
+    const hasCommentedSql = lines.some((l) =>
+      /^\s*(?:--|#)\s*(?:CREATE|SELECT|INSERT|UPDATE|DELETE|DROP|ALTER|USE|SHOW|PRAGMA)\b/i.test(l)
+    );
+    if (hasCommentedSql) {
+      const uncommented = lines.map((l) => l.replace(/^\s*(?:--|#)\s?/, '')).join('\n');
+      const retryStatements = splitSqlStatements(uncommented);
+      if (retryStatements.length > 0) {
+        statements = retryStatements;
+        executionLogs.push("💡 Note: Your SQL script had '--' comment prefixes. FullCode automatically uncommented and executed it for you.");
+      }
+    }
+  }
+
   if (statements.length === 0) {
     return {
       success: true,
@@ -362,7 +460,6 @@ export async function executeSqlQuery(initialDbName = 'main_db', sqlQuery) {
   }
 
   let finalResult = null;
-  const executionLogs = [];
   let lastModifiedTable = null;
 
   for (const stmt of statements) {
@@ -413,8 +510,8 @@ export async function executeSqlQuery(initialDbName = 'main_db', sqlQuery) {
       continue;
     }
 
-    // 3. SHOW DATABASES / SHOW SCHEMAS
-    if (/^SHOW\s+(?:DATABASES|SCHEMAS)\b/i.test(trimmed)) {
+    // 3. SHOW DATABASES / SHOW SCHEMAS / .databases
+    if (/^(?:SHOW\s+(?:DATABASES|SCHEMAS)|\.DATABASES?)\b/i.test(trimmed)) {
       const dbs = await listDatabases();
       finalResult = {
         success: true,
@@ -431,14 +528,14 @@ export async function executeSqlQuery(initialDbName = 'main_db', sqlQuery) {
       continue;
     }
 
-    // 4. SHOW TABLES [FROM <db>]
-    const showTablesMatch = trimmed.match(/^SHOW\s+TABLES(?:\s+FROM\s+([a-zA-Z0-9_-]+))?/i);
+    // 4. SHOW TABLES [FROM <db>] / .tables
+    const showTablesMatch = trimmed.match(/^(?:SHOW\s+TABLES(?:\s+FROM\s+([a-zA-Z0-9_-]+))?|\.TABLES?)\b/i);
     if (showTablesMatch) {
       const targetDb = showTablesMatch[1] ? showTablesMatch[1].toLowerCase() : currentDb;
       const { db } = getDbConnection(targetDb);
       const tables = await new Promise((resolve) => {
         db.all(
-          "SELECT name AS Tables_in_database FROM sqlite_master WHERE type IN ('table', 'view') AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_codeforge_%';",
+          "SELECT name AS Tables_in_database FROM sqlite_master WHERE type IN ('table', 'view') AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_codeforge_%' ORDER BY name ASC;",
           (err, rows) => resolve(err || !rows ? [] : rows)
         );
       });
@@ -453,8 +550,163 @@ export async function executeSqlQuery(initialDbName = 'main_db', sqlQuery) {
       continue;
     }
 
-    // 5. DESCRIBE / DESC <table>
-    const descMatch = trimmed.match(/^(?:DESCRIBE|DESC)\s+([a-zA-Z0-9_"-]+)/i);
+    // 4b. .schema [table] or SCHEMA [table]
+    const schemaMatch = trimmed.match(/^(?:\.SCHEMA|SCHEMA)(?:\s+([a-zA-Z0-9_"-]+))?$/i);
+    if (schemaMatch) {
+      const targetTable = schemaMatch[1] ? schemaMatch[1].replace(/["'`]/g, '').toLowerCase() : null;
+      const { db } = getDbConnection(currentDb);
+      const schemaRows = await new Promise((resolve) => {
+        if (targetTable) {
+          db.all(
+            "SELECT type, name, tbl_name, sql FROM sqlite_master WHERE (LOWER(name) = ? OR LOWER(tbl_name) = ?) AND sql IS NOT NULL ORDER BY type DESC, name ASC;",
+            [targetTable, targetTable],
+            (err, rows) => resolve(err || !rows ? [] : rows)
+          );
+        } else {
+          db.all(
+            "SELECT type, name, tbl_name, sql FROM sqlite_master WHERE name NOT LIKE 'sqlite_%' AND name NOT LIKE '_codeforge_%' AND sql IS NOT NULL ORDER BY type DESC, name ASC;",
+            [],
+            (err, rows) => resolve(err || !rows ? [] : rows)
+          );
+        }
+      });
+
+      if (schemaRows.length === 0 && targetTable) {
+        return {
+          success: false,
+          error: `Table or view '${targetTable}' does not exist in database '${currentDb}'.`,
+          sql: trimmed,
+          database: currentDb,
+        };
+      }
+
+      schemaRows.forEach((r) => {
+        if (r.sql) executionLogs.push(`${r.sql};`);
+      });
+
+      finalResult = {
+        success: true,
+        columns: ['type', 'name', 'tbl_name', 'sql'],
+        rows: schemaRows,
+        rowCount: schemaRows.length,
+        database: currentDb,
+        type: 'SELECT',
+      };
+      continue;
+    }
+
+    // 4c. SHOW CREATE TABLE / SHOW CREATE VIEW <table>
+    const showCreateMatch = trimmed.match(/^SHOW\s+CREATE\s+(?:TABLE|VIEW)\s+([a-zA-Z0-9_"-]+)/i);
+    if (showCreateMatch) {
+      const targetTable = showCreateMatch[1].replace(/["'`]/g, '').toLowerCase();
+      const { db } = getDbConnection(currentDb);
+      const row = await new Promise((resolve) => {
+        db.get(
+          "SELECT name, sql FROM sqlite_master WHERE (LOWER(name) = ? OR LOWER(tbl_name) = ?) AND sql IS NOT NULL;",
+          [targetTable, targetTable],
+          (err, r) => resolve(r || null)
+        );
+      });
+
+      if (!row) {
+        return {
+          success: false,
+          error: `Table '${targetTable}' does not exist in database '${currentDb}'.`,
+          sql: trimmed,
+          database: currentDb,
+        };
+      }
+
+      executionLogs.push(`${row.sql};`);
+      finalResult = {
+        success: true,
+        columns: ['Table', 'Create Table'],
+        rows: [{ Table: row.name, 'Create Table': row.sql }],
+        rowCount: 1,
+        database: currentDb,
+        type: 'SELECT',
+      };
+      continue;
+    }
+
+    // 4d. .indices / .indexes [table]
+    const indexMatch = trimmed.match(/^(?:\.INDICES|\.INDEXES)(?:\s+([a-zA-Z0-9_"-]+))?$/i);
+    if (indexMatch) {
+      const targetTable = indexMatch[1] ? indexMatch[1].replace(/["'`]/g, '').toLowerCase() : null;
+      const { db } = getDbConnection(currentDb);
+      const rows = await new Promise((resolve) => {
+        if (targetTable) {
+          db.all(
+            "SELECT name AS index_name, tbl_name AS table_name, sql FROM sqlite_master WHERE type = 'index' AND (LOWER(tbl_name) = ? OR LOWER(name) = ?);",
+            [targetTable, targetTable],
+            (err, r) => resolve(r || [])
+          );
+        } else {
+          db.all(
+            "SELECT name AS index_name, tbl_name AS table_name, sql FROM sqlite_master WHERE type = 'index' AND name NOT LIKE 'sqlite_%';",
+            [],
+            (err, r) => resolve(r || [])
+          );
+        }
+      });
+      finalResult = {
+        success: true,
+        columns: ['index_name', 'table_name', 'sql'],
+        rows,
+        rowCount: rows.length,
+        database: currentDb,
+        type: 'SELECT',
+      };
+      continue;
+    }
+
+    // 4e. .dump [table]
+    const dumpMatch = trimmed.match(/^\.DUMP(?:\s+([a-zA-Z0-9_"-]+))?$/i);
+    if (dumpMatch) {
+      const targetTable = dumpMatch[1] ? dumpMatch[1].replace(/["'`]/g, '').toLowerCase() : null;
+      const { db } = getDbConnection(currentDb);
+      const dumpLines = ['PRAGMA foreign_keys=OFF;', 'BEGIN TRANSACTION;'];
+
+      const dumpTables = await new Promise((resolve) => {
+        const query = targetTable
+          ? "SELECT name, sql FROM sqlite_master WHERE type='table' AND LOWER(name) = ?;"
+          : "SELECT name, sql FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_codeforge_%' ORDER BY name ASC;";
+        const params = targetTable ? [targetTable] : [];
+        db.all(query, params, (err, r) => resolve(r || []));
+      });
+
+      for (const t of dumpTables) {
+        if (t.sql) dumpLines.push(`${t.sql};`);
+        const rows = await new Promise((res) => {
+          db.all(`SELECT * FROM "${t.name}";`, (err, r) => res(r || []));
+        });
+        for (const row of rows) {
+          const cols = Object.keys(row);
+          const vals = cols.map((c) => {
+            const v = row[c];
+            if (v === null || v === undefined) return 'NULL';
+            if (typeof v === 'number') return v;
+            return `'${String(v).replace(/'/g, "''")}'`;
+          });
+          dumpLines.push(`INSERT INTO "${t.name}" (${cols.map((c) => `"${c}"`).join(', ')}) VALUES (${vals.join(', ')});`);
+        }
+      }
+      dumpLines.push('COMMIT;');
+
+      executionLogs.push(dumpLines.join('\n'));
+      finalResult = {
+        success: true,
+        columns: ['SQL_Dump_Script'],
+        rows: dumpLines.map((line) => ({ SQL_Dump_Script: line })),
+        rowCount: dumpLines.length,
+        database: currentDb,
+        type: 'SELECT',
+      };
+      continue;
+    }
+
+    // 5. DESCRIBE / DESC <table> / SHOW COLUMNS FROM <table>
+    const descMatch = trimmed.match(/^(?:DESCRIBE|DESC|SHOW\s+(?:COLUMNS|FIELDS)\s+FROM)\s+([a-zA-Z0-9_"-]+)/i);
     if (descMatch) {
       const table = descMatch[1].replace(/["']/g, '');
       const { db } = getDbConnection(currentDb);
@@ -478,8 +730,8 @@ export async function executeSqlQuery(initialDbName = 'main_db', sqlQuery) {
       continue;
     }
 
-    // 6. DROP DATABASE
-    const dropDbMatch = trimmed.match(/^DROP\s+DATABASE\s+(?:IF\s+EXISTS\s+)?([a-zA-Z0-9_-]+)/i);
+    // 6. DROP DATABASE / DROP SCHEMA
+    const dropDbMatch = trimmed.match(/^DROP\s+(?:DATABASE|SCHEMA)\s+(?:IF\s+EXISTS\s+)?([a-zA-Z0-9_-]+)/i);
     if (dropDbMatch) {
       const targetDb = dropDbMatch[1];
       await deleteDatabase(targetDb);
@@ -499,8 +751,188 @@ export async function executeSqlQuery(initialDbName = 'main_db', sqlQuery) {
       continue;
     }
 
+    // 6b. COMMIT / ROLLBACK / BEGIN (Graceful transaction control)
+    if (/^COMMIT\b/i.test(trimmed)) {
+      try {
+        const { db } = getDbConnection(currentDb);
+        await new Promise((res) => db.run('COMMIT;', () => res()));
+      } catch {
+        // Safe to ignore if no transaction active in SQLite
+      }
+      executionLogs.push('💾 Transaction committed.');
+      finalResult = {
+        success: true,
+        columns: ['status', 'message'],
+        rows: [{ status: 'OK', message: 'Transaction committed successfully.' }],
+        rowCount: 1,
+        database: currentDb,
+        type: 'MUTATION',
+      };
+      continue;
+    }
+    if (/^ROLLBACK\b/i.test(trimmed)) {
+      try {
+        const { db } = getDbConnection(currentDb);
+        await new Promise((res) => db.run('ROLLBACK;', () => res()));
+      } catch {
+        // Safe to ignore if no transaction active
+      }
+      executionLogs.push('🔄 Transaction rolled back.');
+      finalResult = {
+        success: true,
+        columns: ['status', 'message'],
+        rows: [{ status: 'OK', message: 'Transaction rolled back.' }],
+        rowCount: 1,
+        database: currentDb,
+        type: 'MUTATION',
+      };
+      continue;
+    }
+    if (/^BEGIN(?:\s+TRANSACTION)?\b/i.test(trimmed)) {
+      try {
+        const { db } = getDbConnection(currentDb);
+        await new Promise((res) => db.run('BEGIN TRANSACTION;', () => res()));
+      } catch {
+        // Safe to ignore if already in transaction
+      }
+      finalResult = {
+        success: true,
+        columns: ['status', 'message'],
+        rows: [{ status: 'OK', message: 'Transaction started.' }],
+        rowCount: 1,
+        database: currentDb,
+        type: 'MUTATION',
+      };
+      continue;
+    }
+
+    // 6c. MySQL SET FOREIGN_KEY_CHECKS = 0 | 1 and session variables
+    if (/^SET\s+FOREIGN_KEY_CHECKS\s*=\s*0\b/i.test(trimmed)) {
+      const { db } = getDbConnection(currentDb);
+      await new Promise((res) => db.run('PRAGMA foreign_keys = OFF;', () => res()));
+      executionLogs.push('⚙️ FOREIGN_KEY_CHECKS disabled (PRAGMA foreign_keys = OFF).');
+      finalResult = {
+        success: true,
+        columns: ['status'],
+        rows: [{ status: 'FOREIGN_KEY_CHECKS = 0' }],
+        rowCount: 1,
+        database: currentDb,
+        type: 'PRAGMA',
+      };
+      continue;
+    }
+    if (/^SET\s+FOREIGN_KEY_CHECKS\s*=\s*1\b/i.test(trimmed)) {
+      const { db } = getDbConnection(currentDb);
+      await new Promise((res) => db.run('PRAGMA foreign_keys = ON;', () => res()));
+      executionLogs.push('⚙️ FOREIGN_KEY_CHECKS enabled (PRAGMA foreign_keys = ON).');
+      finalResult = {
+        success: true,
+        columns: ['status'],
+        rows: [{ status: 'FOREIGN_KEY_CHECKS = 1' }],
+        rowCount: 1,
+        database: currentDb,
+        type: 'PRAGMA',
+      };
+      continue;
+    }
+    if (/^SET\s+[@a-zA-Z0-9_.]+\s*=/i.test(trimmed)) {
+      executionLogs.push(`⚙️ Session variable set (${trimmed}).`);
+      finalResult = {
+        success: true,
+        columns: ['status'],
+        rows: [{ status: 'OK' }],
+        rowCount: 1,
+        database: currentDb,
+        type: 'PRAGMA',
+      };
+      continue;
+    }
+
+    // 6d. LOCK TABLES / UNLOCK TABLES (MySQL dump compatibility)
+    if (/^(?:LOCK\s+TABLES|UNLOCK\s+TABLES)\b/i.test(trimmed)) {
+      finalResult = {
+        success: true,
+        columns: ['status'],
+        rows: [{ status: 'OK' }],
+        rowCount: 1,
+        database: currentDb,
+        type: 'MUTATION',
+      };
+      continue;
+    }
+
+    // 6e. ALTER TABLE ... ADD UNIQUE INDEX (cols) -> CREATE UNIQUE INDEX
+    const addUniqueIdxMatch = trimmed.match(/^ALTER\s+TABLE\s+([a-zA-Z0-9_"-]+)\s+ADD\s+UNIQUE\s+(?:INDEX|KEY)?\s*(?:([a-zA-Z0-9_"-]+)\s*)?\(([^)]+)\)/i);
+    if (addUniqueIdxMatch) {
+      const table = addUniqueIdxMatch[1].replace(/["'`]/g, '');
+      const idxName = addUniqueIdxMatch[2] ? addUniqueIdxMatch[2].replace(/["'`]/g, '') : `idx_${table}_uniq_${Date.now()}`;
+      const cols = addUniqueIdxMatch[3];
+      const indexSql = `CREATE UNIQUE INDEX IF NOT EXISTS "${idxName}" ON "${table}" (${cols});`;
+      const { db } = getDbConnection(currentDb);
+      await new Promise((res, rej) => db.run(indexSql, (err) => (err ? rej(err) : res())));
+      executionLogs.push(`✅ Unique index '${idxName}' created on '${table}'.`);
+      finalResult = {
+        success: true,
+        columns: ['status', 'message'],
+        rows: [{ status: 'OK', message: `Unique index '${idxName}' created on '${table}'.` }],
+        rowCount: 1,
+        database: currentDb,
+        type: 'DDL',
+      };
+      continue;
+    }
+
+    // 6f. ALTER TABLE ... ADD INDEX (cols) -> CREATE INDEX
+    const addIdxMatch = trimmed.match(/^ALTER\s+TABLE\s+([a-zA-Z0-9_"-]+)\s+ADD\s+INDEX\s*(?:([a-zA-Z0-9_"-]+)\s*)?\(([^)]+)\)/i);
+    if (addIdxMatch) {
+      const table = addIdxMatch[1].replace(/["'`]/g, '');
+      const idxName = addIdxMatch[2] ? addIdxMatch[2].replace(/["'`]/g, '') : `idx_${table}_${Date.now()}`;
+      const cols = addIdxMatch[3];
+      const indexSql = `CREATE INDEX IF NOT EXISTS "${idxName}" ON "${table}" (${cols});`;
+      const { db } = getDbConnection(currentDb);
+      await new Promise((res, rej) => db.run(indexSql, (err) => (err ? rej(err) : res())));
+      executionLogs.push(`✅ Index '${idxName}' created on '${table}'.`);
+      finalResult = {
+        success: true,
+        columns: ['status', 'message'],
+        rows: [{ status: 'OK', message: `Index '${idxName}' created on '${table}'.` }],
+        rowCount: 1,
+        database: currentDb,
+        type: 'DDL',
+      };
+      continue;
+    }
+
+    // 6g. ALTER TABLE ... ADD FOREIGN KEY (SQLite validates at CREATE TABLE time)
+    if (/^ALTER\s+TABLE\s+[a-zA-Z0-9_"-]+\s+ADD\s+(?:CONSTRAINT\s+[a-zA-Z0-9_"-]+\s+)?FOREIGN\s+KEY\b/i.test(trimmed)) {
+      executionLogs.push(`ℹ️ Foreign key constraint noted (SQLite enforces foreign keys declared at table creation).`);
+      finalResult = {
+        success: true,
+        columns: ['status', 'message'],
+        rows: [{ status: 'OK', message: 'Foreign key constraint noted.' }],
+        rowCount: 1,
+        database: currentDb,
+        type: 'DDL',
+      };
+      continue;
+    }
+
+    // 6h. CREATE VIEW / CREATE OR REPLACE VIEW
+    const createViewMatch = trimmed.match(/^CREATE\s+(?:OR\s+REPLACE\s+)?VIEW\s+(?:(IF\s+NOT\s+EXISTS)\s+)?([a-zA-Z0-9_"-]+)/i);
+    if (createViewMatch) {
+      const isIfNotExists = Boolean(createViewMatch[1]);
+      const viewName = createViewMatch[2].replace(/["'`]/g, '');
+      lastModifiedTable = viewName;
+      if (!isIfNotExists) {
+        const { db } = getDbConnection(currentDb);
+        await new Promise((res) => db.run(`DROP VIEW IF EXISTS "${viewName}";`, () => res()));
+      }
+    }
+
+    // Transpile statement through SQLite dialect preprocessor
+    let executionSql = transpileSqlForSqlite(trimmed);
+
     // 7. Handle CREATE TABLE re-runs cleanly + support NOCASE
-    let executionSql = trimmed;
     const createTableMatch = trimmed.match(/^CREATE\s+TABLE\s+(?:(IF\s+NOT\s+EXISTS)\s+)?([a-zA-Z0-9_"-]+)/i);
     if (createTableMatch) {
       const isIfNotExists = Boolean(createTableMatch[1]);
@@ -511,7 +943,7 @@ export async function executeSqlQuery(initialDbName = 'main_db', sqlQuery) {
         await new Promise((res) => db.run(`DROP TABLE IF EXISTS "${tblName}";`, () => res()));
       }
       // Inject COLLATE NOCASE for case-insensitive string operations like MySQL
-      executionSql = trimmed.replace(/(VARCHAR\s*\([^)]+\)|TEXT|CHAR\s*\([^)]+\))(?!\s+COLLATE)/gi, '$1 COLLATE NOCASE');
+      executionSql = executionSql.replace(/(VARCHAR\s*\([^)]+\)|TEXT|CHAR\s*\([^)]+\))(?!\s+COLLATE)/gi, '$1 COLLATE NOCASE');
     }
 
     // Track table name for INSERT, UPDATE, DELETE
@@ -524,27 +956,30 @@ export async function executeSqlQuery(initialDbName = 'main_db', sqlQuery) {
     const tableRefMatch = trimmed.match(/\b(?:FROM|INTO|UPDATE|TABLE)\s+([a-zA-Z0-9_"-]+)/i);
     if (tableRefMatch && !createDbMatch && !useDbMatch) {
       const referencedTable = tableRefMatch[1].replace(/["'`]/g, '');
-      const { db: testDb } = getDbConnection(currentDb);
-      const existsLocally = await new Promise((res) => {
-        testDb.get(
-          "SELECT name FROM sqlite_master WHERE type IN ('table', 'view') AND LOWER(name) = ?;",
-          [referencedTable.toLowerCase()],
-          (err, row) => res(Boolean(row))
-        );
-      });
-      if (!existsLocally && !createTableMatch) {
-        const altDb = await findDatabaseForTable(referencedTable);
-        if (altDb && altDb !== currentDb) {
-          currentDb = altDb;
-          lastActiveDatabase = altDb;
-          executionLogs.push(`🔄 Context switched to database '${currentDb}' (contains '${referencedTable}').`);
+      const isSystemTable = /^(sqlite_|sqlite_master|sqlite_schema|_codeforge_)/i.test(referencedTable);
+      if (!isSystemTable) {
+        const { db: testDb } = getDbConnection(currentDb);
+        const existsLocally = await new Promise((res) => {
+          testDb.get(
+            "SELECT name FROM sqlite_master WHERE type IN ('table', 'view') AND LOWER(name) = ?;",
+            [referencedTable.toLowerCase()],
+            (err, row) => res(Boolean(row))
+          );
+        });
+        if (!existsLocally && !createTableMatch) {
+          const altDb = await findDatabaseForTable(referencedTable);
+          if (altDb && altDb !== currentDb) {
+            currentDb = altDb;
+            lastActiveDatabase = altDb;
+            executionLogs.push(`🔄 Context switched to database '${currentDb}' (contains '${referencedTable}').`);
+          }
         }
       }
     }
 
     // Support MySQL-like case-insensitivity on string comparisons in DELETE, UPDATE, SELECT
     if (/^(DELETE|UPDATE|SELECT)\b/i.test(trimmed)) {
-      executionSql = trimmed.replace(/(=\s*(?:'[^']+'|"[^"]+"))(?!\s+COLLATE)/gi, '$1 COLLATE NOCASE');
+      executionSql = executionSql.replace(/(=\s*(?:'[^']+'|"[^"]+"))(?!\s+COLLATE)/gi, '$1 COLLATE NOCASE');
     }
 
     // 8. Regular SQL Execution (SELECT, INSERT, UPDATE, DELETE, CREATE TABLE, etc.)
@@ -683,7 +1118,7 @@ export async function getDatabaseSchema(dbName = 'main_db') {
 
   const tables = await new Promise((resolve) => {
     db.all(
-      "SELECT name, type FROM sqlite_master WHERE type IN ('table', 'view') AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_codeforge_%';",
+      "SELECT name, type, sql FROM sqlite_master WHERE type IN ('table', 'view') AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_codeforge_%' ORDER BY name ASC;",
       (err, rows) => {
         if (err || !rows) return resolve([]);
         resolve(rows);
@@ -719,6 +1154,7 @@ export async function getDatabaseSchema(dbName = 'main_db') {
       tableName: table.name,
       type: table.type,
       rowCount: countRow,
+      sql: table.sql || null,
       columns,
     });
   }

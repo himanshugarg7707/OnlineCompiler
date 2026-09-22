@@ -20,6 +20,7 @@ import {
   ExternalLink,
   Layers,
   GraduationCap,
+  Terminal,
   Code2,
   X,
   Compass,
@@ -163,15 +164,18 @@ export default function NotebookSetupPage() {
       {/* Background ambient lighting */}
       <div className="setup-ambient-glow" />
 
-      {/* Top Navigation */}
+      {/* Top Navigation matching main IDE Header */}
       <header className="setup-navbar">
         <div className="setup-nav-left">
-          <div className="setup-logo" onClick={handleSkipToEditor}>
-            <div className="setup-logo-icon">
-              <Code2 size={18} />
+          <div className="setup-brand-link" onClick={handleSkipToEditor} title="Return to Editor">
+            <div className="setup-brand-icon">
+              <Terminal size={18} />
             </div>
-            <span className="setup-logo-title">Full Code</span>
-            <span className="setup-logo-tag">SUBJECT HUB</span>
+            <span className="setup-brand-title">Full Code</span>
+            <div className="setup-brand-pill">
+              <span className="setup-brand-dot"></span>
+              <span className="setup-brand-tag">Subject Notebooks</span>
+            </div>
           </div>
         </div>
 
@@ -191,13 +195,14 @@ export default function NotebookSetupPage() {
 
           <button
             type="button"
-            className="btn-skip-setup"
+            className="btn-back-editor"
             onClick={handleSkipToEditor}
             title="Return directly to the code editor (Esc)"
           >
-            <ArrowLeft size={13} />
+            <ArrowLeft size={15} />
             <span className="btn-skip-full">Back to Editor</span>
             <span className="btn-skip-short">Editor</span>
+            <kbd className="esc-key-badge">Esc</kbd>
           </button>
         </div>
       </header>
@@ -206,54 +211,54 @@ export default function NotebookSetupPage() {
       <main className="setup-container animate-fade-in">
         {/* Hero Section */}
         <section className="setup-hero">
-          <div className="hero-badge">
-            <GraduationCap size={14} />
-            <span>Academic & Course Workspaces Setup</span>
+          <div className="hero-pill-badge">
+            <BookOpen size={14} />
+            <span>Curated Academic & Course Workspaces</span>
           </div>
           <h1 className="hero-title">
-            Which <span className="text-gradient">Subject Notebook</span> are you studying?
+            Subject <span className="text-gradient">Notebooks Hub</span>
           </h1>
           <p className="hero-subtitle">
-            Create or select your course notebook below. Each subject comes configured with its own
-            isolated workspace, syllabus notes, cheat-sheet, and compiler so you never have to
-            hustle or reconfigure again.
+            Configure isolated course workspaces with syllabus notes, lecture labs, starter code, and interactive cheat-sheets. Everything stays organized per subject.
           </p>
         </section>
 
         {/* Tab & Action Bar */}
         <div className="setup-actions-bar">
-          <div className="setup-tabs">
+          <div className="setup-segmented-tabs">
             <button
               type="button"
-              className={`setup-tab-btn ${activeTab === 'presets' ? 'active' : ''}`}
+              className={`setup-segmented-tab ${activeTab === 'presets' ? 'active' : ''}`}
               onClick={() => setActiveTab('presets')}
             >
               <Compass size={15} />
-              <span className="tab-label-full">Curated Subject Presets ({PRESET_SUBJECTS.length})</span>
-              <span className="tab-label-short">Presets ({PRESET_SUBJECTS.length})</span>
+              <span className="tab-label-full">Curated Presets</span>
+              <span className="tab-label-short">Presets</span>
+              <span className="tab-counter-badge">{PRESET_SUBJECTS.length}</span>
             </button>
 
             <button
               type="button"
-              className={`setup-tab-btn ${activeTab === 'saved' ? 'active' : ''}`}
+              className={`setup-segmented-tab ${activeTab === 'saved' ? 'active' : ''}`}
               onClick={() => {
                 refreshSaved();
                 setActiveTab('saved');
               }}
             >
               <FolderKanban size={15} />
-              <span className="tab-label-full">My Active Notebooks ({savedNotebooks.length})</span>
-              <span className="tab-label-short">Active ({savedNotebooks.length})</span>
+              <span className="tab-label-full">My Active Notebooks</span>
+              <span className="tab-label-short">Active</span>
+              <span className="tab-counter-badge">{savedNotebooks.length}</span>
             </button>
           </div>
 
           <button
             type="button"
-            className="btn-create-subject"
+            className="btn-primary-create"
             onClick={() => setShowCustomModal(true)}
           >
             <Plus size={15} />
-            <span>+ Create Custom Subject</span>
+            <span>Create Custom Subject</span>
           </button>
         </div>
 

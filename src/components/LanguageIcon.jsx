@@ -316,6 +316,57 @@ export function GenericDocIcon({ size = 16, className = '', style = {} }) {
   );
 }
 
+export function JupyterIcon({ size = 16, className = '', style = {} }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 44 48"
+      width={size}
+      height={size}
+      className={`lang-svg-icon jupyter-icon ${className}`}
+      style={{ display: 'inline-block', verticalAlign: 'middle', flexShrink: 0, ...style }}
+      aria-label="Jupyter Notebook Logo"
+    >
+      <path
+        fill="#F37626"
+        d="M22 0C13.2 0 5.4 4.5 1 11.5c4.1-3 9.4-4.8 15.2-4.8 11.5 0 21.2 7 24.3 16.7C39.6 10.3 31.7 0 22 0z"
+      />
+      <circle cx="7.5" cy="24" r="3.5" fill="#767677" />
+      <circle cx="22" cy="24" r="3.5" fill="#767677" />
+      <circle cx="36.5" cy="24" r="3.5" fill="#767677" />
+      <path
+        fill="#F37626"
+        d="M22 48c8.8 0 16.6-4.5 21-11.5-4.1 3-9.4 4.8-15.2 4.8-11.5 0-21.2-7-24.3-16.7.9 13.1 8.8 23.4 18.5 23.4z"
+      />
+    </svg>
+  );
+}
+
+export function AnacondaIcon({ size = 16, className = '', style = {} }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 128 128"
+      width={size}
+      height={size}
+      className={`lang-svg-icon anaconda-icon ${className}`}
+      style={{ display: 'inline-block', verticalAlign: 'middle', flexShrink: 0, ...style }}
+      aria-label="Anaconda Logo"
+    >
+      <circle cx="64" cy="64" r="60" fill="#3EB049" />
+      <path
+        fill="#fff"
+        d="M64 20c-24.3 0-44 19.7-44 44s19.7 44 44 44 44-19.7 44-44-19.7-44-44-44zm0 80c-19.9 0-36-16.1-36-36s16.1-36 36-36 36 16.1 36 36-16.1 36-36 36z"
+      />
+      <path
+        fill="#fff"
+        d="M64 38c-14.4 0-26 11.6-26 26s11.6 26 26 26 26-11.6 26-26-11.6-26-26-26zm0 44c-9.9 0-18-8.1-18-18s8.1-18 18-18 18 8.1 18 18-8.1 18-18 18z"
+      />
+      <circle cx="64" cy="64" r="8" fill="#fff" />
+    </svg>
+  );
+}
+
 /**
  * Resolves canonical language key from file name or language object
  */
@@ -323,6 +374,14 @@ export function resolveLanguageKey(language, filename = '') {
   // 1. Check filename extension first (most accurate for workspace files)
   if (filename && typeof filename === 'string') {
     const ext = filename.split('.').pop()?.toLowerCase();
+    if (ext === 'ipynb') {
+      const lower = filename.toLowerCase();
+      if (lower.includes('java')) return 'jupyter-java';
+      if (lower.includes('cpp') || lower.includes('c++')) return 'jupyter-cpp';
+      if (lower.includes('js') || lower.includes('javascript')) return 'jupyter-js';
+      return 'jupyter';
+    }
+    if (ext === 'yml' || ext === 'yaml') return 'anaconda';
     if (ext === 'java') return 'java';
     if (ext === 'py' || ext === 'python') return 'python';
     if (ext === 'cpp' || ext === 'cc' || ext === 'cxx' || ext === 'hpp') return 'cpp';
@@ -352,8 +411,12 @@ export function resolveLanguageKey(language, filename = '') {
     if (id === 99) return 'markdown';
     if (id === 73) return 'rust';
     if (id === 60) return 'go';
+    if (id === 710) return 'jupyter';
+    if (id === 711) return 'anaconda';
 
     const str = `${language.name || ''} ${language.monacoLanguage || ''} ${language.extension || ''}`.toLowerCase();
+    if (str.includes('ipynb') || str.includes('jupyter')) return 'jupyter';
+    if (str.includes('anaconda') || str.includes('conda') || str.includes('yaml') || str.includes('yml')) return 'anaconda';
     if (str.includes('java') && !str.includes('javascript')) return 'java';
     if (str.includes('python')) return 'python';
     if (str.includes('c++') || str.includes('cpp')) return 'cpp';
@@ -379,6 +442,40 @@ export default function LanguageIcon({ language, filename = '', size = 16, class
   const key = resolveLanguageKey(language, filename);
 
   switch (key) {
+    case 'jupyter':
+      return <JupyterIcon size={size} className={className} style={style} />;
+    case 'jupyter-java':
+      return (
+        <span
+          className={`jupyter-lang-composite-icon ${className}`}
+          style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: size, height: size, ...style }}
+          title="Java Interactive Notebook (.ipynb)"
+        >
+          <span style={{ fontSize: `${Math.max(12, Math.round(size * 0.95))}px`, lineHeight: 1 }}>☕</span>
+        </span>
+      );
+    case 'jupyter-cpp':
+      return (
+        <span
+          className={`jupyter-lang-composite-icon ${className}`}
+          style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: size, height: size, ...style }}
+          title="C++ Interactive Notebook (.ipynb)"
+        >
+          <span style={{ fontSize: `${Math.max(12, Math.round(size * 0.95))}px`, lineHeight: 1 }}>⚡</span>
+        </span>
+      );
+    case 'jupyter-js':
+      return (
+        <span
+          className={`jupyter-lang-composite-icon ${className}`}
+          style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: size, height: size, ...style }}
+          title="JavaScript Interactive Notebook (.ipynb)"
+        >
+          <span style={{ fontSize: `${Math.max(12, Math.round(size * 0.95))}px`, lineHeight: 1 }}>🟨</span>
+        </span>
+      );
+    case 'anaconda':
+      return <AnacondaIcon size={size} className={className} style={style} />;
     case 'java':
       return <JavaIcon size={size} className={className} style={style} />;
     case 'python':

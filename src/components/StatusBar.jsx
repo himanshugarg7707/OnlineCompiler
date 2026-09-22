@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { useApp } from '../context/AppContext';
 import { Terminal, Plus, ChevronUp, ChevronDown, Palette, Activity } from 'lucide-react';
 import { analyzeComplexity } from '../services/complexityAnalyzer';
+import { getFriendlyLanguageName } from '../services/languageDetector';
 import LanguageIcon from './LanguageIcon';
 import './StatusBar.css';
 
@@ -20,6 +21,7 @@ export default function StatusBar() {
   const { state, dispatch, handleToggleTerminal } = useApp();
   const { detectedLanguage, cursorPosition, executionTime, executionMemory, terminalHidden, code, files, activeFileId } = state;
   const activeFile = files?.find((f) => f.id === activeFileId);
+  const displayName = getFriendlyLanguageName(detectedLanguage, activeFile?.name);
 
   const complexity = useMemo(() => {
     return analyzeComplexity(code, detectedLanguage);
@@ -30,7 +32,7 @@ export default function StatusBar() {
       <div className="status-left">
         <span className="status-item language">
           <LanguageIcon language={detectedLanguage} filename={activeFile?.name} size={13} />
-          <span>{detectedLanguage?.name || 'Code'}</span>
+          <span>{displayName}</span>
         </span>
         <span className="status-item">
           Ln {cursorPosition.line}, Col {cursorPosition.column}

@@ -475,6 +475,20 @@ const LANGUAGE_PATTERNS = [
     ],
     weight: 2,
   },
+  {
+    id: 711,
+    name: 'Anaconda (YAML)',
+    monacoLanguage: 'yaml',
+    icon: '🐍',
+    patterns: [
+      /^name:\s*/m,
+      /^dependencies:\s*/m,
+      /^channels:\s*/m,
+      /- conda-forge/,
+      /- pip:/,
+    ],
+    weight: 1.5,
+  },
 ];
 
 const DEFAULT_LANGUAGE = {
@@ -561,9 +575,404 @@ export function detectLanguage(code) {
 }
 
 /**
- * Generate standard Jupyter Notebook (v4) JSON template
+ * Prepare Java cell code for execution
+ * If code doesn't contain a main class, wrap statements into public class Main
  */
-export function createDefaultNotebookJson() {
+/**
+ * Resolve friendly display name for files and notebook kernels
+ */
+export function getFriendlyLanguageName(language, filename = '') {
+  if (filename && typeof filename === 'string') {
+    const lower = filename.toLowerCase();
+    if (lower.endsWith('.ipynb')) {
+      if (lower.includes('java')) return 'Java Notebook';
+      if (lower.includes('cpp') || lower.includes('c++')) return 'C++ Notebook';
+      if (lower.includes('js') || lower.includes('javascript')) return 'JavaScript Notebook';
+      return 'Python Notebook';
+    }
+  }
+  if (language && Number(language.id) === 710) {
+    return 'Python Notebook';
+  }
+  return language?.name || 'Code';
+}
+
+/**
+ * Prepare Java cell code for execution
+ * Separates imports, package-private helper classes, and statements to guarantee valid Java compilation
+ */
+export function prepareJavaCellCode(cellCode) {
+  let text = (cellCode || '').trim();
+  if (!text) return text;
+
+  // 1. If already contains a complete runnable class with main method
+  if (/\bpublic\s+static\s+void\s+main\b/.test(text) || /\bstatic\s+void\s+main\b/.test(text)) {
+    // If it has "public class Foo", rename to "public class Main" so Judge0 can find entry point
+    if (/\bpublic\s+class\s+([A-Za-z0-9_$]+)/.test(text)) {
+      text = text.replace(/\bpublic\s+class\s+([A-Za-z0-9_$]+)/, (match, name) => {
+        return name === 'Main' ? match : 'public class Main';
+      });
+    }
+    // If it has class without public e.g. "class Solution { public static void main...", ensure Main exists
+    if (!/\bclass\s+Main\b/.test(text)) {
+      text = text.replace(/\bclass\s+([A-Za-z0-9_$]+)/, 'public class Main');
+    }
+    return text;
+  }
+
+  // 2. Separate all import lines so they NEVER get placed inside main()
+  const importSet = new Set([
+    'import java.util.*;',
+    'import java.io.*;',
+    'import java.math.*;',
+    'import java.util.stream.*;',
+  ]);
+  const lines = text.split('\n');
+  const nonImportLines = [];
+
+  for (const line of lines) {
+    const trimmedLine = line.trim();
+    if (/^import\s+[^;]+;\s*$/.test(trimmedLine)) {
+      importSet.add(trimmedLine);
+    } else if (/^package\s+[^;]+;\s*$/.test(trimmedLine)) {
+      // Discard package lines in interactive notebook cells
+    } else {
+      nonImportLines.push(line);
+    }
+  }
+
+  const remainingCode = nonImportLines.join('\n').trim();
+  if (!remainingCode) {
+    return `${Array.from(importSet).join('\n')}\n\npublic class Main {\n    public static void main(String[] args) throws Exception {}\n}`;
+  }
+
+  // 3. Separate any top-level class/interface/record/enum declarations from statements
+  const declRegex = /(?:^|\n)\s*(?:(?:public|protected|private|static|final|abstract)\s+)*(class|interface|record|enum)\s+([A-Za-z0-9_$]+)/g;
+  let match;
+  const helperClasses = [];
+  const statementChunks = [];
+  let lastIndex = 0;
+
+  while ((match = declRegex.exec(remainingCode)) !== null) {
+    const startIndex = match.index + (match[0].startsWith('\n') ? 1 : 0);
+    if (startIndex > lastIndex) {
+      const chunk = remainingCode.substring(lastIndex, startIndex).trim();
+      if (chunk) statementChunks.push(chunk);
+    }
+
+    const openBrace = remainingCode.indexOf('{', startIndex);
+    if (openBrace !== -1) {
+      let braceCount = 1;
+      let i = openBrace + 1;
+      while (i < remainingCode.length && braceCount > 0) {
+        if (remainingCode[i] === '{') braceCount++;
+        else if (remainingCode[i] === '}') braceCount--;
+        i++;
+      }
+      const classBody = remainingCode.substring(startIndex, i).trim();
+      // Remove 'public ' from helper classes to avoid multiple public classes error
+      const sanitizedClass = classBody.replace(/^\s*public\s+class\b/, 'class ');
+      helperClasses.push(sanitizedClass);
+      lastIndex = i;
+    } else {
+      lastIndex = startIndex + match[0].length;
+    }
+  }
+
+  if (lastIndex < remainingCode.length) {
+    const chunk = remainingCode.substring(lastIndex).trim();
+    if (chunk) statementChunks.push(chunk);
+  }
+
+  const statements = statementChunks.join('\n\n').trim();
+  const importsStr = Array.from(importSet).join('\n');
+  const classesStr = helperClasses.join('\n\n');
+
+  // If there are only classes and no loose statements:
+  if (!statements) {
+    return `${importsStr}
+
+${classesStr}
+
+class Main {
+    public static void main(String[] args) throws Exception {
+        System.out.println("✓ Java class definition loaded successfully.");
+    }
+}`;
+  }
+
+  // Wrap loose statements inside class Main main()
+  const indentedStatements = statements
+    .split('\n')
+    .map((l) => '        ' + l)
+    .join('\n');
+
+  return `${importsStr}
+
+${classesStr ? classesStr + '\n\n' : ''}class Main {
+    public static void main(String[] args) throws Exception {
+${indentedStatements}
+    }
+}`;
+}
+
+/**
+ * Prepare C++ cell code for execution
+ */
+export function prepareCppCellCode(cellCode) {
+  const trimmed = (cellCode || '').trim();
+  if (!trimmed) return trimmed;
+
+  if (/\bint\s+main\s*\(/.test(trimmed) || /\bvoid\s+main\s*\(/.test(trimmed)) {
+    return trimmed;
+  }
+
+  return `#include <iostream>
+#include <vector>
+#include <string>
+#include <algorithm>
+#include <numeric>
+#include <cmath>
+#include <map>
+#include <set>
+using namespace std;
+
+int main() {
+${trimmed.split('\n').map((line) => '    ' + line).join('\n')}
+    return 0;
+}`;
+}
+
+/**
+ * Prepare C cell code for execution
+ */
+export function prepareCCellCode(cellCode) {
+  const trimmed = (cellCode || '').trim();
+  if (!trimmed) return trimmed;
+
+  if (/\bint\s+main\s*\(/.test(trimmed) || /\bvoid\s+main\s*\(/.test(trimmed)) {
+    return trimmed;
+  }
+
+  return `#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <math.h>
+
+int main() {
+${trimmed.split('\n').map((line) => '    ' + line).join('\n')}
+    return 0;
+}`;
+}
+
+/**
+ * Generate standard Jupyter Notebook (v4) JSON template
+ * Tailored for specified programming language (Java, Python, C++, JavaScript)
+ */
+export function createDefaultNotebookJson(targetLang = 'python') {
+  const langKey = String(targetLang).toLowerCase();
+
+  // 1. JAVA NOTEBOOK
+  if (langKey === 'java' || langKey === '62') {
+    return JSON.stringify(
+      {
+        cells: [
+          {
+            cell_type: 'markdown',
+            metadata: {},
+            source: [
+              '# ☕ Java Interactive Notebook\n',
+              'Interactive Java computing environment with **JShell & OpenJDK** execution.\n',
+              '- Execute Java statements, methods, and classes interactively.\n',
+              '- Full support for **Collections**, **Streams**, and **OOP Architecture**.\n',
+              '- Built-in automated cell scaffolding for instant execution.'
+            ]
+          },
+          {
+            cell_type: 'code',
+            execution_count: null,
+            metadata: { language: 'java' },
+            outputs: [],
+            source: [
+              '// Cell 1: Java Collections, Streams & Modern Features\n',
+              'import java.util.*;\n',
+              'import java.util.stream.*;\n',
+              '\n',
+              'List<String> coreTopics = Arrays.asList(\n',
+              '    "Object-Oriented Programming",\n',
+              '    "Generics & Collections",\n',
+              '    "Functional Streams & Lambdas",\n',
+              '    "Exception Handling & I/O",\n',
+              '    "Multithreading & Concurrency"\n',
+              ');\n',
+              '\n',
+              'System.out.println("☕ Welcome to Java Interactive Notebook!");\n',
+              'System.out.println("============================================");\n',
+              'System.out.println("Total Core Topics: " + coreTopics.size());\n',
+              '\n',
+              '// Stream pipeline demo\n',
+              'System.out.println("\\nCurriculum Modules (Filtered & Uppercased):");\n',
+              'coreTopics.stream()\n',
+              '    .filter(topic -> topic.contains("OOP") || topic.contains("Streams") || topic.contains("Collections"))\n',
+              '    .map(String::toUpperCase)\n',
+              '    .forEach(topic -> System.out.println("  ➜ " + topic));\n'
+            ]
+          },
+          {
+            cell_type: 'code',
+            execution_count: null,
+            metadata: { language: 'java' },
+            outputs: [],
+            source: [
+              '// Cell 2: OOP Principles — Classes & Static Helper Methods\n',
+              'class MathUtils {\n',
+              '    public static long factorial(int n) {\n',
+              '        long result = 1;\n',
+              '        for (int i = 2; i <= n; i++) {\n',
+              '            result *= i;\n',
+              '        }\n',
+              '        return result;\n',
+              '    }\n',
+              '}\n',
+              '\n',
+              'System.out.println("Computing Factorials in Java Notebook:");\n',
+              'for (int i = 1; i <= 8; i++) {\n',
+              '    System.out.printf("  %d! = %d%n", i, MathUtils.factorial(i));\n',
+              '}\n'
+            ]
+          }
+        ],
+        metadata: {
+          language_info: {
+            name: 'java',
+            version: '17'
+          },
+          kernelspec: {
+            display_name: 'Java (OpenJDK / JShell Engine)',
+            language: 'java',
+            name: 'java'
+          }
+        },
+        nbformat: 4,
+        nbformat_minor: 5
+      },
+      null,
+      2
+    );
+  }
+
+  // 2. C++ NOTEBOOK
+  if (langKey === 'cpp' || langKey === '54' || langKey === 'c++') {
+    return JSON.stringify(
+      {
+        cells: [
+          {
+            cell_type: 'markdown',
+            metadata: {},
+            source: [
+              '# ⚡ C++ Interactive Notebook\n',
+              'Interactive C++ computing environment powered by modern GCC/Clang.\n',
+              '- Direct execution of modern C++20 code, STL algorithms, and structures.\n',
+              '- Interactive cell statements automatically wrapped for convenience.'
+            ]
+          },
+          {
+            cell_type: 'code',
+            execution_count: null,
+            metadata: { language: 'cpp' },
+            outputs: [],
+            source: [
+              '#include <iostream>\n',
+              '#include <vector>\n',
+              '#include <numeric>\n',
+              '#include <algorithm>\n',
+              '\n',
+              'using namespace std;\n',
+              '\n',
+              'int main() {\n',
+              '    cout << "⚡ C++ Interactive Notebook Running!" << endl;\n',
+              '    vector<int> numbers = {10, 25, 30, 45, 60, 80};\n',
+              '    int total = accumulate(numbers.begin(), numbers.end(), 0);\n',
+              '    cout << "Total elements: " << numbers.size() << endl;\n',
+              '    cout << "Sum: " << total << ", Average: " << (double)total / numbers.size() << endl;\n',
+              '    return 0;\n',
+              '}\n'
+            ]
+          }
+        ],
+        metadata: {
+          language_info: {
+            name: 'cpp',
+            version: '20'
+          },
+          kernelspec: {
+            display_name: 'C++20 (GCC / Clang)',
+            language: 'cpp',
+            name: 'cpp'
+          }
+        },
+        nbformat: 4,
+        nbformat_minor: 5
+      },
+      null,
+      2
+    );
+  }
+
+  // 3. JAVASCRIPT NOTEBOOK
+  if (langKey === 'javascript' || langKey === 'js' || langKey === '63') {
+    return JSON.stringify(
+      {
+        cells: [
+          {
+            cell_type: 'markdown',
+            metadata: {},
+            source: [
+              '# 🟨 JavaScript Interactive Notebook\n',
+              'Interactive JavaScript computing environment running directly in the browser.\n',
+              '- Instant execution with console logs, object inspection, and table previews.\n',
+              '- Full ES2024 features: Async/Await, Array methods, and Math.'
+            ]
+          },
+          {
+            cell_type: 'code',
+            execution_count: null,
+            metadata: { language: 'javascript' },
+            outputs: [],
+            source: [
+              '// Interactive Data Operations in JavaScript\n',
+              'const languages = [\n',
+              '  { name: "Java", type: "Compiled / JVM", popularity: 88 },\n',
+              '  { name: "Python", type: "Interpreted / SciPy", popularity: 96 },\n',
+              '  { name: "JavaScript", type: "JIT / V8 Engine", popularity: 94 },\n',
+              '  { name: "C++", type: "Native Compiled", popularity: 82 }\n',
+              '];\n',
+              '\n',
+              'console.log("🟨 Welcome to JavaScript Notebook!");\n',
+              'console.table(languages);\n'
+            ]
+          }
+        ],
+        metadata: {
+          language_info: {
+            name: 'javascript',
+            version: 'ES2024'
+          },
+          kernelspec: {
+            display_name: 'JavaScript (Browser V8 Engine)',
+            language: 'javascript',
+            name: 'javascript'
+          }
+        },
+        nbformat: 4,
+        nbformat_minor: 5
+      },
+      null,
+      2
+    );
+  }
+
+  // 4. PYTHON NOTEBOOK (Default)
   return JSON.stringify(
     {
       cells: [
@@ -571,7 +980,7 @@ export function createDefaultNotebookJson() {
           cell_type: 'markdown',
           metadata: {},
           source: [
-            '# 🪐 Jupyter Notebook\n',
+            '# 🪐 Jupyter Notebook (Python 3)\n',
             'Interactive computing environment powered by Pyodide WebAssembly.\n',
             'Directly supports **NumPy**, **Pandas**, **Matplotlib**, and interactive data exploration.'
           ]
@@ -579,7 +988,7 @@ export function createDefaultNotebookJson() {
         {
           cell_type: 'code',
           execution_count: null,
-          metadata: {},
+          metadata: { language: 'python' },
           outputs: [],
           source: [
             'import numpy as np\n',
@@ -738,6 +1147,18 @@ Write your notes, explanations, ideas, or documentation here...
 - Note 2: 
 `,
     710: createDefaultNotebookJson(),
+    711: `name: myenv
+channels:
+  - defaults
+  - conda-forge
+dependencies:
+  - python=3.11
+  - numpy
+  - pandas
+  - matplotlib
+  - pip:
+    - requests
+`,
   };
 
   return templates[languageId] || templates[71];
@@ -811,6 +1232,8 @@ const EXTENSION_MAP = {
   markdown: 99,
   log: 99,
   ipynb: 710,
+  yml: 711,
+  yaml: 711,
 };
 
 const DEFAULT_EXTENSIONS = {
@@ -835,6 +1258,7 @@ const DEFAULT_EXTENSIONS = {
   1: 'styles.css',
   99: 'notes.txt',
   710: 'notebook.ipynb',
+  711: 'environment.yml',
 };
 
 /**
@@ -942,7 +1366,25 @@ export function getSequentialFileStarterContent(baseName, ext) {
     return `// ${baseName}.js\n\n`;
   }
   if (ext === 'ipynb') {
-    return createDefaultNotebookJson();
+    const lower = (baseName || '').toLowerCase();
+    if (lower.includes('java')) return createDefaultNotebookJson('java');
+    if (lower.includes('cpp') || lower.includes('c++')) return createDefaultNotebookJson('cpp');
+    if (lower.includes('js') || lower.includes('javascript')) return createDefaultNotebookJson('javascript');
+    return createDefaultNotebookJson('python');
+  }
+  if (ext === 'yml' || ext === 'yaml') {
+    return `name: myenv
+channels:
+  - defaults
+  - conda-forge
+dependencies:
+  - python=3.11
+  - numpy
+  - pandas
+  - matplotlib
+  - pip:
+    - requests
+`;
   }
   return '';
 }

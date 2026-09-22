@@ -24,7 +24,9 @@ import {
 import { isItemProtected, isItemUnlocked } from '../services/securityService';
 import { sanitizeFilenameIdentifier } from '../services/identifierSanitizer';
 import PasswordPromptModal from './PasswordPromptModal';
+import { JupyterIcon, AnacondaIcon } from './LanguageIcon';
 import LanguageIcon from './LanguageIcon';
+import { createDefaultNotebookJson } from '../services/languageDetector';
 import './FileExplorer.css';
 
 /**
@@ -145,6 +147,24 @@ export default function FileExplorer() {
 
   // Password Security Prompt Modal State
   const [securityTarget, setSecurityTarget] = useState(null);
+
+  // Notebook Dropdown Menu State
+  const [showNotebookDropdown, setShowNotebookDropdown] = useState(false);
+  const notebookDropdownRef = useRef(null);
+
+  useEffect(() => {
+    function handleClickOutside(e) {
+      if (notebookDropdownRef.current && !notebookDropdownRef.current.contains(e.target)) {
+        setShowNotebookDropdown(false);
+      }
+    }
+    if (showNotebookDropdown) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showNotebookDropdown]);
 
   const addInputRef = useRef(null);
   const editInputRef = useRef(null);
@@ -598,6 +618,13 @@ export default function FileExplorer() {
     );
   };
 
+  const activeFile = files.find((f) => f.id === activeFileId);
+  const currentLang = activeFile?.language || state.detectedLanguage;
+  const isJavaWorkspace =
+    currentLang?.id === 62 ||
+    currentLang?.monacoLanguage === 'java' ||
+    files.some((f) => f.name.endsWith('.java') || f.name.toLowerCase().includes('java'));
+
   return (
     <aside className="file-explorer file-explorer-sidebar">
       {/* Explorer Header */}
@@ -614,6 +641,113 @@ export default function FileExplorer() {
             title="New File (Enter file name)"
           >
             <FilePlus size={14} />
+          </button>
+
+          {/* Unified Notebook Add Button & Language Dropdown */}
+          <div className="notebook-btn-dropdown-group" ref={notebookDropdownRef}>
+            <button
+              className={`explorer-action-btn notebook-main-btn ${isJavaWorkspace ? 'active-lang-btn' : ''}`}
+              id="addnotebook-quick-btn"
+              onClick={() => {
+                if (isJavaWorkspace) {
+                  handleAddFile('java_notebook.ipynb', createDefaultNotebookJson('java'));
+                } else {
+                  handleAddFile('notebook.ipynb', createDefaultNotebookJson('python'));
+                }
+              }}
+              title={isJavaWorkspace ? 'New Java Notebook (java_notebook.ipynb)' : 'New Jupyter Notebook (notebook.ipynb)'}
+            >
+              {isJavaWorkspace ? (
+                <div className="btn-combo-wrapper">
+                  <JupyterIcon size={13} />
+                  <span className="btn-combo-badge">☕</span>
+                </div>
+              ) : (
+                <JupyterIcon size={14} />
+              )}
+            </button>
+
+            <button
+              className={`explorer-action-btn notebook-arrow-btn ${showNotebookDropdown ? 'active' : ''}`}
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowNotebookDropdown((prev) => !prev);
+              }}
+              title="Select Notebook Type (Java, Python, C++, JavaScript)"
+            >
+              <ChevronDown size={11} />
+            </button>
+
+            {showNotebookDropdown && (
+              <div className="notebook-picker-dropdown">
+                <div className="notebook-picker-header">Interactive Notebooks</div>
+
+                <button
+                  className="notebook-picker-item"
+                  id="addjavanotebook-menu"
+                  onClick={() => {
+                    handleAddFile('java_notebook.ipynb', createDefaultNotebookJson('java'));
+                    setShowNotebookDropdown(false);
+                  }}
+                >
+                  <span className="item-icon">☕</span>
+                  <div className="item-text">
+                    <span className="item-title">Java Notebook</span>
+                    <span className="item-sub">OpenJDK / JShell Engine</span>
+                  </div>
+                </button>
+
+                <button
+                  className="notebook-picker-item"
+                  onClick={() => {
+                    handleAddFile('notebook.ipynb', createDefaultNotebookJson('python'));
+                    setShowNotebookDropdown(false);
+                  }}
+                >
+                  <span className="item-icon">🐍</span>
+                  <div className="item-text">
+                    <span className="item-title">Python 3 Notebook</span>
+                    <span className="item-sub">Pyodide WebAssembly</span>
+                  </div>
+                </button>
+
+                <button
+                  className="notebook-picker-item"
+                  onClick={() => {
+                    handleAddFile('cpp_notebook.ipynb', createDefaultNotebookJson('cpp'));
+                    setShowNotebookDropdown(false);
+                  }}
+                >
+                  <span className="item-icon">⚡</span>
+                  <div className="item-text">
+                    <span className="item-title">C++ Notebook</span>
+                    <span className="item-sub">GCC / Clang C++20</span>
+                  </div>
+                </button>
+
+                <button
+                  className="notebook-picker-item"
+                  onClick={() => {
+                    handleAddFile('js_notebook.ipynb', createDefaultNotebookJson('javascript'));
+                    setShowNotebookDropdown(false);
+                  }}
+                >
+                  <span className="item-icon">🟨</span>
+                  <div className="item-text">
+                    <span className="item-title">JavaScript Notebook</span>
+                    <span className="item-sub">Browser V8 Engine</span>
+                  </div>
+                </button>
+              </div>
+            )}
+          </div>
+
+          <button
+            className="explorer-action-btn"
+            onClick={() => handleAddFile('environment.yml')}
+            title="New Anaconda Environment (environment.yml)"
+          >
+            <AnacondaIcon size={14} />
           </button>
 
           <button

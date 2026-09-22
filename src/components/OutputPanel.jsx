@@ -7,6 +7,7 @@ import DatabasePanel from './DatabasePanel';
 import WebPreviewPanel from './WebPreviewPanel';
 import ComplexityTab from './ComplexityTab';
 import LanguageIcon from './LanguageIcon';
+import { getFriendlyLanguageName } from '../services/languageDetector';
 import './OutputPanel.css';
 
 const TABS = [
@@ -731,7 +732,7 @@ export default function OutputPanel() {
                 <span className="in-use-text">
                   Terminal in use with: <strong>{activeFile?.name || 'File'}</strong>
                 </span>
-                <span className="in-use-lang">({activeFile?.language?.name || 'Code'})</span>
+                <span className="in-use-lang">({getFriendlyLanguageName(activeFile?.language, activeFile?.name)})</span>
               </div>
               <div className="in-use-right">
                 <button

@@ -1,5 +1,6 @@
 // ─── Academic & Subject Notebooks Management Service ───────────────────────
 import { saveNamedWorkspace, getSavedWorkspaces } from './workspaceService';
+import { createDefaultNotebookJson } from './languageDetector';
 
 export const NOTEBOOKS_STORAGE_KEY = 'fullcode_subject_notebooks_v1';
 
@@ -98,6 +99,11 @@ public class Main {
     }
 }
 `,
+      },
+      {
+        name: 'java_notebook.ipynb',
+        language: { id: 710, name: 'Jupyter Notebook', monacoLanguage: 'ipynb', extension: 'ipynb', icon: '🪐' },
+        content: createDefaultNotebookJson('java'),
       },
       {
         name: 'Notes.md',

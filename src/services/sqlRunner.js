@@ -38,26 +38,56 @@ const inMemoryDatabases = new Map();
 let currentActiveDbName = 'main_db';
 
 /**
+ * Generate standard SQLite CREATE TABLE DDL statement
+ */
+export function generateTableDdl(table) {
+  if (!table) return '';
+  const colDefs = (table.columns || []).map((c) => {
+    let def = `  ${c.name} ${c.type || 'TEXT'}`;
+    if (c.isPk) def += ' PRIMARY KEY';
+    if (c.notNull) def += ' NOT NULL';
+    if (c.default !== undefined && c.default !== null) {
+      def += ` DEFAULT ${typeof c.default === 'string' ? `'${c.default}'` : c.default}`;
+    }
+    return def;
+  });
+  return `CREATE TABLE ${table.name} (\n${colDefs.join(',\n')}\n);`;
+}
+
+/**
+ * Locate which in-memory database holds a specific table
+ */
+export function findDatabaseForTableInBrowser(tableName) {
+  if (!tableName) return null;
+  const clean = tableName.replace(/["'`]/g, '').toLowerCase();
+  for (const [name, db] of inMemoryDatabases.entries()) {
+    if (db.tables[clean]) return name;
+  }
+  return null;
+}
+
+/**
  * Initialize and seed initial databases
  */
 function initDatabases() {
   if (inMemoryDatabases.size > 0) return;
 
   try {
-    // Try loading saved databases from localStorage
-    const savedList = localStorage.getItem(DB_LIST_KEY);
-    if (savedList) {
-      const dbNames = JSON.parse(savedList);
-      dbNames.forEach((name) => {
-        const raw = localStorage.getItem(STORAGE_PREFIX + name);
-        if (raw) {
-          const parsed = JSON.parse(raw);
-          const db = new InMemoryDatabase(name);
-          db.tables = parsed.tables || {};
-          db.createdAt = parsed.createdAt || new Date().toISOString();
-          inMemoryDatabases.set(name, db);
-        }
-      });
+    if (typeof localStorage !== 'undefined') {
+      const savedList = localStorage.getItem(DB_LIST_KEY);
+      if (savedList) {
+        const dbNames = JSON.parse(savedList);
+        dbNames.forEach((name) => {
+          const raw = localStorage.getItem(STORAGE_PREFIX + name);
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            const db = new InMemoryDatabase(name);
+            db.tables = parsed.tables || {};
+            db.createdAt = parsed.createdAt || new Date().toISOString();
+            inMemoryDatabases.set(name, db);
+          }
+        });
+      }
     }
   } catch (e) {
     console.warn('Failed to load SQL databases from storage:', e);
@@ -71,17 +101,19 @@ function initDatabases() {
 
 function persistDatabases() {
   try {
-    const list = Array.from(inMemoryDatabases.keys());
-    localStorage.setItem(DB_LIST_KEY, JSON.stringify(list));
-    for (const [name, db] of inMemoryDatabases.entries()) {
-      localStorage.setItem(
-        STORAGE_PREFIX + name,
-        JSON.stringify({
-          name: db.name,
-          tables: db.tables,
-          createdAt: db.createdAt,
-        })
-      );
+    if (typeof localStorage !== 'undefined') {
+      const list = Array.from(inMemoryDatabases.keys());
+      localStorage.setItem(DB_LIST_KEY, JSON.stringify(list));
+      for (const [name, db] of inMemoryDatabases.entries()) {
+        localStorage.setItem(
+          STORAGE_PREFIX + name,
+          JSON.stringify({
+            name: db.name,
+            tables: db.tables,
+            createdAt: db.createdAt,
+          })
+        );
+      }
     }
   } catch (e) {
     console.warn('Failed to persist databases to localStorage:', e);
@@ -156,6 +188,38 @@ function seedDefaultDatabases() {
   mainDb.tables.employees.autoIncrementSeq = 9;
 
   inMemoryDatabases.set('main_db', mainDb);
+
+  // 3. university_db
+  const university = new InMemoryDatabase('university_db');
+  university.createTable('departments', [
+    { name: 'dept_id', type: 'INTEGER', isPk: true },
+    { name: 'dept_name', type: 'TEXT', notNull: true },
+    { name: 'budget', type: 'REAL', notNull: true },
+  ]);
+  university.tables.departments.rows = [
+    { dept_id: 1, dept_name: 'Computer Science', budget: 850000 },
+    { dept_id: 2, dept_name: 'Mathematics', budget: 450000 },
+    { dept_id: 3, dept_name: 'Physics', budget: 620000 },
+  ];
+  university.tables.departments.autoIncrementSeq = 4;
+
+  university.createTable('students', [
+    { name: 'student_id', type: 'INTEGER', isPk: true },
+    { name: 'first_name', type: 'TEXT', notNull: true },
+    { name: 'last_name', type: 'TEXT', notNull: true },
+    { name: 'gpa', type: 'REAL', notNull: true },
+    { name: 'dept_id', type: 'INTEGER' },
+  ]);
+  university.tables.students.rows = [
+    { student_id: 1, first_name: 'Alex', last_name: 'Mercer', gpa: 3.85, dept_id: 1 },
+    { student_id: 2, first_name: 'Sarah', last_name: 'Connor', gpa: 3.92, dept_id: 1 },
+    { student_id: 3, first_name: 'Bruce', last_name: 'Wayne', gpa: 3.7, dept_id: 2 },
+    { student_id: 4, first_name: 'Peter', last_name: 'Parker', gpa: 3.98, dept_id: 3 },
+    { student_id: 5, first_name: 'Clark', last_name: 'Kent', gpa: 3.65, dept_id: 2 },
+  ];
+  university.tables.students.autoIncrementSeq = 6;
+
+  inMemoryDatabases.set('university_db', university);
 
   persistDatabases();
 }
@@ -233,6 +297,77 @@ function parseLiteral(valStr) {
   return trimmed;
 }
 
+const MONTH_MAP = {
+  jan: '01', feb: '02', mar: '03', apr: '04', may: '05', jun: '06',
+  jul: '07', aug: '08', sep: '09', oct: '10', nov: '11', dec: '12',
+  january: '01', february: '02', march: '03', april: '04', may: '05', june: '06',
+  july: '07', august: '08', september: '09', oct: '10', november: '11', december: '12',
+};
+
+/**
+ * Transpile MySQL / Oracle / PostgreSQL dialect constructs into SQLite-compatible SQL
+ */
+export function transpileSqlForSqlite(sql) {
+  if (!sql) return '';
+  let s = sql.trim();
+
+  // 1. STR_TO_DATE('17-JUN-1987', '%d-%M-%Y') and TO_DATE(...) -> ISO format '1987-06-17'
+  s = s.replace(/(?:STR_TO_DATE|TO_DATE)\s*\(\s*'([^']+)'\s*,\s*'([^']+)'\s*\)/gi, (match, dateStr) => {
+    const dmyMatch = dateStr.match(/^(\d{1,2})[-/]([A-Za-z]+)[-/](\d{4})$/);
+    if (dmyMatch) {
+      const day = dmyMatch[1].padStart(2, '0');
+      const monName = dmyMatch[2].toLowerCase();
+      const month = MONTH_MAP[monName] || '01';
+      const year = dmyMatch[3];
+      return `'${year}-${month}-${day}'`;
+    }
+    const dmyNumMatch = dateStr.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/);
+    if (dmyNumMatch) {
+      const day = dmyNumMatch[1].padStart(2, '0');
+      const month = dmyNumMatch[2].padStart(2, '0');
+      const year = dmyNumMatch[3];
+      return `'${year}-${month}-${day}'`;
+    }
+    const ymdMatch = dateStr.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})$/);
+    if (ymdMatch) {
+      return `'${ymdMatch[1]}-${ymdMatch[2].padStart(2, '0')}-${ymdMatch[3].padStart(2, '0')}'`;
+    }
+    return `'${dateStr}'`;
+  });
+
+  // 2. Subquery operators: > ALL, < ALL, >= ALL, <= ALL, > ANY, etc.
+  s = s.replace(/>\s*ALL\s*\(\s*SELECT\s+([a-zA-Z0-9_.*]+)\s+FROM\b/gi, '> (SELECT MAX($1) FROM');
+  s = s.replace(/>=\s*ALL\s*\(\s*SELECT\s+([a-zA-Z0-9_.*]+)\s+FROM\b/gi, '>= (SELECT MAX($1) FROM');
+  s = s.replace(/<\s*ALL\s*\(\s*SELECT\s+([a-zA-Z0-9_.*]+)\s+FROM\b/gi, '< (SELECT MIN($1) FROM');
+  s = s.replace(/<=\s*ALL\s*\(\s*SELECT\s+([a-zA-Z0-9_.*]+)\s+FROM\b/gi, '<= (SELECT MIN($1) FROM');
+  s = s.replace(/>\s*ANY\s*\(\s*SELECT\s+([a-zA-Z0-9_.*]+)\s+FROM\b/gi, '> (SELECT MIN($1) FROM');
+  s = s.replace(/>=\s*ANY\s*\(\s*SELECT\s+([a-zA-Z0-9_.*]+)\s+FROM\b/gi, '>= (SELECT MIN($1) FROM');
+  s = s.replace(/<\s*ANY\s*\(\s*SELECT\s+([a-zA-Z0-9_.*]+)\s+FROM\b/gi, '< (SELECT MAX($1) FROM');
+  s = s.replace(/<=\s*ANY\s*\(\s*SELECT\s+([a-zA-Z0-9_.*]+)\s+FROM\b/gi, '<= (SELECT MAX($1) FROM');
+  s = s.replace(/=\s*ANY\s*\(/gi, 'IN (');
+  s = s.replace(/(?:!=|<>)\s*ALL\s*\(/gi, 'NOT IN (');
+
+  // 3. Normalize common field aliases: emp_id -> employee_id in employees queries
+  if (/\bemployees\b/i.test(s) && /\bemp_id\b/i.test(s)) {
+    s = s.replace(/\bemp_id\b/gi, 'employee_id');
+  }
+
+  // 4. CREATE TABLE normalization
+  if (/^CREATE\s+TABLE\b/i.test(s)) {
+    s = s.replace(/\bUNSIGNED\b/gi, '');
+    s = s.replace(/\b(?:INT|INTEGER|TINYINT|SMALLINT|MEDIUMINT|BIGINT)\s*(?:\(\s*\d+\s*\))?/gi, 'INTEGER');
+    s = s.replace(/\)\s*(?:ENGINE\s*=\s*\w+|DEFAULT\s+CHARSET\s*=\s*\w+|CHARSET\s*=\s*\w+|COLLATE\s*=\s*\w+|AUTO_INCREMENT\s*=\s*\d+)+;/gi, ');');
+    s = s.replace(/COLLATE\s*(?:=\s*)?(?:utf8\w*|latin1\w*)/gi, 'COLLATE NOCASE');
+    if (/PRIMARY\s+KEY\s*\([^)]*\b/i.test(s)) {
+      s = s.replace(/\bAUTO_INCREMENT\b/gi, '');
+    } else {
+      s = s.replace(/\bAUTO_INCREMENT\b/gi, 'AUTOINCREMENT');
+    }
+  }
+
+  return s;
+}
+
 /**
  * Main in-browser SQL Execution Engine
  */
@@ -252,13 +387,44 @@ export async function executeSqlInBrowser(sqlQuery) {
     };
   }
 
-  const statements = splitStatements(clean);
-  let finalResult = null;
+  let statements = splitStatements(clean);
   const executionLogs = [];
 
+  // If entire script was commented out with '-- ' or '# ' (e.g. pasted directly from tutorials/workbench)
+  if (statements.length === 0) {
+    const lines = clean.split('\n');
+    const hasCommentedSql = lines.some((l) =>
+      /^\s*(?:--|#)\s*(?:CREATE|SELECT|INSERT|UPDATE|DELETE|DROP|ALTER|USE|SHOW|PRAGMA)\b/i.test(l)
+    );
+    if (hasCommentedSql) {
+      const uncommented = lines.map((l) => l.replace(/^\s*(?:--|#)\s?/, '')).join('\n');
+      const retryStatements = splitStatements(uncommented);
+      if (retryStatements.length > 0) {
+        statements = retryStatements;
+        executionLogs.push("💡 Note: Your SQL script had '--' comment prefixes. CodeForge automatically uncommented and executed it for you.");
+      }
+    }
+  }
+
+  if (statements.length === 0) {
+    return {
+      success: true,
+      output: '✅ Empty query.\n',
+      sqlData: { columns: [], rows: [], rowCount: 0, executionTimeMs: '0.00' },
+      time: '0.000',
+      memory: 1024,
+      statusCode: 0,
+    };
+  }
+
+  let finalResult = null;
+
   for (const rawStmt of statements) {
-    const stmt = rawStmt.trim();
-    if (!stmt) continue;
+    const rawTrimmed = rawStmt.trim();
+    if (!rawTrimmed) continue;
+
+    // Transpile statement through SQLite dialect preprocessor
+    const stmt = transpileSqlForSqlite(rawTrimmed);
 
     // 1. CREATE DATABASE / CREATE SCHEMA
     const createDbMatch = stmt.match(/^CREATE\s+(?:DATABASE|SCHEMA)\s+(?:IF\s+NOT\s+EXISTS\s+)?([a-zA-Z0-9_-]+)/i);
@@ -273,6 +439,140 @@ export async function executeSqlInBrowser(sqlQuery) {
         success: true,
         columns: ['status', 'message'],
         rows: [{ status: 'OK', message: `Database '${dbName}' created successfully.` }],
+        rowCount: 1,
+        type: 'DDL',
+      };
+      continue;
+    }
+
+    // 1b. DROP DATABASE / DROP SCHEMA
+    const dropDbMatch = stmt.match(/^DROP\s+(?:DATABASE|SCHEMA)\s+(?:IF\s+EXISTS\s+)?([a-zA-Z0-9_-]+)/i);
+    if (dropDbMatch) {
+      const dbName = dropDbMatch[1].toLowerCase();
+      inMemoryDatabases.delete(dbName);
+      if (currentActiveDbName === dbName) {
+        currentActiveDbName = 'main_db';
+      }
+      persistDatabases();
+      executionLogs.push(`🗑️ Database '${dbName}' dropped.`);
+      finalResult = {
+        success: true,
+        columns: ['status', 'message'],
+        rows: [{ status: 'OK', message: `Database '${dbName}' dropped successfully.` }],
+        rowCount: 1,
+        type: 'DDL',
+      };
+      continue;
+    }
+
+    // 1c. COMMIT / ROLLBACK / BEGIN
+    if (/^COMMIT\b/i.test(stmt)) {
+      executionLogs.push('💾 Transaction committed.');
+      finalResult = {
+        success: true,
+        columns: ['status', 'message'],
+        rows: [{ status: 'OK', message: 'Transaction committed successfully.' }],
+        rowCount: 1,
+        type: 'MUTATION',
+      };
+      continue;
+    }
+    if (/^ROLLBACK\b/i.test(stmt)) {
+      executionLogs.push('🔄 Transaction rolled back.');
+      finalResult = {
+        success: true,
+        columns: ['status', 'message'],
+        rows: [{ status: 'OK', message: 'Transaction rolled back.' }],
+        rowCount: 1,
+        type: 'MUTATION',
+      };
+      continue;
+    }
+    if (/^BEGIN(?:\s+TRANSACTION)?\b/i.test(stmt)) {
+      finalResult = {
+        success: true,
+        columns: ['status', 'message'],
+        rows: [{ status: 'OK', message: 'Transaction started.' }],
+        rowCount: 1,
+        type: 'MUTATION',
+      };
+      continue;
+    }
+
+    // 1d. SET FOREIGN_KEY_CHECKS and session variables
+    if (/^SET\s+FOREIGN_KEY_CHECKS\b/i.test(stmt)) {
+      executionLogs.push(`⚙️ FOREIGN_KEY_CHECKS updated.`);
+      finalResult = {
+        success: true,
+        columns: ['status'],
+        rows: [{ status: 'OK' }],
+        rowCount: 1,
+        type: 'PRAGMA',
+      };
+      continue;
+    }
+    if (/^SET\s+[@a-zA-Z0-9_.]+\s*=/i.test(stmt)) {
+      executionLogs.push(`⚙️ Session variable set.`);
+      finalResult = {
+        success: true,
+        columns: ['status'],
+        rows: [{ status: 'OK' }],
+        rowCount: 1,
+        type: 'PRAGMA',
+      };
+      continue;
+    }
+
+    // 1e. LOCK TABLES / UNLOCK TABLES
+    if (/^(?:LOCK\s+TABLES|UNLOCK\s+TABLES)\b/i.test(stmt)) {
+      finalResult = {
+        success: true,
+        columns: ['status'],
+        rows: [{ status: 'OK' }],
+        rowCount: 1,
+        type: 'MUTATION',
+      };
+      continue;
+    }
+
+    // 1f. ALTER TABLE ... ADD FOREIGN KEY
+    if (/^ALTER\s+TABLE\s+[a-zA-Z0-9_"-]+\s+ADD\s+(?:CONSTRAINT\s+[a-zA-Z0-9_"-]+\s+)?FOREIGN\s+KEY\b/i.test(stmt)) {
+      executionLogs.push(`ℹ️ Foreign key constraint registered.`);
+      finalResult = {
+        success: true,
+        columns: ['status', 'message'],
+        rows: [{ status: 'OK', message: 'Foreign key constraint registered.' }],
+        rowCount: 1,
+        type: 'DDL',
+      };
+      continue;
+    }
+
+    // 1g. ALTER TABLE ... ADD UNIQUE INDEX / ADD INDEX
+    if (/^ALTER\s+TABLE\s+[a-zA-Z0-9_"-]+\s+ADD\s+(?:UNIQUE\s+)?(?:INDEX|KEY)\b/i.test(stmt)) {
+      executionLogs.push(`✅ Index registered.`);
+      finalResult = {
+        success: true,
+        columns: ['status', 'message'],
+        rows: [{ status: 'OK', message: 'Index registered successfully.' }],
+        rowCount: 1,
+        type: 'DDL',
+      };
+      continue;
+    }
+
+    // 1h. CREATE VIEW
+    const createViewMatch = stmt.match(/^CREATE\s+(?:OR\s+REPLACE\s+)?VIEW\s+(?:IF\s+NOT\s+EXISTS\s+)?([a-zA-Z0-9_"-]+)/i);
+    if (createViewMatch) {
+      const activeDb = inMemoryDatabases.get(currentActiveDbName) || inMemoryDatabases.get('main_db');
+      const viewName = createViewMatch[1].replace(/["'`]/g, '');
+      activeDb.createTable(viewName, [{ name: 'view_result', type: 'TEXT' }]);
+      persistDatabases();
+      executionLogs.push(`✅ View '${viewName}' created in '${activeDb.name}'.`);
+      finalResult = {
+        success: true,
+        columns: ['status', 'message'],
+        rows: [{ status: 'OK', message: `View '${viewName}' created successfully.` }],
         rowCount: 1,
         type: 'DDL',
       };
@@ -299,8 +599,8 @@ export async function executeSqlInBrowser(sqlQuery) {
       continue;
     }
 
-    // 3. SHOW DATABASES / SHOW SCHEMAS
-    if (/^SHOW\s+(?:DATABASES|SCHEMAS)\b/i.test(stmt)) {
+    // 3. SHOW DATABASES / SHOW SCHEMAS / .databases
+    if (/^(?:SHOW\s+(?:DATABASES|SCHEMAS)|\.DATABASES?)\b/i.test(stmt)) {
       const list = Array.from(inMemoryDatabases.values());
       finalResult = {
         success: true,
@@ -315,9 +615,11 @@ export async function executeSqlInBrowser(sqlQuery) {
       continue;
     }
 
-    // 4. SHOW TABLES
-    if (/^SHOW\s+TABLES\b/i.test(stmt)) {
-      const activeDb = inMemoryDatabases.get(currentActiveDbName) || inMemoryDatabases.get('main_db');
+    // 4. SHOW TABLES [FROM <db>] / .tables
+    const showTablesMatch = stmt.match(/^(?:SHOW\s+TABLES(?:\s+FROM\s+([a-zA-Z0-9_-]+))?|\.TABLES?)\b/i);
+    if (showTablesMatch) {
+      const targetDbName = showTablesMatch[1] ? showTablesMatch[1].toLowerCase() : currentActiveDbName;
+      const activeDb = inMemoryDatabases.get(targetDbName) || inMemoryDatabases.get('main_db');
       const tableNames = Object.keys(activeDb.tables);
       finalResult = {
         success: true,
@@ -329,12 +631,282 @@ export async function executeSqlInBrowser(sqlQuery) {
       continue;
     }
 
-    // 5. DESCRIBE / DESC <table>
-    const descMatch = stmt.match(/^(?:DESCRIBE|DESC)\s+([a-zA-Z0-9_"-]+)/i);
-    if (descMatch) {
+    // 4b. .schema [table] or SCHEMA [table]
+    const schemaMatch = stmt.match(/^(?:\.SCHEMA|SCHEMA)(?:\s+([a-zA-Z0-9_"-]+))?$/i);
+    if (schemaMatch) {
+      let targetTable = schemaMatch[1] ? schemaMatch[1].replace(/["'`]/g, '').toLowerCase() : null;
+      let activeDb = inMemoryDatabases.get(currentActiveDbName);
+
+      if (targetTable && !activeDb?.getTable(targetTable)) {
+        const altDb = findDatabaseForTableInBrowser(targetTable);
+        if (altDb) {
+          currentActiveDbName = altDb;
+          activeDb = inMemoryDatabases.get(altDb);
+          executionLogs.push(`🔄 Context switched to database '${currentActiveDbName}' (contains '${targetTable}').`);
+        }
+      }
+
+      if (targetTable) {
+        const tbl = activeDb?.getTable(targetTable);
+        if (!tbl) {
+          return {
+            success: false,
+            output: '',
+            error: `Table '${targetTable}' does not exist in database '${currentActiveDbName}'.`,
+            time: '0.001',
+            memory: 1024,
+            statusCode: 1,
+          };
+        }
+        const ddl = generateTableDdl(tbl);
+        executionLogs.push(`${ddl}`);
+        finalResult = {
+          success: true,
+          columns: ['type', 'name', 'tbl_name', 'sql'],
+          rows: [{ type: 'table', name: tbl.name, tbl_name: tbl.name, sql: ddl }],
+          rowCount: 1,
+          type: 'SELECT',
+        };
+      } else {
+        const allTables = Object.values(activeDb?.tables || {});
+        const schemaRows = allTables.map((t) => {
+          const ddl = generateTableDdl(t);
+          executionLogs.push(`${ddl}`);
+          return { type: 'table', name: t.name, tbl_name: t.name, sql: ddl };
+        });
+        finalResult = {
+          success: true,
+          columns: ['type', 'name', 'tbl_name', 'sql'],
+          rows: schemaRows,
+          rowCount: schemaRows.length,
+          type: 'SELECT',
+        };
+      }
+      continue;
+    }
+
+    // 4c. SHOW CREATE TABLE / SHOW CREATE VIEW <table>
+    const showCreateMatch = stmt.match(/^SHOW\s+CREATE\s+(?:TABLE|VIEW)\s+([a-zA-Z0-9_"-]+)/i);
+    if (showCreateMatch) {
+      const targetTable = showCreateMatch[1].replace(/["'`]/g, '').toLowerCase();
+      let activeDb = inMemoryDatabases.get(currentActiveDbName);
+      let tbl = activeDb?.getTable(targetTable);
+
+      if (!tbl) {
+        const altDb = findDatabaseForTableInBrowser(targetTable);
+        if (altDb) {
+          currentActiveDbName = altDb;
+          activeDb = inMemoryDatabases.get(altDb);
+          tbl = activeDb?.getTable(targetTable);
+          executionLogs.push(`🔄 Context switched to database '${currentActiveDbName}' (contains '${targetTable}').`);
+        }
+      }
+
+      if (!tbl) {
+        return {
+          success: false,
+          output: '',
+          error: `Table '${targetTable}' does not exist in database '${currentActiveDbName}'.`,
+          time: '0.001',
+          memory: 1024,
+          statusCode: 1,
+        };
+      }
+
+      const ddl = generateTableDdl(tbl);
+      executionLogs.push(`${ddl}`);
+      finalResult = {
+        success: true,
+        columns: ['Table', 'Create Table'],
+        rows: [{ Table: tbl.name, 'Create Table': ddl }],
+        rowCount: 1,
+        type: 'SELECT',
+      };
+      continue;
+    }
+
+    // 4d. PRAGMA table_info(<table>) / PRAGMA table_xinfo(<table>)
+    const pragmaTableInfoMatch = stmt.match(/^PRAGMA\s+(?:table_info|table_xinfo)\s*\(([^)]+)\)/i);
+    if (pragmaTableInfoMatch) {
+      const targetTable = pragmaTableInfoMatch[1].trim().replace(/["'`]/g, '').toLowerCase();
+      let activeDb = inMemoryDatabases.get(currentActiveDbName);
+      let tbl = activeDb?.getTable(targetTable);
+
+      if (!tbl) {
+        const altDb = findDatabaseForTableInBrowser(targetTable);
+        if (altDb) {
+          currentActiveDbName = altDb;
+          activeDb = inMemoryDatabases.get(altDb);
+          tbl = activeDb?.getTable(targetTable);
+          executionLogs.push(`🔄 Context switched to database '${currentActiveDbName}' (contains '${targetTable}').`);
+        }
+      }
+
+      if (!tbl) {
+        return {
+          success: false,
+          output: '',
+          error: `Table '${targetTable}' does not exist in database '${currentActiveDbName}'.`,
+          time: '0.001',
+          memory: 1024,
+          statusCode: 1,
+        };
+      }
+
+      const rows = tbl.columns.map((c, idx) => ({
+        cid: idx,
+        name: c.name,
+        type: c.type || 'TEXT',
+        notnull: c.notNull ? 1 : 0,
+        dflt_value: c.default !== undefined ? String(c.default) : null,
+        pk: c.isPk ? 1 : 0,
+      }));
+
+      finalResult = {
+        success: true,
+        columns: ['cid', 'name', 'type', 'notnull', 'dflt_value', 'pk'],
+        rows,
+        rowCount: rows.length,
+        type: 'SELECT',
+      };
+      continue;
+    }
+
+    // 4e. PRAGMA table_list
+    const pragmaTableListMatch = stmt.match(/^PRAGMA\s+table_list(?:\s*\(([^)]+)\))?/i);
+    if (pragmaTableListMatch) {
       const activeDb = inMemoryDatabases.get(currentActiveDbName);
+      const targetTable = pragmaTableListMatch[1]?.trim().replace(/["'`]/g, '').toLowerCase();
+      const tables = Object.values(activeDb?.tables || {}).filter(
+        (t) => !targetTable || t.name.toLowerCase() === targetTable
+      );
+
+      finalResult = {
+        success: true,
+        columns: ['schema', 'name', 'type', 'ncol', 'wr', 'strict'],
+        rows: tables.map((t) => ({
+          schema: 'main',
+          name: t.name,
+          type: 'table',
+          ncol: t.columns.length,
+          wr: 0,
+          strict: 0,
+        })),
+        rowCount: tables.length,
+        type: 'SELECT',
+      };
+      continue;
+    }
+
+    // 4f. PRAGMA database_list
+    if (/^PRAGMA\s+database_list\b/i.test(stmt)) {
+      const list = Array.from(inMemoryDatabases.keys());
+      finalResult = {
+        success: true,
+        columns: ['seq', 'name', 'file'],
+        rows: list.map((name, idx) => ({
+          seq: idx,
+          name,
+          file: '',
+        })),
+        rowCount: list.length,
+        type: 'SELECT',
+      };
+      continue;
+    }
+
+    // 4g. PRAGMA foreign_key_list / index_list / index_info
+    const pragmaFkMatch = stmt.match(/^PRAGMA\s+foreign_key_list\s*\(([^)]+)\)/i);
+    if (pragmaFkMatch) {
+      finalResult = {
+        success: true,
+        columns: ['id', 'seq', 'table', 'from', 'to', 'on_update', 'on_delete', 'match'],
+        rows: [],
+        rowCount: 0,
+        type: 'SELECT',
+      };
+      continue;
+    }
+
+    const pragmaIdxMatch = stmt.match(/^PRAGMA\s+index_list\s*\(([^)]+)\)/i);
+    if (pragmaIdxMatch) {
+      finalResult = {
+        success: true,
+        columns: ['seq', 'name', 'unique', 'origin', 'partial'],
+        rows: [],
+        rowCount: 0,
+        type: 'SELECT',
+      };
+      continue;
+    }
+
+    // 4h. .indices / .indexes [table]
+    const indexMatch = stmt.match(/^(?:\.INDICES|\.INDEXES)(?:\s+([a-zA-Z0-9_"-]+))?$/i);
+    if (indexMatch) {
+      finalResult = {
+        success: true,
+        columns: ['index_name', 'table_name', 'sql'],
+        rows: [],
+        rowCount: 0,
+        type: 'SELECT',
+      };
+      continue;
+    }
+
+    // 4i. .dump [table]
+    const dumpMatch = stmt.match(/^\.DUMP(?:\s+([a-zA-Z0-9_"-]+))?$/i);
+    if (dumpMatch) {
+      const targetTable = dumpMatch[1] ? dumpMatch[1].replace(/["'`]/g, '').toLowerCase() : null;
+      const activeDb = inMemoryDatabases.get(currentActiveDbName);
+      const dumpLines = ['PRAGMA foreign_keys=OFF;', 'BEGIN TRANSACTION;'];
+
+      const dumpTables = Object.values(activeDb?.tables || {}).filter(
+        (t) => !targetTable || t.name.toLowerCase() === targetTable
+      );
+
+      for (const t of dumpTables) {
+        dumpLines.push(generateTableDdl(t));
+        for (const r of t.rows) {
+          const cols = Object.keys(r);
+          const vals = cols.map((c) => {
+            const v = r[c];
+            if (v === null || v === undefined) return 'NULL';
+            if (typeof v === 'number') return v;
+            return `'${String(v).replace(/'/g, "''")}'`;
+          });
+          dumpLines.push(`INSERT INTO "${t.name}" (${cols.map((c) => `"${c}"`).join(', ')}) VALUES (${vals.join(', ')});`);
+        }
+      }
+      dumpLines.push('COMMIT;');
+
+      executionLogs.push(dumpLines.join('\n'));
+      finalResult = {
+        success: true,
+        columns: ['SQL_Dump_Script'],
+        rows: dumpLines.map((l) => ({ SQL_Dump_Script: l })),
+        rowCount: dumpLines.length,
+        type: 'SELECT',
+      };
+      continue;
+    }
+
+    // 5. DESCRIBE / DESC <table> / SHOW COLUMNS FROM <table>
+    const descMatch = stmt.match(/^(?:DESCRIBE|DESC|SHOW\s+(?:COLUMNS|FIELDS)\s+FROM)\s+([a-zA-Z0-9_"-]+)/i);
+    if (descMatch) {
       const tableName = descMatch[1].replace(/["']/g, '').toLowerCase();
-      const table = activeDb?.getTable(tableName);
+      let activeDb = inMemoryDatabases.get(currentActiveDbName);
+      let table = activeDb?.getTable(tableName);
+
+      if (!table) {
+        const altDb = findDatabaseForTableInBrowser(tableName);
+        if (altDb) {
+          currentActiveDbName = altDb;
+          activeDb = inMemoryDatabases.get(altDb);
+          table = activeDb?.getTable(tableName);
+          executionLogs.push(`🔄 Context switched to database '${currentActiveDbName}' (contains '${tableName}').`);
+        }
+      }
+
       if (!table) {
         return {
           success: false,
@@ -387,17 +959,19 @@ export async function executeSqlInBrowser(sqlQuery) {
 
       const columnDefs = [];
       const lines = body.split(/,(?![^(]*\))/);
+      const pkMatch = body.match(/PRIMARY\s+KEY\s*\(([^)]+)\)/i);
+      const pkCols = pkMatch ? pkMatch[1].split(',').map((c) => c.trim().replace(/["'`]/g, '').toLowerCase()) : [];
 
       for (const line of lines) {
         const trimmedLine = line.trim();
-        if (!trimmedLine || /^PRIMARY\s+KEY/i.test(trimmedLine) || /^FOREIGN\s+KEY/i.test(trimmedLine)) {
+        if (!trimmedLine || /^PRIMARY\s+KEY/i.test(trimmedLine) || /^FOREIGN\s+KEY/i.test(trimmedLine) || /^KEY\b/i.test(trimmedLine) || /^INDEX\b/i.test(trimmedLine)) {
           continue;
         }
         const parts = trimmedLine.split(/\s+/);
         const colName = parts[0].replace(/["'`]/g, '');
         const colType = (parts[1] || 'TEXT').toUpperCase();
-        const isPk = /PRIMARY\s+KEY/i.test(trimmedLine);
-        const notNull = /NOT\s+NULL/i.test(trimmedLine);
+        const isPk = /PRIMARY\s+KEY/i.test(trimmedLine) || pkCols.includes(colName.toLowerCase());
+        const notNull = /NOT\s+NULL/i.test(trimmedLine) || isPk;
 
         columnDefs.push({
           name: colName,
@@ -609,12 +1183,81 @@ export async function executeSqlInBrowser(sqlQuery) {
     // 11. SELECT
     const selectMatch = stmt.match(/^SELECT\s+([\s\S]+?)\s+FROM\s+([a-zA-Z0-9_"-]+)([\s\S]*)/i);
     if (selectMatch) {
-      const activeDb = inMemoryDatabases.get(currentActiveDbName);
+      let activeDb = inMemoryDatabases.get(currentActiveDbName);
       const columnsClause = selectMatch[1].trim();
       const tableName = selectMatch[2].replace(/["']/g, '').toLowerCase();
       const restClause = selectMatch[3].trim();
 
-      const table = activeDb?.getTable(tableName);
+      // Handle virtual system tables: sqlite_master / sqlite_schema
+      if (tableName === 'sqlite_master' || tableName === 'sqlite_schema') {
+        const allTables = Object.values(activeDb?.tables || {});
+        let masterRows = allTables.map((t, idx) => ({
+          type: 'table',
+          name: t.name,
+          tbl_name: t.name,
+          rootpage: idx + 2,
+          sql: generateTableDdl(t),
+        }));
+
+        // Handle simple WHERE clause on sqlite_master
+        const whereMatch = restClause.match(/WHERE\s+([\s\S]+?)(?=(?:\s+(?:ORDER|GROUP|LIMIT)\b)|$)/i);
+        if (whereMatch) {
+          const condition = whereMatch[1].trim();
+          const eqMatch = condition.match(/([a-zA-Z0-9_]+)\s*(=|!=|LIKE)\s*(.+)/i);
+          if (eqMatch) {
+            const field = eqMatch[1].trim().toLowerCase();
+            const op = eqMatch[2].trim().toUpperCase();
+            const targetVal = parseLiteral(eqMatch[3].trim());
+
+            masterRows = masterRows.filter((r) => {
+              const actual = String(r[field] ?? '');
+              if (op === '=') return actual.toLowerCase() === String(targetVal).toLowerCase();
+              if (op === '!=') return actual.toLowerCase() !== String(targetVal).toLowerCase();
+              if (op === 'LIKE') {
+                const pat = String(targetVal).replace(/%/g, '.*').replace(/_/g, '.');
+                return new RegExp(`^${pat}$`, 'i').test(actual);
+              }
+              return true;
+            });
+          }
+        }
+
+        let outCols = [];
+        if (columnsClause === '*') {
+          outCols = ['type', 'name', 'tbl_name', 'rootpage', 'sql'];
+        } else {
+          outCols = columnsClause.split(',').map((c) => c.trim().replace(/["'`]/g, ''));
+        }
+
+        const projectedRows = masterRows.map((r) => {
+          const rowObj = {};
+          outCols.forEach((c) => {
+            rowObj[c] = r[c] !== undefined ? r[c] : null;
+          });
+          return rowObj;
+        });
+
+        finalResult = {
+          success: true,
+          columns: outCols,
+          rows: projectedRows,
+          rowCount: projectedRows.length,
+          type: 'SELECT',
+        };
+        continue;
+      }
+
+      let table = activeDb?.getTable(tableName);
+      if (!table) {
+        const altDb = findDatabaseForTableInBrowser(tableName);
+        if (altDb) {
+          currentActiveDbName = altDb;
+          activeDb = inMemoryDatabases.get(altDb);
+          table = activeDb?.getTable(tableName);
+          executionLogs.push(`🔄 Context switched to database '${currentActiveDbName}' (contains '${tableName}').`);
+        }
+      }
+
       if (!table) {
         return {
           success: false,

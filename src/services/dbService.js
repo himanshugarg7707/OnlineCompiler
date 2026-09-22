@@ -2,6 +2,8 @@
 // Seamlessly communicates with the backend SQL engine when available,
 // with 100% offline & client-side in-browser fallback for Vercel/serverless environments.
 
+import { executeSqlInBrowser, generateTableDdl } from './sqlRunner';
+
 const STORAGE_PREFIX = 'codeforge_sql_db_';
 const DB_LIST_KEY = 'codeforge_sql_dbs_list';
 
@@ -121,6 +123,14 @@ export async function executeSql(database, query) {
     if (res.ok) return res.json();
   } catch {}
 
+  // Fallback to in-browser execution
+  try {
+    const browserRes = await executeSqlInBrowser(query);
+    if (browserRes && browserRes.sqlData) {
+      return browserRes.sqlData;
+    }
+  } catch {}
+
   return { success: false, error: 'Database query execution failed' };
 }
 
@@ -132,25 +142,45 @@ export async function getDatabaseSchema(database) {
     const res = await fetch(`/api/db/schema/${encodeURIComponent(database)}`);
     if (res.ok) {
       const data = await res.json();
-      if (data.schema) return data.schema;
+      if (data.schema && data.schema.tables) {
+        // Ensure sql DDL is present on every table
+        data.schema.tables = data.schema.tables.map((t) => ({
+          ...t,
+          sql: t.sql || generateTableDdl(t),
+        }));
+        return data.schema;
+      }
     }
   } catch {}
 
   // Fallback to in-browser schema introspection
   const dbData = getLocalDbData(database);
   if (dbData && dbData.tables) {
-    const tables = Object.entries(dbData.tables).map(([tblName, tbl]) => ({
-      tableName: tbl.name || tblName,
-      type: 'table',
-      rowCount: tbl.rows ? tbl.rows.length : 0,
-      columns: (tbl.columns || []).map((c) => ({
-        name: c.name,
-        type: c.type || 'TEXT',
-        isPrimaryKey: Boolean(c.isPk),
-        notNull: Boolean(c.notNull),
-        defaultValue: c.default || null,
-      })),
-    }));
+    const tables = Object.entries(dbData.tables).map(([tblName, tbl]) => {
+      const tableObj = {
+        name: tbl.name || tblName,
+        columns: (tbl.columns || []).map((c) => ({
+          name: c.name,
+          type: c.type || 'TEXT',
+          isPk: Boolean(c.isPk),
+          notNull: Boolean(c.notNull),
+          default: c.default !== undefined ? c.default : null,
+        })),
+      };
+      return {
+        tableName: tbl.name || tblName,
+        type: 'table',
+        rowCount: tbl.rows ? tbl.rows.length : 0,
+        sql: tbl.sql || generateTableDdl(tableObj),
+        columns: (tbl.columns || []).map((c) => ({
+          name: c.name,
+          type: c.type || 'TEXT',
+          isPrimaryKey: Boolean(c.isPk),
+          notNull: Boolean(c.notNull),
+          defaultValue: c.default || null,
+        })),
+      };
+    });
     return { database, tables };
   }
 

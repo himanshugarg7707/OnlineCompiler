@@ -99,6 +99,13 @@ export async function executePythonInBrowser(code, stdin = '') {
 import sys
 import io
 import base64
+import warnings
+
+# Filter out library deprecation/future warnings (e.g. Pandas Pyarrow dependency deprecation)
+warnings.filterwarnings('ignore', category=DeprecationWarning)
+warnings.filterwarnings('ignore', category=FutureWarning)
+warnings.filterwarnings('ignore', message='.*Pyarrow.*')
+warnings.filterwarnings('ignore', message='.*pyarrow.*')
 
 class _CapturingStdout(io.StringIO):
     pass
@@ -147,12 +154,66 @@ try:
 except Exception:
     pass
 
+# Pre-seed sample SQLite database files if sqlite3 is used
+if "sqlite3" in ${JSON.stringify(code)}:
+    try:
+        import os
+        import sqlite3
+        os.makedirs("server/data/databases", exist_ok=True)
+        if not os.path.exists("server/data/databases/ecommerce_db.sqlite"):
+            for _p in ["server/data/databases/ecommerce_db.sqlite", "ecommerce_db.sqlite"]:
+                _conn = sqlite3.connect(_p)
+                _cur = _conn.cursor()
+                _cur.executescript("""
+                    CREATE TABLE IF NOT EXISTS customers (
+                        customer_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        name TEXT NOT NULL,
+                        email TEXT UNIQUE NOT NULL,
+                        country TEXT DEFAULT 'USA'
+                    );
+                    CREATE TABLE IF NOT EXISTS products (
+                        product_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        name TEXT NOT NULL,
+                        category TEXT NOT NULL,
+                        price REAL NOT NULL,
+                        stock INTEGER NOT NULL
+                    );
+                    INSERT OR IGNORE INTO customers (customer_id, name, email, country) VALUES
+                        (1, 'Alice Johnson', 'alice@example.com', 'USA'),
+                        (2, 'Bob Smith', 'bob@example.com', 'Canada'),
+                        (3, 'Charlie Brown', 'charlie@example.com', 'UK');
+                    INSERT OR IGNORE INTO products (product_id, name, category, price, stock) VALUES
+                        (1, 'Quantum Laptop Pro', 'Electronics', 1299.99, 45),
+                        (2, 'Wireless Headphones', 'Electronics', 249.50, 120);
+                """)
+                _conn.commit()
+                _conn.close()
+        if not os.path.exists("server/data/databases/main_db.sqlite"):
+            for _p in ["server/data/databases/main_db.sqlite", "main_db.sqlite"]:
+                _conn = sqlite3.connect(_p)
+                _cur = _conn.cursor()
+                _cur.executescript("""
+                    CREATE TABLE IF NOT EXISTS users (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        username TEXT NOT NULL,
+                        role TEXT DEFAULT 'developer',
+                        rating INTEGER DEFAULT 1500
+                    );
+                    INSERT OR IGNORE INTO users (id, username, role, rating) VALUES
+                        (1, 'admin', 'system_admin', 2500),
+                        (2, 'himanshu', 'lead_architect', 2200);
+                """)
+                _conn.commit()
+                _conn.close()
+    except Exception:
+        pass
+
 _user_code = ${JSON.stringify(code)}
 _exec_error = None
 
 try:
     exec(_user_code, globals())
-except Exception as e:
+except BaseException as e:
     import traceback
     _exec_error = traceback.format_exc()
 
@@ -190,7 +251,8 @@ sys.stdin = _old_stdin
 
 {
     "stdout": _captured_stdout.getvalue(),
-    "stderr": _exec_error or _captured_stderr.getvalue(),
+    "stderr": _captured_stderr.getvalue(),
+    "error": _exec_error,
     "plots": _captured_figures,
     "html": _captured_html
 }
@@ -204,16 +266,19 @@ sys.stdin = _old_stdin
 
     const stdout = result.stdout || '';
     const stderr = result.stderr || '';
+    const error = result.error || null;
     const plots = Array.isArray(result.plots) ? result.plots : [];
     const html = result.html || '';
 
-    const hasError = Boolean(stderr && stderr.trim());
+    // Only unhandled exceptions are fatal execution failures; warnings are not fatal
+    const hasError = Boolean(error && error.trim());
 
     if (hasError) {
       return {
         success: false,
         output: stdout,
-        error: stderr,
+        error: error,
+        warning: stderr || null,
         plots,
         html,
         time: elapsed,
@@ -225,6 +290,7 @@ sys.stdin = _old_stdin
     return {
       success: true,
       output: stdout || (plots.length > 0 || html ? '' : '(Program finished with no output)'),
+      warning: stderr || null,
       error: null,
       plots,
       html,

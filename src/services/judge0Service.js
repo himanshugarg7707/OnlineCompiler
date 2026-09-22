@@ -8,6 +8,7 @@ import { getConfig } from './configService';
 import { executePythonInBrowser } from './pythonRunner';
 import { executeJavaScriptInBrowser } from './jsRunner';
 import { executeSqlInBrowser } from './sqlRunner';
+import { prepareJavaCellCode, prepareCppCellCode, prepareCCellCode } from './languageDetector';
 
 // ─── Godbolt Compiler Explorer — Primary Execution Engine ─────────────────────
 // Free, no API key, actively maintained, supports execution with stdin
@@ -91,21 +92,57 @@ export async function executeCode(code, languageId, stdin = '', allFiles = []) {
     }
   }
 
-  // 1b. Jupyter Notebook (.ipynb) — Run all code cells in Pyodide
+  // 1b. Jupyter Notebook (.ipynb) — Run all code cells in appropriate engine
   if (languageId === 710) {
     try {
       let combinedCode = code;
+      let notebookLanguage = 'python';
       try {
         const parsed = JSON.parse(code);
-        if (parsed && Array.isArray(parsed.cells)) {
-          combinedCode = parsed.cells
-            .filter((c) => c.cell_type === 'code')
-            .map((c) => (Array.isArray(c.source) ? c.source.join('') : c.source || ''))
-            .join('\n\n# --- Next Cell ---\n');
+        if (parsed) {
+          const specLang =
+            parsed.metadata?.kernelspec?.language ||
+            parsed.metadata?.language_info?.name ||
+            parsed.cells?.find((c) => c.metadata?.language)?.metadata?.language;
+          if (specLang) {
+            notebookLanguage = String(specLang).toLowerCase();
+          }
+          if (Array.isArray(parsed.cells)) {
+            combinedCode = parsed.cells
+              .filter((c) => c.cell_type === 'code')
+              .map((c) => (Array.isArray(c.source) ? c.source.join('') : c.source || ''))
+              .join('\n\n');
+          }
         }
       } catch (err) {
         // Raw code fallback
       }
+
+      // Check code content fallback if language wasn't explicit
+      if (notebookLanguage === 'python') {
+        if (/\bclass\s+\w+|\bSystem\.(out|err)\.|\bScanner\b|\bimport\s+java\.|\bpublic\s+(class|static|void)/.test(combinedCode)) {
+          notebookLanguage = 'java';
+        } else if (/\b#include\s*<iostream>|\bcout\s*<<|\bcin\s*>>|\busing\s+namespace\s+std/.test(combinedCode)) {
+          notebookLanguage = 'cpp';
+        }
+      }
+
+      if (notebookLanguage === 'java') {
+        const prepared = prepareJavaCellCode(combinedCode);
+        return await executeCode(prepared, 62, stdin);
+      }
+      if (notebookLanguage === 'cpp' || notebookLanguage === 'c++') {
+        const prepared = prepareCppCellCode(combinedCode);
+        return await executeCode(prepared, 54, stdin);
+      }
+      if (notebookLanguage === 'javascript' || notebookLanguage === 'js') {
+        return await executeJavaScriptInBrowser(combinedCode, stdin);
+      }
+      if (notebookLanguage === 'c') {
+        const prepared = prepareCCellCode(combinedCode);
+        return await executeCode(prepared, 50, stdin);
+      }
+
       return await executePythonInBrowser(combinedCode, stdin);
     } catch (e) {
       return {
