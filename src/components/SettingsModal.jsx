@@ -25,6 +25,7 @@ import {
   UserPlus,
   Sliders,
   Paintbrush,
+  Archive,
 } from 'lucide-react';
 import { getSupportedLanguages, getLanguageById } from '../services/languageDetector';
 import { resetConfig } from '../services/configService';
@@ -897,7 +898,37 @@ export default function SettingsModal() {
             </div>
           </div>
 
-          {/* ─── 5. PERMANENT MEMORY, COOKIES & STORAGE ─── */}
+          {/* ─── 5. NOTEBOOK EXPORT FORMAT ─── */}
+          <div className="settings-section">
+            <div className="section-title-wrapper">
+              <Archive size={16} className="section-icon-accent" />
+              <h3 className="section-title">Interactive Notebooks Export</h3>
+            </div>
+            <p className="section-desc">
+              Choose how code cells are extracted when you export a notebook (Java, Python, C++, JS).
+            </p>
+
+            <div className="setting-row">
+              <div className="setting-info">
+                <span className="setting-label">Split Cells into Language Folder (.zip)</span>
+                <span className="setting-desc">
+                  Splits notebook cells into sequential standalone files (e.g. <code>java/java_01.java</code>, <code>java_02.java</code>) packaged inside a ZIP folder.
+                </span>
+              </div>
+              <label className="toggle-switch">
+                <input
+                  type="checkbox"
+                  checked={localConfig.notebookExportMode !== 'ipynb'}
+                  onChange={(e) =>
+                    handleConfigChange('notebookExportMode', e.target.checked ? 'split' : 'ipynb')
+                  }
+                />
+                <span className="toggle-slider" />
+              </label>
+            </div>
+          </div>
+
+          {/* ─── 6. PERMANENT MEMORY, COOKIES & STORAGE ─── */}
           <div className="settings-section">
             <div className="section-title-wrapper">
               <HardDrive size={16} className="section-icon-accent" />

@@ -264,6 +264,141 @@
   margin: 0 4px;
 }
 
+/* ─── Export Split Button Group & Dropdown ─── */
+.jupyter-export-group {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.jupyter-export-main-btn {
+  border-top-right-radius: 0 !important;
+  border-bottom-right-radius: 0 !important;
+  border-right: none !important;
+}
+
+.jupyter-export-arrow-btn {
+  border-top-left-radius: 0 !important;
+  border-bottom-left-radius: 0 !important;
+  padding: 5px 6px !important;
+}
+
+.jupyter-export-arrow-btn.active {
+  background: rgba(0, 212, 255, 0.2) !important;
+  border-color: var(--accent-cyan, #00d4ff) !important;
+  color: var(--accent-cyan, #00d4ff) !important;
+}
+
+.jupyter-export-dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 270px;
+  background: var(--bg-surface, #161b22);
+  border: 1px solid var(--border-primary, rgba(48, 54, 61, 0.9));
+  border-radius: var(--radius-md, 8px);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.05);
+  padding: 6px;
+  z-index: 1200;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  animation: jupyterFadeIn 0.15s ease-out;
+}
+
+.jupyter-export-dropdown-header {
+  padding: 6px 8px 4px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted, #8b949e);
+}
+
+.jupyter-export-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text-primary, #e6edf3);
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  width: 100%;
+}
+
+.jupyter-export-option:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.jupyter-export-option.recommended {
+  background: rgba(0, 212, 255, 0.05);
+  border-color: rgba(0, 212, 255, 0.15);
+}
+
+.jupyter-export-option.recommended:hover {
+  background: rgba(0, 212, 255, 0.12);
+  border-color: rgba(0, 212, 255, 0.3);
+}
+
+.jupyter-export-option .option-icon {
+  font-size: 16px;
+  line-height: 1.2;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.jupyter-export-option .option-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+}
+
+.jupyter-export-option .option-title {
+  font-size: 12px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-primary, #e6edf3);
+}
+
+.jupyter-export-option .option-badge {
+  font-size: 9px;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: rgba(0, 212, 255, 0.2);
+  color: var(--accent-cyan, #00d4ff);
+  text-transform: uppercase;
+}
+
+.jupyter-export-option .option-desc {
+  font-size: 11px;
+  color: var(--text-muted, #8b949e);
+  line-height: 1.35;
+}
+
+.jupyter-export-option .option-desc code {
+  background: rgba(255, 255, 255, 0.08);
+  padding: 1px 4px;
+  border-radius: 3px;
+  color: var(--accent-cyan, #00d4ff);
+  font-family: var(--font-code, monospace);
+  font-size: 10px;
+}
+
+.jupyter-export-dropdown-divider {
+  height: 1px;
+  background: var(--border-primary, rgba(48, 54, 61, 0.6));
+  margin: 2px 4px;
+}
+
 /* ─── Raw JSON Mode ──────────────────────────────────────────────────────── */
 .jupyter-raw-json {
   display: flex;

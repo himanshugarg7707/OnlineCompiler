@@ -1119,6 +1119,59 @@ export default function SettingsPage() {
               </div>
 
               <div className="settings-cards-grid">
+                {/* Notebook Multi-File Split Export Card */}
+                <div className="feature-card highlight-card">
+                  <div className="card-top">
+                    <div className="card-icon-wrap" style={{ background: 'linear-gradient(135deg, #f59e0b, #ec4899)' }}>
+                      <Archive size={20} />
+                    </div>
+                    <div>
+                      <div className="card-badge-row" style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                        <h3 style={{ margin: 0 }}>Notebook Multi-File Split Export</h3>
+                        <span style={{ fontSize: '10px', fontWeight: '700', padding: '2px 6px', background: 'rgba(245, 158, 11, 0.2)', color: '#fbbf24', borderRadius: '4px', textTransform: 'uppercase' }}>New Feature</span>
+                      </div>
+                      <p>
+                        When exporting interactive notebooks (Java, Python, C++, JS), automatically split each cell into indexed files (e.g. <code>java/java_01.java</code>, <code>java_02.java</code>) packaged inside a clean language folder.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="card-action-bar" style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                    <button
+                      className={`btn-cyber-primary ${localConfig.notebookExportMode !== 'ipynb' ? 'active-select' : ''}`}
+                      style={{
+                        background: localConfig.notebookExportMode !== 'ipynb' ? 'rgba(0, 212, 255, 0.2)' : 'transparent',
+                        borderColor: localConfig.notebookExportMode !== 'ipynb' ? 'var(--accent-cyan)' : 'var(--border-primary)',
+                      }}
+                      onClick={() => {
+                        const updated = { ...localConfig, notebookExportMode: 'split' };
+                        setLocalConfig(updated);
+                        handleUpdateConfig(updated);
+                        showToast('Notebook export set to Split Files (.zip) 📦');
+                      }}
+                    >
+                      <Archive size={14} />
+                      <span>Split into Language Folder (.zip)</span>
+                    </button>
+
+                    <button
+                      className={`btn-cyber-secondary ${localConfig.notebookExportMode === 'ipynb' ? 'active-select' : ''}`}
+                      style={{
+                        background: localConfig.notebookExportMode === 'ipynb' ? 'rgba(0, 212, 255, 0.2)' : 'transparent',
+                        borderColor: localConfig.notebookExportMode === 'ipynb' ? 'var(--accent-cyan)' : 'var(--border-primary)',
+                      }}
+                      onClick={() => {
+                        const updated = { ...localConfig, notebookExportMode: 'ipynb' };
+                        setLocalConfig(updated);
+                        handleUpdateConfig(updated);
+                        showToast('Notebook export set to Single File (.ipynb) 🪐');
+                      }}
+                    >
+                      <FileCode size={14} />
+                      <span>Single File (.ipynb)</span>
+                    </button>
+                  </div>
+                </div>
+
                 {/* Export Entire Workspace as ZIP Card */}
                 <div className="feature-card highlight-card">
                   <div className="card-top">

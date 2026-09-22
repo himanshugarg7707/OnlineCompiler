@@ -31,6 +31,11 @@ const DEFAULT_CONFIG = {
   sidebarOpen: false,
   explorerOpen: true,
   explorerWidth: 240,
+
+  // Notebook Export settings ('split' | 'ipynb')
+  // 'split': splits cells into java/java_01.java, python/python_01.py, etc. in a ZIP archive
+  // 'ipynb': exports standard single .ipynb notebook
+  notebookExportMode: 'split',
 };
 
 /**

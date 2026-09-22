@@ -45,6 +45,10 @@ import {
   prepareCppCellCode,
   prepareCCellCode,
 } from '../services/languageDetector';
+import {
+  exportNotebookAsSplitZip,
+  extractNotebookToWorkspace,
+} from '../services/notebookExportService';
 import './JupyterNotebookEditor.css';
 
 export const KERNEL_CONFIGS = {
@@ -177,7 +181,7 @@ export default function JupyterNotebookEditor({ file, onContentChange }) {
   const [hoveredDividerIndex, setHoveredDividerIndex] = useState(null);
   const isInternalUpdateRef = useRef(false);
 
-  const { state: appState, handleRenameFile, showToast } = useApp();
+  const { state: appState, handleRenameFile, handleAddFile, showToast } = useApp();
   const config = appState?.config;
   const activeMonacoTheme = getMonacoThemeName(config?.theme);
 
@@ -709,8 +713,24 @@ export default function JupyterNotebookEditor({ file, onContentChange }) {
     setIsRunningAll(false);
   };
 
-  // Export notebook file (.ipynb)
-  const exportNotebook = () => {
+  // Dropdown state for export options
+  const [exportDropdownOpen, setExportDropdownOpen] = useState(false);
+  const exportDropdownRef = useRef(null);
+
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (exportDropdownRef.current && !exportDropdownRef.current.contains(event.target)) {
+        setExportDropdownOpen(false);
+      }
+    }
+    if (exportDropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [exportDropdownOpen]);
+
+  // Export raw .ipynb Jupyter file
+  const exportRawIpynb = () => {
     const jsonString = JSON.stringify(notebook, null, 2);
     const blob = new Blob([jsonString], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -721,6 +741,41 @@ export default function JupyterNotebookEditor({ file, onContentChange }) {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
+    showToast?.('Exported as Jupyter Notebook (.ipynb) 🪐');
+  };
+
+  // Export as multi-file split folder packaged in a ZIP (e.g. java/java_01.java, etc.)
+  const handleExportSplitZip = async () => {
+    try {
+      showToast?.('Packaging notebook into language folder ZIP... 📦');
+      const baseName = file?.name || `${notebookLanguage}_notebook`;
+      const res = await exportNotebookAsSplitZip(notebook, baseName, notebookLanguage);
+      showToast?.(`Downloaded ${res.zipFileName} (${res.fileCount} files) 🚀`);
+    } catch (err) {
+      console.error('Failed to export split ZIP:', err);
+      showToast?.(`Export failed: ${err.message}`);
+    }
+  };
+
+  // Extract split files directly into current browser workspace
+  const handleExtractToWorkspace = () => {
+    try {
+      const res = extractNotebookToWorkspace(notebook, notebookLanguage, handleAddFile, showToast);
+      setExportDropdownOpen(false);
+    } catch (err) {
+      console.error('Failed to extract to workspace:', err);
+      showToast?.(`Extract failed: ${err.message}`);
+    }
+  };
+
+  // Default export action respecting settings (config.notebookExportMode)
+  const exportNotebook = () => {
+    const mode = config?.notebookExportMode || 'split';
+    if (mode === 'ipynb') {
+      exportRawIpynb();
+    } else {
+      handleExportSplitZip();
+    }
   };
 
   // Quick Markdown formatting actions
@@ -830,14 +885,89 @@ export default function JupyterNotebookEditor({ file, onContentChange }) {
 
           <div className="jupyter-action-divider" />
 
-          <button
-            className="jupyter-btn-action"
-            onClick={exportNotebook}
-            title="Export as standard .ipynb Jupyter notebook file"
-          >
-            <Download size={14} />
-            <span>Export</span>
-          </button>
+          {/* Export Button Group with Dropdown */}
+          <div className="jupyter-export-group" ref={exportDropdownRef}>
+            <button
+              className="jupyter-btn-action jupyter-export-main-btn"
+              onClick={exportNotebook}
+              title={
+                config?.notebookExportMode === 'ipynb'
+                  ? 'Export as .ipynb Jupyter notebook'
+                  : `Export and split into ${notebookLanguage} folder (.zip)`
+              }
+            >
+              <Download size={14} />
+              <span>Export {config?.notebookExportMode === 'ipynb' ? '(.ipynb)' : '(.zip)'}</span>
+            </button>
+            <button
+              className={`jupyter-btn-action jupyter-export-arrow-btn ${exportDropdownOpen ? 'active' : ''}`}
+              onClick={() => setExportDropdownOpen(!exportDropdownOpen)}
+              title="Choose export format or workspace extract"
+              aria-expanded={exportDropdownOpen}
+            >
+              <ChevronDown size={13} />
+            </button>
+
+            {exportDropdownOpen && (
+              <div className="jupyter-export-dropdown">
+                <div className="jupyter-export-dropdown-header">
+                  <span>Export Notebook Options</span>
+                </div>
+                <button
+                  className={`jupyter-export-option ${config?.notebookExportMode !== 'ipynb' ? 'recommended' : ''}`}
+                  onClick={() => {
+                    handleExportSplitZip();
+                    setExportDropdownOpen(false);
+                  }}
+                >
+                  <div className="option-icon">📦</div>
+                  <div className="option-text">
+                    <div className="option-title">
+                      Split into Folder (.zip)
+                      {config?.notebookExportMode !== 'ipynb' && <span className="option-badge">Default</span>}
+                    </div>
+                    <div className="option-desc">
+                      Splits cells into <code>{notebookLanguage}/{notebookLanguage}_01</code>, <code>02</code> etc.
+                    </div>
+                  </div>
+                </button>
+
+                <button
+                  className={`jupyter-export-option ${config?.notebookExportMode === 'ipynb' ? 'recommended' : ''}`}
+                  onClick={() => {
+                    exportRawIpynb();
+                    setExportDropdownOpen(false);
+                  }}
+                >
+                  <div className="option-icon">🪐</div>
+                  <div className="option-text">
+                    <div className="option-title">
+                      Single .ipynb File
+                      {config?.notebookExportMode === 'ipynb' && <span className="option-badge">Default</span>}
+                    </div>
+                    <div className="option-desc">
+                      Standard JSON Jupyter notebook file
+                    </div>
+                  </div>
+                </button>
+
+                <div className="jupyter-export-dropdown-divider" />
+
+                <button
+                  className="jupyter-export-option"
+                  onClick={handleExtractToWorkspace}
+                >
+                  <div className="option-icon">📁</div>
+                  <div className="option-text">
+                    <div className="option-title">Extract to Workspace</div>
+                    <div className="option-desc">
+                      Creates <code>{notebookLanguage}/</code> files directly in browser file tree
+                    </div>
+                  </div>
+                </button>
+              </div>
+            )}
+          </div>
 
           <button
             className={`jupyter-btn-action ${viewRawJson ? 'active' : ''}`}
