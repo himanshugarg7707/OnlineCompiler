@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useApp } from '../context/AppContext';
 import {
   Copy,
@@ -9,7 +10,6 @@ import {
   Play,
   Trash2,
   Lock,
-  ExternalLink,
 } from 'lucide-react';
 import LanguageIcon from './LanguageIcon';
 import './FileOptionsMenu.css';
@@ -18,6 +18,8 @@ export default function FileOptionsMenu({
   file,
   folderPath = '',
   position,
+  rect,
+  isTab = false,
   onClose,
   onStartRename,
   onProtect,
@@ -59,13 +61,33 @@ export default function FileOptionsMenu({
   const baseName = file.name.includes('/') ? file.name.split('/').pop() : file.name;
   const duplicatePreviewName = baseName.replace(/\.([^.]+)$/, '_copy.$1');
 
-  // Constrain position to viewport
-  const menuWidth = 260;
+  // Compute smart position cleanly clear of sidebar / dividers
+  const menuWidth = 275;
   const menuHeight = 360;
-  const safeX = Math.max(10, Math.min(position?.x || 150, window.innerWidth - menuWidth - 16));
-  const safeY = Math.max(10, Math.min(position?.y || 150, window.innerHeight - menuHeight - 16));
 
-  return (
+  let safeX = 150;
+  let safeY = 150;
+
+  if (rect) {
+    if (isTab) {
+      // Anchored below tab
+      safeX = Math.max(12, Math.min(rect.left, window.innerWidth - menuWidth - 16));
+      safeY = Math.max(12, Math.min(rect.bottom + 6, window.innerHeight - menuHeight - 16));
+    } else {
+      // Anchored to the right of file explorer item (in editor canvas)
+      if (rect.right + menuWidth + 16 <= window.innerWidth) {
+        safeX = rect.right + 10;
+      } else {
+        safeX = Math.max(12, rect.left - menuWidth - 10);
+      }
+      safeY = Math.max(12, Math.min(rect.top - 6, window.innerHeight - menuHeight - 16));
+    }
+  } else if (position) {
+    safeX = Math.max(12, Math.min(position.x + 8, window.innerWidth - menuWidth - 16));
+    safeY = Math.max(12, Math.min(position.y, window.innerHeight - menuHeight - 16));
+  }
+
+  const menuContent = (
     <div
       className="file-options-menu-backdrop"
       onClick={onClose}
@@ -233,4 +255,8 @@ export default function FileOptionsMenu({
       </div>
     </div>
   );
+
+  return typeof document !== 'undefined'
+    ? createPortal(menuContent, document.body)
+    : menuContent;
 }

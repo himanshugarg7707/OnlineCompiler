@@ -170,9 +170,13 @@ export default function FileExplorer() {
       return;
     }
 
+    const targetElement = e.currentTarget;
+    const rect = targetElement?.getBoundingClientRect ? targetElement.getBoundingClientRect() : null;
+
     setFileOptionsMenu({
       file,
       folderPath,
+      rect,
       position: { x: e.clientX, y: e.clientY },
     });
   };
@@ -999,6 +1003,7 @@ export default function FileExplorer() {
           file={fileOptionsMenu.file}
           folderPath={fileOptionsMenu.folderPath}
           position={fileOptionsMenu.position}
+          rect={fileOptionsMenu.rect}
           onClose={() => setFileOptionsMenu(null)}
           onStartRename={(f) => startEditFile(null, f)}
           onProtect={(f) => {

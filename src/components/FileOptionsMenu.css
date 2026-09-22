@@ -2,32 +2,34 @@
 .file-options-menu-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 9999;
+  z-index: 99999;
   background: transparent;
   user-select: none;
 }
 
 .file-options-menu {
   position: fixed;
-  width: 260px;
+  width: 275px;
+  min-width: 275px;
   background: var(--bg-surface, #161b22);
   border: 1px solid var(--border-primary, rgba(48, 54, 61, 0.95));
-  border-radius: var(--radius-md, 8px);
-  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.06);
+  border-radius: 10px;
+  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(255, 255, 255, 0.08), 0 0 24px rgba(0, 212, 255, 0.06);
   padding: 6px;
   display: flex;
   flex-direction: column;
   gap: 2px;
-  z-index: 10000;
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  animation: fileOptionsFadeIn 0.14s ease-out;
+  z-index: 100000;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  animation: fileOptionsFadeIn 0.14s cubic-bezier(0.16, 1, 0.3, 1);
+  transform-origin: top left;
 }
 
 @keyframes fileOptionsFadeIn {
   from {
     opacity: 0;
-    transform: scale(0.96) translateY(-4px);
+    transform: scale(0.95) translateY(-6px);
   }
   to {
     opacity: 1;
@@ -39,7 +41,7 @@
 .file-options-header {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 9px;
   padding: 8px 10px 6px;
 }
 
@@ -47,10 +49,11 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
-  border-radius: 4px;
-  background: rgba(255, 255, 255, 0.05);
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   flex-shrink: 0;
 }
 
@@ -62,7 +65,7 @@
 }
 
 .file-options-filename {
-  font-size: 12px;
+  font-size: 12.5px;
   font-weight: 600;
   color: var(--text-primary, #e6edf3);
   overflow: hidden;
@@ -71,16 +74,16 @@
 }
 
 .file-options-meta {
-  font-size: 10px;
+  font-size: 10.5px;
   color: var(--text-muted, #8b949e);
 }
 
 .file-options-group-label {
-  padding: 4px 8px 2px;
-  font-size: 10px;
+  padding: 5px 8px 3px;
+  font-size: 9.5px;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.6px;
   color: var(--text-muted, #8b949e);
 }
 
@@ -110,17 +113,17 @@
 .file-options-btn:hover {
   background: rgba(255, 255, 255, 0.08);
   color: var(--text-primary, #ffffff);
-  border-color: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.08);
 }
 
 .file-options-btn.highlight {
-  background: rgba(0, 212, 255, 0.08);
-  border-color: rgba(0, 212, 255, 0.2);
+  background: rgba(0, 212, 255, 0.09);
+  border-color: rgba(0, 212, 255, 0.22);
   color: var(--accent-cyan, #00d4ff);
 }
 
 .file-options-btn.highlight:hover {
-  background: rgba(0, 212, 255, 0.16);
+  background: rgba(0, 212, 255, 0.18);
   border-color: var(--accent-cyan, #00d4ff);
   color: #fff;
 }
@@ -130,7 +133,7 @@
 }
 
 .file-options-btn.danger:hover {
-  background: rgba(248, 81, 73, 0.14);
+  background: rgba(248, 81, 73, 0.15);
   border-color: rgba(248, 81, 73, 0.35);
   color: #ff7b72;
 }
@@ -159,13 +162,14 @@
 .file-options-btn .btn-title {
   font-size: 12px;
   font-weight: 500;
-  line-height: 1.2;
+  line-height: 1.25;
+  white-space: nowrap;
 }
 
 .file-options-btn .btn-subtext {
   font-size: 10px;
   color: var(--text-muted, #8b949e);
-  line-height: 1.2;
+  line-height: 1.25;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -173,7 +177,7 @@
 
 .file-options-btn .btn-subtext code {
   background: rgba(255, 255, 255, 0.08);
-  padding: 1px 3px;
+  padding: 1px 4px;
   border-radius: 3px;
   color: var(--accent-cyan, #00d4ff);
   font-size: 9.5px;

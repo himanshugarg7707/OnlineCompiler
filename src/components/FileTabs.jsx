@@ -62,8 +62,13 @@ export default function FileTabs() {
       return;
     }
 
+    const targetElement = e.currentTarget;
+    const rect = targetElement?.getBoundingClientRect ? targetElement.getBoundingClientRect() : null;
+
     setTabOptionsMenu({
       file,
+      rect,
+      isTab: true,
       position: { x: e.clientX, y: e.clientY },
     });
   };
@@ -343,6 +348,8 @@ export default function FileTabs() {
         <FileOptionsMenu
           file={tabOptionsMenu.file}
           position={tabOptionsMenu.position}
+          rect={tabOptionsMenu.rect}
+          isTab={true}
           onClose={() => setTabOptionsMenu(null)}
           onStartRename={(f) => handleStartEdit(null, f)}
           onProtect={(f) => {
