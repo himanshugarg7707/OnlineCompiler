@@ -14,6 +14,7 @@ import {
 import { isItemProtected, isItemUnlocked } from '../services/securityService';
 import PasswordPromptModal from './PasswordPromptModal';
 import LanguageIcon from './LanguageIcon';
+import { setupFileDragDataTransfer } from '../services/languageDetector';
 import './FileTabs.css';
 
 export default function FileTabs() {
@@ -135,8 +136,13 @@ export default function FileTabs() {
   const handleDragStart = (e, fileId) => {
     if (editingId) return;
     setDraggedTabId(fileId);
-    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.effectAllowed = 'copyMove';
     e.dataTransfer.setData('text/plain', fileId);
+
+    const file = files.find((f) => f.id === fileId);
+    if (file) {
+      setupFileDragDataTransfer(e, file);
+    }
   };
 
   const handleDragOver = (e, fileId) => {

@@ -518,8 +518,15 @@
   width: calc(100% - 8px);
   box-sizing: border-box;
   min-width: 0;
-  overflow: hidden;
   border: 1px solid transparent;
+}
+
+.explorer-file-item[draggable="true"] {
+  cursor: grab;
+}
+
+.explorer-file-item[draggable="true"]:active {
+  cursor: grabbing;
 }
 
 /* Nested files inside a folder: snug padding right next to the tree guide line */

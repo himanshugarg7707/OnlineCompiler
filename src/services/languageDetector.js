@@ -1389,3 +1389,63 @@ dependencies:
   return '';
 }
 
+/**
+ * Resolve MIME type for a given filename
+ */
+export function getFileMimeType(filename) {
+  const lower = (filename || '').toLowerCase();
+  if (lower.endsWith('.ipynb')) return 'application/x-ipynb+json';
+  if (lower.endsWith('.java')) return 'text/x-java-source';
+  if (lower.endsWith('.py')) return 'text/x-python';
+  if (lower.endsWith('.cpp') || lower.endsWith('.cc') || lower.endsWith('.h')) return 'text/x-c++src';
+  if (lower.endsWith('.c')) return 'text/x-csrc';
+  if (lower.endsWith('.js') || lower.endsWith('.mjs')) return 'application/javascript';
+  if (lower.endsWith('.ts')) return 'application/typescript';
+  if (lower.endsWith('.html')) return 'text/html';
+  if (lower.endsWith('.css')) return 'text/css';
+  if (lower.endsWith('.json')) return 'application/json';
+  if (lower.endsWith('.md')) return 'text/markdown';
+  if (lower.endsWith('.sql')) return 'application/sql';
+  return 'text/plain';
+}
+
+/**
+ * Configure drag-and-drop data transfer for dragging files directly out of the browser
+ * into local Desktop or Finder/File Explorer in Chromium (DownloadURL hook)
+ */
+export function setupFileDragDataTransfer(e, file) {
+  if (!file || !e?.dataTransfer) return;
+
+  const cleanName = (file.name || 'file.txt').split('/').pop();
+  const mime = getFileMimeType(cleanName);
+  const content = file.content || '';
+
+  e.dataTransfer.effectAllowed = 'copyMove';
+
+  // 1. Text payload
+  try {
+    e.dataTransfer.setData('text/plain', content);
+  } catch {}
+
+  // 2. Internal JSON metadata
+  try {
+    e.dataTransfer.setData(
+      'application/json',
+      JSON.stringify({ fileId: file.id, name: file.name })
+    );
+  } catch {}
+
+  // 3. Chromium proprietary DownloadURL format: mime_type:file_name:url
+  // Allows dragging directly to Desktop, Downloads, or any OS folder in Chrome / Edge / Brave
+  try {
+    const base64 = btoa(unescape(encodeURIComponent(content)));
+    const dataUri = `data:${mime};charset=utf-8;base64,${base64}`;
+    e.dataTransfer.setData('DownloadURL', `${mime}:${cleanName}:${dataUri}`);
+  } catch {
+    try {
+      const dataUri = `data:${mime};charset=utf-8,${encodeURIComponent(content)}`;
+      e.dataTransfer.setData('DownloadURL', `${mime}:${cleanName}:${dataUri}`);
+    } catch {}
+  }
+}
+

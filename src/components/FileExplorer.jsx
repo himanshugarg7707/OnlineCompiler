@@ -26,7 +26,7 @@ import { sanitizeFilenameIdentifier } from '../services/identifierSanitizer';
 import PasswordPromptModal from './PasswordPromptModal';
 import { JupyterIcon, AnacondaIcon } from './LanguageIcon';
 import LanguageIcon from './LanguageIcon';
-import { createDefaultNotebookJson } from '../services/languageDetector';
+import { createDefaultNotebookJson, setupFileDragDataTransfer } from '../services/languageDetector';
 import './FileExplorer.css';
 
 /**
@@ -535,7 +535,9 @@ export default function FileExplorer() {
                   className={`explorer-file-item child ${isActive ? 'active' : ''}`}
                   onClick={() => handleFileClick(file, folderPath)}
                   onDoubleClick={(e) => startEditFile(e, file)}
-                  title={`${file.name} — ${file.language?.name || 'File'}`}
+                  draggable={!isEditingFile}
+                  onDragStart={(e) => setupFileDragDataTransfer(e, file)}
+                  title={`${file.name} — ${file.language?.name || 'File'} (Drag to desktop to save)`}
                 >
                   <span className="file-icon">
                     <LanguageIcon language={file.language} filename={file.name} size={15} />
@@ -817,7 +819,9 @@ export default function FileExplorer() {
               className={`explorer-file-item root ${isActive ? 'active' : ''}`}
               onClick={() => handleFileClick(file)}
               onDoubleClick={(e) => startEditFile(e, file)}
-              title={`${file.name} — ${file.language?.name || 'File'}`}
+              draggable={!isEditing}
+              onDragStart={(e) => setupFileDragDataTransfer(e, file)}
+              title={`${file.name} — ${file.language?.name || 'File'} (Drag to desktop to save)`}
             >
               <span className="file-icon">
                 <LanguageIcon language={file.language} filename={file.name} size={15} />
