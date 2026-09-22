@@ -1019,6 +1019,84 @@ export function AppProvider({ children }) {
     showToast(`Deleted folder ${folderName}/ 🗑️`);
   }, [showToast]);
 
+  // Duplicate file: creates a cloned copy in the workspace
+  const handleDuplicateFile = useCallback((fileOrId) => {
+    const file = typeof fileOrId === 'object' && fileOrId !== null
+      ? fileOrId
+      : state.files.find((f) => f.id === fileOrId);
+    if (!file) return;
+
+    const originalName = file.name;
+    const lastSlash = originalName.lastIndexOf('/');
+    const folderPart = lastSlash !== -1 ? originalName.substring(0, lastSlash) : null;
+    const baseNameWithExt = lastSlash !== -1 ? originalName.substring(lastSlash + 1) : originalName;
+
+    const dotIdx = baseNameWithExt.lastIndexOf('.');
+    let base = baseNameWithExt;
+    let ext = '';
+    if (dotIdx !== -1) {
+      base = baseNameWithExt.substring(0, dotIdx);
+      ext = baseNameWithExt.substring(dotIdx);
+    }
+
+    const duplicateBaseName = `${base}_copy${ext}`;
+    const duplicateFullName = folderPart ? `${folderPart}/${duplicateBaseName}` : duplicateBaseName;
+
+    let contentToCopy = file.content || '';
+    if (file.language?.id === 62 || duplicateFullName.endsWith('.java')) {
+      contentToCopy = syncJavaClassWithFilename(contentToCopy, duplicateFullName);
+    }
+
+    dispatch({
+      type: 'ADD_FILE',
+      payload: {
+        name: duplicateFullName,
+        content: contentToCopy,
+        folder: folderPart,
+        openTab: true,
+      },
+    });
+
+    showToast(`Duplicated "${baseNameWithExt}" as copy 📋`);
+  }, [state.files, showToast]);
+
+  // Copy file content directly to clipboard
+  const handleCopyFileContent = useCallback((fileOrId) => {
+    const file = typeof fileOrId === 'object' && fileOrId !== null
+      ? fileOrId
+      : state.files.find((f) => f.id === fileOrId);
+    if (!file) return;
+
+    const text = file.content || '';
+    if (navigator?.clipboard?.writeText) {
+      navigator.clipboard.writeText(text)
+        .then(() => showToast(`Copied code of "${file.name}" to clipboard! 📄`))
+        .catch(() => showToast(`Copied code of "${file.name}" to clipboard! 📄`));
+    } else {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      showToast(`Copied code of "${file.name}" to clipboard! 📄`);
+    }
+  }, [state.files, showToast]);
+
+  // Copy file path to clipboard
+  const handleCopyFilePath = useCallback((fileOrId) => {
+    const file = typeof fileOrId === 'object' && fileOrId !== null
+      ? fileOrId
+      : state.files.find((f) => f.id === fileOrId);
+    if (!file) return;
+
+    if (navigator?.clipboard?.writeText) {
+      navigator.clipboard.writeText(file.name)
+        .then(() => showToast(`Copied path "${file.name}"! 🔗`))
+        .catch(() => showToast(`Copied path "${file.name}"! 🔗`));
+    }
+  }, [state.files, showToast]);
+
   // Save single active file: Opens "Save As" modal for custom name & target selection
   const handleSaveActiveFile = useCallback((targetFile = null) => {
     const fileToSave = targetFile || state.files.find((f) => f.id === state.activeFileId) || state.files[0];
@@ -1689,6 +1767,9 @@ export function AppProvider({ children }) {
     handleRenameFolder,
     handleDeleteFolder,
     handleSaveActiveFile,
+    handleDuplicateFile,
+    handleCopyFileContent,
+    handleCopyFilePath,
     handleDownloadWorkspace,
     handleLoadWorkspaceState,
     handleRunCode,

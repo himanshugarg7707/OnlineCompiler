@@ -15,6 +15,7 @@ import { isItemProtected, isItemUnlocked } from '../services/securityService';
 import PasswordPromptModal from './PasswordPromptModal';
 import LanguageIcon from './LanguageIcon';
 import { setupFileDragDataTransfer } from '../services/languageDetector';
+import FileOptionsMenu from './FileOptionsMenu';
 import './FileTabs.css';
 
 export default function FileTabs() {
@@ -44,6 +45,28 @@ export default function FileTabs() {
   const [editingId, setEditingId] = useState(null);
   const [editingName, setEditingName] = useState('');
   const [tabSecurityTarget, setTabSecurityTarget] = useState(null);
+  const [tabOptionsMenu, setTabOptionsMenu] = useState(null);
+
+  const handleOpenTabOptions = (e, file) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    const isLocked = isItemProtected(file.name) && !isItemUnlocked(file.name);
+    if (isLocked) {
+      setTabSecurityTarget({
+        key: file.name,
+        name: file.name,
+        isFolder: false,
+        fileId: file.id,
+      });
+      return;
+    }
+
+    setTabOptionsMenu({
+      file,
+      position: { x: e.clientX, y: e.clientY },
+    });
+  };
 
   // Drag and drop tab reordering state
   const [draggedTabId, setDraggedTabId] = useState(null);
@@ -189,14 +212,15 @@ export default function FileTabs() {
               key={file.id}
               className={`file-tab ${isActive ? 'active' : ''} ${isDragging ? 'is-dragging' : ''} ${isDragOver ? 'is-drag-over' : ''}`}
               onClick={() => handleTabClick(file)}
-              onDoubleClick={(e) => handleStartEdit(e, file)}
+              onDoubleClick={(e) => handleOpenTabOptions(e, file)}
+              onContextMenu={(e) => handleOpenTabOptions(e, file)}
               draggable={!isEditing}
               onDragStart={(e) => handleDragStart(e, file.id)}
               onDragOver={(e) => handleDragOver(e, file.id)}
               onDragLeave={(e) => handleDragLeave(e, file.id)}
               onDrop={(e) => handleDrop(e, file.id)}
               onDragEnd={handleDragEnd}
-              title={`${file.name} (${file.language.name}) — Drag to reorder, double click to rename`}
+              title={`${file.name} (${file.language.name}) — Double-click or right-click for options`}
             >
               <span className="file-tab-icon">
                 <LanguageIcon language={file.language} filename={file.name} size={14} />
@@ -313,6 +337,24 @@ export default function FileTabs() {
         onClose={() => setTabSecurityTarget(null)}
         onUnlocked={handleUnlockedTab}
       />
+
+      {/* Multiple Options File Menu (on Double-Click and Right-Click) */}
+      {tabOptionsMenu && (
+        <FileOptionsMenu
+          file={tabOptionsMenu.file}
+          position={tabOptionsMenu.position}
+          onClose={() => setTabOptionsMenu(null)}
+          onStartRename={(f) => handleStartEdit(null, f)}
+          onProtect={(f) => {
+            setTabSecurityTarget({
+              key: f.name,
+              name: f.name,
+              isFolder: false,
+              fileId: f.id,
+            });
+          }}
+        />
+      )}
     </div>
   );
 }

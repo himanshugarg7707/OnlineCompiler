@@ -20,6 +20,7 @@ import {
   FileText,
   AlertCircle,
   FolderInput,
+  Copy,
 } from 'lucide-react';
 import { isItemProtected, isItemUnlocked } from '../services/securityService';
 import { sanitizeFilenameIdentifier } from '../services/identifierSanitizer';
@@ -27,6 +28,7 @@ import PasswordPromptModal from './PasswordPromptModal';
 import { JupyterIcon, AnacondaIcon } from './LanguageIcon';
 import LanguageIcon from './LanguageIcon';
 import { createDefaultNotebookJson, setupFileDragDataTransfer } from '../services/languageDetector';
+import FileOptionsMenu from './FileOptionsMenu';
 import './FileExplorer.css';
 
 /**
@@ -118,6 +120,7 @@ export default function FileExplorer() {
     handleCreateSequentialFile,
     handleCloseFile,
     handleRenameFile,
+    handleDuplicateFile,
     handleAddFolder,
     handleRenameFolder,
     handleDeleteFolder,
@@ -147,6 +150,32 @@ export default function FileExplorer() {
 
   // Password Security Prompt Modal State
   const [securityTarget, setSecurityTarget] = useState(null);
+
+  // File Options Multi-Menu (Double-Click & Right-Click)
+  const [fileOptionsMenu, setFileOptionsMenu] = useState(null);
+
+  const handleOpenFileOptions = (e, file, folderPath = '') => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    const isLocked = isItemProtected(file.name, folderPath) && !isItemUnlocked(file.name, folderPath);
+    if (isLocked) {
+      const key = isItemProtected(file.name) ? file.name : folderPath;
+      setSecurityTarget({
+        key,
+        name: file.name,
+        isFolder: false,
+        fileId: file.id,
+      });
+      return;
+    }
+
+    setFileOptionsMenu({
+      file,
+      folderPath,
+      position: { x: e.clientX, y: e.clientY },
+    });
+  };
 
   // Notebook Dropdown Menu State
   const [showNotebookDropdown, setShowNotebookDropdown] = useState(false);
@@ -534,10 +563,11 @@ export default function FileExplorer() {
                   key={file.id}
                   className={`explorer-file-item child ${isActive ? 'active' : ''}`}
                   onClick={() => handleFileClick(file, folderPath)}
-                  onDoubleClick={(e) => startEditFile(e, file)}
+                  onDoubleClick={(e) => handleOpenFileOptions(e, file, folderPath)}
+                  onContextMenu={(e) => handleOpenFileOptions(e, file, folderPath)}
                   draggable={!isEditingFile}
                   onDragStart={(e) => setupFileDragDataTransfer(e, file)}
-                  title={`${file.name} — ${file.language?.name || 'File'} (Drag to desktop to save)`}
+                  title={`${file.name} — ${file.language?.name || 'File'} (Double-click or right-click for options)`}
                 >
                   <span className="file-icon">
                     <LanguageIcon language={file.language} filename={file.name} size={15} />
@@ -575,6 +605,17 @@ export default function FileExplorer() {
 
                   {!isEditingFile && (
                     <div className="file-item-actions">
+                      <button
+                        className="file-action-btn"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDuplicateFile(file);
+                        }}
+                        title={`Duplicate & make copy of ${baseName}`}
+                      >
+                        <Copy size={11} />
+                      </button>
+
                       <button
                         className="file-action-btn"
                         onClick={(e) => {
@@ -818,10 +859,11 @@ export default function FileExplorer() {
               key={file.id}
               className={`explorer-file-item root ${isActive ? 'active' : ''}`}
               onClick={() => handleFileClick(file)}
-              onDoubleClick={(e) => startEditFile(e, file)}
+              onDoubleClick={(e) => handleOpenFileOptions(e, file, '')}
+              onContextMenu={(e) => handleOpenFileOptions(e, file, '')}
               draggable={!isEditing}
               onDragStart={(e) => setupFileDragDataTransfer(e, file)}
-              title={`${file.name} — ${file.language?.name || 'File'} (Drag to desktop to save)`}
+              title={`${file.name} — ${file.language?.name || 'File'} (Double-click or right-click for options)`}
             >
               <span className="file-icon">
                 <LanguageIcon language={file.language} filename={file.name} size={15} />
@@ -859,6 +901,17 @@ export default function FileExplorer() {
 
               {!isEditing && (
                 <div className="file-item-actions">
+                  <button
+                    className="file-action-btn"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDuplicateFile(file);
+                    }}
+                    title={`Duplicate & make copy of ${file.name}`}
+                  >
+                    <Copy size={11} />
+                  </button>
+
                   <button
                     className="file-action-btn"
                     onClick={(e) => {
@@ -939,6 +992,25 @@ export default function FileExplorer() {
         onClose={() => setSecurityTarget(null)}
         onUnlocked={handleUnlockedItem}
       />
+
+      {/* Multiple Options File Menu (on Double-Click and Right-Click) */}
+      {fileOptionsMenu && (
+        <FileOptionsMenu
+          file={fileOptionsMenu.file}
+          folderPath={fileOptionsMenu.folderPath}
+          position={fileOptionsMenu.position}
+          onClose={() => setFileOptionsMenu(null)}
+          onStartRename={(f) => startEditFile(null, f)}
+          onProtect={(f) => {
+            setSecurityTarget({
+              key: f.name,
+              name: f.name,
+              isFolder: false,
+              fileId: f.id,
+            });
+          }}
+        />
+      )}
     </aside>
   );
 }
