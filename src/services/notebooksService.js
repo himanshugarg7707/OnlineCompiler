@@ -6,9 +6,101 @@ export const NOTEBOOKS_STORAGE_KEY = 'fullcode_subject_notebooks_v1';
 
 export const PRESET_SUBJECTS = [
   {
+    id: 'python-ai',
+    name: 'Python & Data Science / AI',
+    shortCode: 'CS201',
+    icon: '🐍',
+    badgeColor: '#10b981',
+    languageName: 'Python 3',
+    languageId: 71,
+    monacoLanguage: 'python',
+    extension: 'py',
+    description: 'Data manipulation, algorithmic scripting, list comprehensions, statistics, and machine learning logic.',
+    tags: ['List Comprehensions', 'NumPy Logic', 'Algorithms', 'File Parsing', 'Data Structures'],
+    files: [
+      {
+        name: 'main.py',
+        language: { id: 71, name: 'Python 3', monacoLanguage: 'python', extension: 'py' },
+        content: `# ============================================================================
+# Subject: Python & Data Science / AI
+# Topic: Algorithmic Logic & Data Pipeline
+# ============================================================================
+from collections import defaultdict, Counter
+import math
+
+def calculate_statistics(numbers):
+    """Computes mean, variance, and standard deviation."""
+    n = len(numbers)
+    if n == 0:
+        return {}
+    mean = sum(numbers) / n
+    variance = sum((x - mean) ** 2 for x in numbers) / n
+    std_dev = math.sqrt(variance)
+    return {
+        "count": n,
+        "mean": round(mean, 2),
+        "variance": round(variance, 2),
+        "std_dev": round(std_dev, 2)
+    }
+
+def main():
+    print("🐍 Python Data Science Notebook Active!")
+    print("-" * 45)
+
+    scores = [88, 92, 79, 95, 84, 91, 76, 89, 94, 100]
+    stats = calculate_statistics(scores)
+    
+    print("📈 Dataset Statistics:")
+    for key, val in stats.items():
+        print(f"   {key.capitalize()}: {val}")
+
+    # Frequency analysis
+    text = "data science machine learning python algorithms artificial intelligence python data"
+    word_freq = Counter(text.split())
+    print("\\n📊 Top Keywords:")
+    for word, count in word_freq.most_common(3):
+        print(f"   • '{word}': {count} occurrences")
+
+if __name__ == "__main__":
+    main()
+`,
+      },
+      {
+        name: 'Notes.md',
+        language: { id: 99, name: 'Markdown', monacoLanguage: 'markdown', extension: 'md' },
+        content: `# 🐍 Python & Data Science / AI — Subject Notebook
+
+## 📌 Course Syllabus
+- [x] Python Data Types, Slicing & Comprehensions
+- [x] Built-in Data Structures: List, Tuple, Dict, Set, Defaultdict, Counter
+- [ ] Lambda functions, map(), filter(), reduce()
+- [ ] Matrix & Vector operations (NumPy arrays)
+- [ ] Data Cleaning & GroupBy operations (Pandas)
+- [ ] Supervised Learning (Linear Regression, Classification)
+
+---
+
+## 💡 Quick Syntax Cheatsheet
+\`\`\`python
+# Fast list comprehension
+evens = [x for x in range(20) if x % 2 == 0]
+
+# Dict comprehension
+squared_map = {x: x**2 for x in range(1, 6)}
+
+# Defaultdict pattern for graphs
+from collections import defaultdict
+graph = defaultdict(list)
+graph['A'].append('B')
+\`\`\`
+`,
+      },
+    ],
+  },
+  {
     id: 'java-oop',
     name: 'Java & Object-Oriented Programming',
-    shortCode: 'CS201',
+    shortCode: 'CS202',
     icon: '☕',
     badgeColor: '#f59e0b',
     languageName: 'Java',
@@ -135,98 +227,6 @@ public class Main {
 - \`String\` is immutable; use \`StringBuilder\` for fast concatenation in loops.
 - \`==\` compares memory references; always use \`.equals()\` for object/String value comparison.
 - In HashMap, always override both \`hashCode()\` and \`equals()\` when using custom objects as keys.
-`,
-      },
-    ],
-  },
-  {
-    id: 'python-ai',
-    name: 'Python & Data Science / AI',
-    shortCode: 'CS202',
-    icon: '🐍',
-    badgeColor: '#10b981',
-    languageName: 'Python 3',
-    languageId: 71,
-    monacoLanguage: 'python',
-    extension: 'py',
-    description: 'Data manipulation, algorithmic scripting, list comprehensions, statistics, and machine learning logic.',
-    tags: ['List Comprehensions', 'NumPy Logic', 'Algorithms', 'File Parsing', 'Data Structures'],
-    files: [
-      {
-        name: 'main.py',
-        language: { id: 71, name: 'Python 3', monacoLanguage: 'python', extension: 'py' },
-        content: `# ============================================================================
-# Subject: Python & Data Science / AI
-# Topic: Algorithmic Logic & Data Pipeline
-# ============================================================================
-from collections import defaultdict, Counter
-import math
-
-def calculate_statistics(numbers):
-    """Computes mean, variance, and standard deviation."""
-    n = len(numbers)
-    if n == 0:
-        return {}
-    mean = sum(numbers) / n
-    variance = sum((x - mean) ** 2 for x in numbers) / n
-    std_dev = math.sqrt(variance)
-    return {
-        "count": n,
-        "mean": round(mean, 2),
-        "variance": round(variance, 2),
-        "std_dev": round(std_dev, 2)
-    }
-
-def main():
-    print("🐍 Python Data Science Notebook Active!")
-    print("-" * 45)
-
-    scores = [88, 92, 79, 95, 84, 91, 76, 89, 94, 100]
-    stats = calculate_statistics(scores)
-    
-    print("📈 Dataset Statistics:")
-    for key, val in stats.items():
-        print(f"   {key.capitalize()}: {val}")
-
-    # Frequency analysis
-    text = "data science machine learning python algorithms artificial intelligence python data"
-    word_freq = Counter(text.split())
-    print("\\n📊 Top Keywords:")
-    for word, count in word_freq.most_common(3):
-        print(f"   • '{word}': {count} occurrences")
-
-if __name__ == "__main__":
-    main()
-`,
-      },
-      {
-        name: 'Notes.md',
-        language: { id: 99, name: 'Markdown', monacoLanguage: 'markdown', extension: 'md' },
-        content: `# 🐍 Python & Data Science / AI — Subject Notebook
-
-## 📌 Course Syllabus
-- [x] Python Data Types, Slicing & Comprehensions
-- [x] Built-in Data Structures: List, Tuple, Dict, Set, Defaultdict, Counter
-- [ ] Lambda functions, map(), filter(), reduce()
-- [ ] Matrix & Vector operations (NumPy arrays)
-- [ ] Data Cleaning & GroupBy operations (Pandas)
-- [ ] Supervised Learning (Linear Regression, Classification)
-
----
-
-## 💡 Quick Syntax Cheatsheet
-\`\`\`python
-# Fast list comprehension
-evens = [x for x in range(20) if x % 2 == 0]
-
-# Dict comprehension
-squared_map = {x: x**2 for x in range(1, 6)}
-
-# Defaultdict pattern for graphs
-from collections import defaultdict
-graph = defaultdict(list)
-graph['A'].append('B')
-\`\`\`
 `,
       },
     ],

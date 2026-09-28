@@ -76,11 +76,11 @@ export default function AuthModal({ isOpen, onClose }) {
     }
 
     handleSwitchUser(res.user);
-    showToast(`Welcome, ${res.user.username}! Let's pick your subject notebook 📚`);
+    showToast(`Welcome back, ${res.user.username}! Happy coding 🚀`);
     onClose();
     setUsername('');
     setPassword('');
-    dispatch({ type: 'NAVIGATE_PAGE', payload: 'notebook-setup' });
+    dispatch({ type: 'NAVIGATE_PAGE', payload: 'editor' });
   };
 
   const handleQuickSwitch = (targetUser) => {

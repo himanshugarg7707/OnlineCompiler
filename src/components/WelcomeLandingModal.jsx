@@ -92,15 +92,16 @@ export default function WelcomeLandingModal({ isOpen, onClose }) {
     } catch {}
 
     handleSwitchUser(res.user);
-    showToast(`Welcome aboard, ${res.user.username}! Let's pick your subject notebook 📚`);
+    showToast(`Welcome aboard, ${res.user.username}! Happy coding 🚀`);
     onClose();
-    dispatch({ type: 'NAVIGATE_PAGE', payload: 'notebook-setup' });
+    dispatch({ type: 'NAVIGATE_PAGE', payload: 'editor' });
   };
 
   const handleSkipToEditor = () => {
     try {
       localStorage.setItem('fullcode_visited_landing_v1', 'true');
     } catch {}
+    dispatch({ type: 'NAVIGATE_PAGE', payload: 'editor' });
     onClose();
   };
 
@@ -224,7 +225,13 @@ export default function WelcomeLandingModal({ isOpen, onClose }) {
                   </div>
                 </div>
 
-                <button className="btn-enter-editor-primary" onClick={onClose}>
+                <button
+                  className="btn-enter-editor-primary"
+                  onClick={() => {
+                    dispatch({ type: 'NAVIGATE_PAGE', payload: 'editor' });
+                    onClose();
+                  }}
+                >
                   <span>Continue to Code Editor</span>
                   <ArrowRight size={15} />
                 </button>

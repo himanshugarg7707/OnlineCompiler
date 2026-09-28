@@ -159,20 +159,30 @@ const initialActiveFile = initialFiles.find((f) => f.id === initialActiveId) || 
 const initialConfig = getConfig();
 const initialUser = getActiveUser();
 
-// Check if user should be shown the welcome landing on first arrival
+// Check if user should be shown the optional login landing on arrival
 const shouldShowWelcomeOnArrival = (() => {
   try {
-    const hasVisited = localStorage.getItem('fullcode_visited_landing_v1') === 'true' || Boolean(initialUser);
-    return !hasVisited && !sharedPayload;
+    if (sharedPayload) return false;
+    // Default page is optional login when user is not authenticated
+    return !initialUser;
   } catch {
     return false;
   }
 })();
 
+// Prevent stale notebook-setup hash from landing unauthenticated user on Java
+if (typeof window !== 'undefined' && !initialUser) {
+  if (window.location.hash.includes('notebooks') || window.location.hash.includes('setup')) {
+    try {
+      window.location.hash = '#/';
+    } catch {}
+  }
+}
+
 const initialState = {
   activeUser: initialUser,
   authModalOpen: false,
-  welcomeModalOpen: false,
+  welcomeModalOpen: shouldShowWelcomeOnArrival,
   workspacesModalOpen: false,
   sharedNotice: initialSharedNotice,
   files: initialFiles,
@@ -226,7 +236,7 @@ const initialState = {
   activeTerminalTab: 'output',
   currentPage: typeof window !== 'undefined' && window.location.hash.includes('settings')
     ? 'settings'
-    : typeof window !== 'undefined' && (window.location.hash.includes('notebooks') || window.location.hash.includes('setup'))
+    : typeof window !== 'undefined' && initialUser && (window.location.hash.includes('notebooks') || window.location.hash.includes('setup'))
       ? 'notebook-setup'
       : typeof window !== 'undefined' && (window.location.hash.includes('exam') || window.location.hash.includes('test'))
         ? 'exam'
@@ -914,6 +924,10 @@ export function AppProvider({ children }) {
       else if (hash.includes('exam') || hash.includes('test')) page = 'exam';
       else if (hash.includes('templates')) page = 'templates';
       else if (hash.includes('practice')) page = 'practice';
+      else if (hash.includes('login') || hash.includes('auth') || hash.includes('welcome') || hash.includes('signup')) {
+        dispatch({ type: 'SET_WELCOME_MODAL', payload: true });
+        page = 'editor';
+      }
       dispatch({ type: 'NAVIGATE_PAGE', payload: page });
     };
     window.addEventListener('hashchange', onHashChange);
