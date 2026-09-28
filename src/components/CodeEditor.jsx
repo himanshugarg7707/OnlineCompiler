@@ -67,6 +67,12 @@ function defineCustomMonacoTheme(monaco, palette) {
 export default function CodeEditor() {
   const { state, handleCodeChange, handleSaveActiveFile, handleCreateSequentialFile, setFileErrors, dispatch } = useApp();
   const { code, detectedLanguage, errorLine, config } = state;
+  const activeFile = state.files?.find((f) => f.id === state.activeFileId) || state.files?.[0];
+  const isNotebook = Boolean(
+    activeFile?.name?.endsWith('.ipynb') ||
+    detectedLanguage?.monacoLanguage === 'ipynb' ||
+    detectedLanguage?.id === 710
+  );
   const [liveErrors, setLiveErrors] = useState([]);
   const editorRef = useRef(null);
   const monacoRef = useRef(null);
@@ -567,13 +573,6 @@ export default function CodeEditor() {
     window.addEventListener('editor-jump-to-line', handleJump);
     return () => window.removeEventListener('editor-jump-to-line', handleJump);
   }, []);
-
-  const activeFile = state.files.find((f) => f.id === state.activeFileId) || state.files[0];
-  const isNotebook = Boolean(
-    activeFile?.name?.endsWith('.ipynb') ||
-    detectedLanguage?.monacoLanguage === 'ipynb' ||
-    detectedLanguage?.id === 710
-  );
 
   return (
     <div className="code-editor-container">
