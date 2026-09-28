@@ -346,15 +346,7 @@ export default function Header() {
               if (navigator.clipboard?.writeText) {
                 navigator.clipboard.writeText(payload);
               }
-              showToast('Code & Error synced for ChatGPT! (⌥ + Space) 🤖');
-
-              // Launch macOS ChatGPT app if available
-              const a = document.createElement('a');
-              a.href = 'chatgpt://';
-              a.style.display = 'none';
-              document.body.appendChild(a);
-              a.click();
-              document.body.removeChild(a);
+              showToast('Code & Error synced for ChatGPT! (Press ⌘V in floating bar) 🤖');
             } catch (err) {
               console.warn('Sync error:', err);
             }
