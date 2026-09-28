@@ -16,7 +16,11 @@ import {
   FileCheck2,
   BookOpenCheck,
   ChevronDown,
+  ChevronUp,
+  Maximize2,
+  Minimize2,
 } from 'lucide-react';
+import LanguageIcon from './LanguageIcon';
 import LanguageSelector from './LanguageSelector';
 import './Header.css';
 
@@ -51,6 +55,83 @@ export default function Header() {
   const isRunning = executionStatus === 'compiling' || executionStatus === 'running';
   const hasSelection = Boolean(state.selectedCode && state.selectedCode.trim());
   const activeFile = files.find((f) => f.id === activeFileId) || files[0];
+
+  // Minimized Sleek Header Mode (28px height, maximum screen space for code)
+  if (state.navbarMinimized) {
+    return (
+      <header className="header app-header header-minimized">
+        <div className="header-min-left">
+          <button
+            className={`btn-icon-min ${explorerOpen ? 'active' : ''}`}
+            onClick={() => dispatch({ type: 'TOGGLE_EXPLORER' })}
+            title="Toggle File Explorer (Ctrl+B)"
+          >
+            <FolderTree size={13} />
+          </button>
+          <div
+            className="brand-min"
+            onClick={() => dispatch({ type: 'NAVIGATE_PAGE', payload: 'editor' })}
+            title="Full Code IDE"
+          >
+            <div className="brand-icon-min">
+              <Code2 size={12} />
+            </div>
+            <span className="brand-title-min">Full Code</span>
+          </div>
+          {activeFile && (
+            <div className="min-active-file-badge" title={activeFile.name}>
+              <LanguageIcon language={activeFile.language} filename={activeFile.name} size={12} />
+              <span className="min-active-file-name">{activeFile.name}</span>
+            </div>
+          )}
+        </div>
+
+        <div className="header-min-center">
+          <button
+            className="btn-full-code-mode-min"
+            onClick={() => dispatch({ type: 'TOGGLE_FOCUS_MODE' })}
+            title="Full Page Code Mode (Alt+Z / F11) — Hide all bars"
+          >
+            <Maximize2 size={12} />
+            <span>Full Page Code</span>
+          </button>
+        </div>
+
+        <div className="header-min-right">
+          <button
+            className={`btn-run-min ${isRunning ? 'running' : ''} ${hasSelection ? 'has-selection' : ''}`}
+            onClick={handleRunCode}
+            disabled={isRunning}
+            title={hasSelection ? 'Run selection (Ctrl+Enter)' : 'Run code (Ctrl+Enter)'}
+          >
+            {isRunning ? (
+              <div className="spinner-min" />
+            ) : (
+              <Play size={11} fill="currentColor" />
+            )}
+            <span>{isRunning ? 'Running...' : 'Run'}</span>
+          </button>
+
+          <button
+            className="btn-icon-min"
+            onClick={() => dispatch({ type: 'NAVIGATE_PAGE', payload: 'settings' })}
+            title="Settings & Hub"
+          >
+            <Settings size={13} />
+          </button>
+
+          <button
+            className="btn-toggle-navbar-expand"
+            onClick={() => dispatch({ type: 'TOGGLE_NAVBAR_MINIMIZED' })}
+            title="Expand Full Navigation Bar (Alt+M)"
+          >
+            <ChevronDown size={13} />
+            <span>Expand Navbar</span>
+          </button>
+        </div>
+      </header>
+    );
+  }
 
   // Standard Header
   return (
@@ -245,6 +326,17 @@ export default function Header() {
           )}
         </button>
 
+        {/* Full Page Code / Zen Mode Button */}
+        <button
+          className="btn-header-tool btn-focus-toggle"
+          onClick={() => dispatch({ type: 'TOGGLE_FOCUS_MODE' })}
+          title="Full Page Code Mode (Alt+Z / F11) — Maximize workspace to pure code"
+        >
+          <Maximize2 size={14} />
+          <span className="btn-tool-label">Full Page</span>
+          <kbd className="btn-shortcut-pill">F11</kbd>
+        </button>
+
         {/* Quick Theme Switcher Button */}
         <button
           className="btn-icon"
@@ -266,6 +358,15 @@ export default function Header() {
           title="Settings, Themes, Audio & ZIP Hub"
         >
           <Settings size={18} />
+        </button>
+
+        {/* Minimize Navbar Button */}
+        <button
+          className="btn-icon btn-minimize-nav"
+          onClick={() => dispatch({ type: 'TOGGLE_NAVBAR_MINIMIZED' })}
+          title="Minimize navigation bar to maximize coding space (Alt+M)"
+        >
+          <ChevronUp size={16} />
         </button>
 
         {/* User Account / Profile Modal Button */}

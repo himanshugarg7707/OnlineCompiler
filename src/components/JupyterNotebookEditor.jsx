@@ -179,6 +179,13 @@ export default function JupyterNotebookEditor({ file, onContentChange }) {
   const [viewRawJson, setViewRawJson] = useState(false);
   const [executionCounter, setExecutionCounter] = useState(1);
   const [hoveredDividerIndex, setHoveredDividerIndex] = useState(null);
+  const [toolbarMinimized, setToolbarMinimized] = useState(() => {
+    try {
+      return localStorage.getItem('fullcode_notebook_toolbar_minimized') === 'true';
+    } catch {
+      return false;
+    }
+  });
   const isInternalUpdateRef = useRef(false);
 
   const { state: appState, handleRenameFile, handleAddFile, showToast } = useApp();
@@ -790,7 +797,71 @@ export default function JupyterNotebookEditor({ file, onContentChange }) {
   return (
     <div className={`jupyter-container kernel-${notebookLanguage}`}>
       {/* Notebook Clean & Minimal Header Toolbar */}
-      <div className="jupyter-header-toolbar">
+      {(toolbarMinimized || appState?.focusMode) ? (
+        <div className="jupyter-header-toolbar jupyter-toolbar-minimized">
+          <div className="jupyter-toolbar-min-left">
+            <span className="min-kernel-pill">
+              {notebookLanguage === 'java' ? '☕' : notebookLanguage === 'cpp' ? '⚡' : notebookLanguage === 'javascript' ? '🟨' : '🪐'} {kernelConfig.name}
+            </span>
+            <span className="min-cells-badge">{notebook.cells.length} cells</span>
+          </div>
+
+          <div className="jupyter-toolbar-min-actions">
+            <button
+              className="jupyter-min-btn jupyter-min-btn-primary"
+              onClick={() => addCell('code', activeCellIndex)}
+              title="Add Code Cell (Alt+Enter)"
+            >
+              <Plus size={12} />
+              <span>Code</span>
+            </button>
+
+            <button
+              className="jupyter-min-btn"
+              onClick={() => addCell('markdown', activeCellIndex)}
+              title="Add Markdown Cell"
+            >
+              <Plus size={12} />
+              <span>MD</span>
+            </button>
+
+            <button
+              className={`jupyter-min-btn jupyter-min-run ${isRunningAll ? 'running' : ''}`}
+              onClick={runAllCells}
+              disabled={isRunningAll || runningCellIndex !== null}
+              title="Run All Cells"
+            >
+              {isRunningAll ? <Loader2 size={11} className="spin" /> : <Play size={11} fill="currentColor" />}
+              <span>Run All</span>
+            </button>
+
+            <button
+              className="jupyter-min-btn"
+              onClick={clearAllOutputs}
+              title="Restart & Clear"
+            >
+              <RotateCcw size={11} />
+            </button>
+
+            {!appState?.focusMode && (
+              <button
+                className="jupyter-min-btn-expand"
+                onClick={() => {
+                  setToolbarMinimized(false);
+                  try {
+                    localStorage.setItem('fullcode_notebook_toolbar_minimized', 'false');
+                  } catch {}
+                }}
+                title="Expand full notebook toolbar"
+              >
+                <ChevronDown size={13} />
+                <span>Expand</span>
+              </button>
+            )}
+          </div>
+        </div>
+      ) : (
+        <div className="jupyter-header-toolbar">
         <div className="jupyter-toolbar-left">
           <div className="jupyter-kernel-compact-select" ref={kernelDropdownRef}>
             <button
@@ -977,8 +1048,22 @@ export default function JupyterNotebookEditor({ file, onContentChange }) {
             <FileCode2 size={14} />
             <span>{viewRawJson ? 'Notebook View' : 'Raw JSON'}</span>
           </button>
+
+          <button
+            className="jupyter-btn-action jupyter-btn-collapse"
+            onClick={() => {
+              setToolbarMinimized(true);
+              try {
+                localStorage.setItem('fullcode_notebook_toolbar_minimized', 'true');
+              } catch {}
+            }}
+            title="Minimize notebook toolbar to maximize code cells"
+          >
+            <ChevronUp size={14} />
+          </button>
         </div>
       </div>
+    )}
 
       {/* Raw JSON View */}
       {viewRawJson ? (

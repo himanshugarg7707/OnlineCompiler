@@ -232,6 +232,13 @@ const initialState = {
   toast: null,
   practiceOpen: false,
   focusMode: false,
+  navbarMinimized: (() => {
+    try {
+      return localStorage.getItem('fullcode_navbar_minimized') === 'true';
+    } catch {
+      return false;
+    }
+  })(),
   terminalHidden: false,
   activeTerminalTab: 'output',
   currentPage: typeof window !== 'undefined' && window.location.hash.includes('settings')
@@ -804,8 +811,22 @@ function reducer(state, action) {
     case 'SET_ACTIVE_USER':
       return { ...state, activeUser: action.payload };
     case 'TOGGLE_FOCUS_MODE':
+      return { ...state, focusMode: !state.focusMode };
     case 'SET_FOCUS_MODE':
-      return { ...state, focusMode: false };
+      return { ...state, focusMode: Boolean(action.payload) };
+    case 'TOGGLE_NAVBAR_MINIMIZED': {
+      const next = !state.navbarMinimized;
+      try {
+        localStorage.setItem('fullcode_navbar_minimized', String(next));
+      } catch {}
+      return { ...state, navbarMinimized: next };
+    }
+    case 'SET_NAVBAR_MINIMIZED': {
+      try {
+        localStorage.setItem('fullcode_navbar_minimized', String(action.payload));
+      } catch {}
+      return { ...state, navbarMinimized: Boolean(action.payload) };
+    }
     case 'TOGGLE_TERMINAL':
       return { ...state, terminalHidden: !state.terminalHidden };
     case 'SET_TERMINAL_HIDDEN':

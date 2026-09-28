@@ -24,7 +24,7 @@ import NotebookSetupPage from './pages/NotebookSetupPage';
 import ExamTestPage from './pages/ExamTestPage';
 import TemplatesPage from './pages/TemplatesPage';
 import PracticePage from './pages/PracticePage';
-import { FolderTree, ChevronLeft, ChevronRight } from 'lucide-react';
+import { FolderTree, ChevronLeft, ChevronRight, Maximize2, Minimize2, Play } from 'lucide-react';
 import './App.css';
 
 const SPLIT_STORAGE_KEY = 'fullcode_split_percent';
@@ -115,11 +115,25 @@ function AppContent() {
         e.preventDefault();
         handleToggleTerminal();
       }
+      // F11 or Alt+Z to toggle Full Page Code Mode
+      if (e.key === 'F11' || (e.altKey && (e.key === 'z' || e.key === 'Z'))) {
+        e.preventDefault();
+        dispatch({ type: 'TOGGLE_FOCUS_MODE' });
+      }
+      // Alt+M to toggle Navbar Minimized
+      if (e.altKey && (e.key === 'm' || e.key === 'M')) {
+        e.preventDefault();
+        dispatch({ type: 'TOGGLE_NAVBAR_MINIMIZED' });
+      }
+      // Escape to exit Full Page Code Mode
+      if (e.key === 'Escape' && state.focusMode) {
+        dispatch({ type: 'SET_FOCUS_MODE', payload: false });
+      }
     };
 
     window.addEventListener('keydown', handleKeyDown, { capture: true });
     return () => window.removeEventListener('keydown', handleKeyDown, { capture: true });
-  }, [handleRunCode, handleSaveActiveFile, handleCreateSequentialFile, handleToggleTerminal, dispatch]);
+  }, [handleRunCode, handleSaveActiveFile, handleCreateSequentialFile, handleToggleTerminal, dispatch, state.focusMode]);
 
   // Handle Vertical Dragging (Editor vs Output)
   const handleVerticalMouseDown = useCallback((e) => {
@@ -293,9 +307,41 @@ function AppContent() {
   }, [isPracticeDragging, practiceWidth]);
 
   return (
-    <div className="app-container">
+    <div className={`app-container ${state.focusMode ? 'focus-mode-active' : ''} ${state.navbarMinimized ? 'navbar-is-minimized' : ''}`}>
       <Header />
       <SharedWorkspaceBanner />
+
+      {/* Floating Zen / Full Page Code Mode Pill */}
+      {state.focusMode && (
+        <div className="floating-zen-bar animate-fade-in">
+          <div className="zen-bar-pill">
+            <div className="zen-pill-badge">
+              <Maximize2 size={12} />
+              <span>Full Page Code</span>
+            </div>
+            <button
+              type="button"
+              className="zen-btn-run"
+              onClick={handleRunCode}
+              title="Run code (Ctrl+Enter)"
+            >
+              <Play size={11} fill="currentColor" />
+              <span>Run</span>
+              <kbd>Ctrl+↵</kbd>
+            </button>
+            <button
+              type="button"
+              className="zen-btn-exit"
+              onClick={() => dispatch({ type: 'SET_FOCUS_MODE', payload: false })}
+              title="Exit Full Page Code Mode (Esc / F11)"
+            >
+              <Minimize2 size={12} />
+              <span>Exit Full Page</span>
+              <kbd>Esc</kbd>
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="app-body" ref={appBodyRef}>
         {/* Left File Explorer Sidebar */}

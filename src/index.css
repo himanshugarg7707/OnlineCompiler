@@ -83,8 +83,9 @@
   --transition-slow: 400ms cubic-bezier(0.4, 0, 0.2, 1);
 
   /* Layout */
-  --header-height: 56px;
-  --statusbar-height: 28px;
+  --header-height: 42px;
+  --header-min-height: 28px;
+  --statusbar-height: 26px;
   --sidebar-width: 380px;
 }
 

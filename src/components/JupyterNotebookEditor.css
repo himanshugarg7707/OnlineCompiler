@@ -46,6 +46,118 @@
   flex-wrap: wrap;
 }
 
+/* Minimized Ultra-Slim Notebook Toolbar (26px) */
+.jupyter-toolbar-minimized {
+  padding: 3px 12px !important;
+  gap: 8px !important;
+  min-height: 26px !important;
+  background: rgba(18, 22, 30, 0.92) !important;
+  border-bottom: 1px solid var(--border-primary) !important;
+  animation: slideDownMin 0.15s ease-out;
+}
+
+.jupyter-toolbar-min-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.min-kernel-pill {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--accent-cyan);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(0, 212, 255, 0.08);
+  border: 1px solid rgba(0, 212, 255, 0.2);
+  padding: 1px 7px;
+  border-radius: 10px;
+}
+
+.min-cells-badge {
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.jupyter-toolbar-min-actions {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.jupyter-min-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 7px;
+  height: 20px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border-primary);
+  color: var(--text-secondary);
+  font-size: 10.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.jupyter-min-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text-primary);
+}
+
+.jupyter-min-btn-primary {
+  background: rgba(0, 212, 255, 0.1);
+  border-color: rgba(0, 212, 255, 0.3);
+  color: var(--accent-cyan);
+}
+
+.jupyter-min-btn-primary:hover {
+  background: rgba(0, 212, 255, 0.2);
+  color: #fff;
+}
+
+.jupyter-min-run {
+  background: rgba(16, 185, 129, 0.15);
+  border-color: rgba(16, 185, 129, 0.35);
+  color: #34d399;
+}
+
+.jupyter-min-run:hover {
+  background: rgba(16, 185, 129, 0.25);
+  color: #fff;
+}
+
+.jupyter-min-btn-expand {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 7px;
+  height: 20px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border-primary);
+  color: var(--text-muted);
+  font-size: 10px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.jupyter-min-btn-expand:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: var(--text-primary);
+}
+
+.jupyter-btn-collapse {
+  padding: 5px 8px !important;
+  color: var(--text-muted) !important;
+}
+
+.jupyter-btn-collapse:hover {
+  color: var(--accent-cyan) !important;
+}
+
 .jupyter-toolbar-left {
   display: flex;
   align-items: center;

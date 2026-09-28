@@ -454,3 +454,118 @@ body.resizing-vertical * {
   to { opacity: 1; }
 }
 
+/* ─── Specialized Full Page Code Mode (Zen Mode) ────────────────────────── */
+.app-container.focus-mode-active .app-header,
+.app-container.focus-mode-active .status-bar,
+.app-container.focus-mode-active .shared-workspace-banner {
+  display: none !important;
+}
+
+.app-container.focus-mode-active .app-body {
+  height: 100vh !important;
+  max-height: 100vh !important;
+  flex: 1 1 100vh !important;
+}
+
+.app-container.focus-mode-active .explorer-collapsed-rail {
+  display: none !important;
+}
+
+/* Floating Zen Mode Pill */
+.floating-zen-bar {
+  position: fixed;
+  top: 10px;
+  right: 18px;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  pointer-events: auto;
+}
+
+.zen-bar-pill {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--bg-glass, rgba(15, 23, 42, 0.85));
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--border-primary, rgba(255, 255, 255, 0.12));
+  border-radius: var(--radius-full, 9999px);
+  padding: 4px 10px 4px 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), 0 0 16px rgba(0, 212, 255, 0.2);
+  transition: all var(--transition-fast, 0.15s ease);
+  opacity: 0.8;
+}
+
+.zen-bar-pill:hover {
+  opacity: 1;
+  box-shadow: 0 10px 36px rgba(0, 0, 0, 0.65), 0 0 24px rgba(0, 212, 255, 0.35);
+  border-color: rgba(0, 212, 255, 0.45);
+}
+
+.zen-pill-badge {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--accent-cyan, #00d4ff);
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  padding-right: 6px;
+  border-right: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.zen-btn-run {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: var(--radius-full, 9999px);
+  background: linear-gradient(135deg, #10b981, #059669);
+  color: #fff;
+  border: none;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.zen-btn-run:hover {
+  filter: brightness(1.1);
+  transform: translateY(-1px);
+}
+
+.zen-btn-run kbd,
+.zen-btn-exit kbd {
+  font-size: 9px;
+  font-family: inherit;
+  background: rgba(0, 0, 0, 0.28);
+  padding: 1px 4px;
+  border-radius: 4px;
+  color: rgba(255, 255, 255, 0.85);
+  margin-left: 2px;
+}
+
+.zen-btn-exit {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 9px;
+  border-radius: var(--radius-full, 9999px);
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-secondary, #cbd5e1);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.zen-btn-exit:hover {
+  background: rgba(239, 68, 68, 0.25);
+  color: #fca5a5;
+  border-color: rgba(239, 68, 68, 0.4);
+}
+
+
