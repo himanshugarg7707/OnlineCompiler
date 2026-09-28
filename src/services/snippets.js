@@ -40,6 +40,315 @@ export function recordVariablesFromCode(codeText) {
   });
 }
 
+// ─── Java VS Code Member Completion Database ─────────────────────────────
+const JAVA_MEMBER_DATABASE = {
+  System: [
+    { label: 'out', kind: 'Field', detail: 'PrintStream System.out', doc: 'The "standard" output stream. Already open and ready to accept output data.', body: 'out' },
+    { label: 'err', kind: 'Field', detail: 'PrintStream System.err', doc: 'The "standard" error output stream.', body: 'err' },
+    { label: 'in', kind: 'Field', detail: 'InputStream System.in', doc: 'The "standard" input stream.', body: 'in' },
+    { label: 'currentTimeMillis', kind: 'Method', detail: 'long System.currentTimeMillis()', doc: 'Returns the current time in milliseconds since UTC epoch.', body: 'currentTimeMillis()' },
+    { label: 'nanoTime', kind: 'Method', detail: 'long System.nanoTime()', doc: 'Returns the current value of the running JVM high-resolution time source in nanoseconds.', body: 'nanoTime()' },
+    { label: 'exit', kind: 'Method', detail: 'void System.exit(int status)', doc: 'Terminates the currently running Java Virtual Machine.', body: 'exit(${1:0})' },
+    { label: 'gc', kind: 'Method', detail: 'void System.gc()', doc: 'Runs the garbage collector in the JVM.', body: 'gc()' },
+    { label: 'arraycopy', kind: 'Method', detail: 'void System.arraycopy(...)', doc: 'Copies an array from the specified source array to the destination array.', body: 'arraycopy(${1:src}, ${2:srcPos}, ${3:dest}, ${4:destPos}, ${5:length})' },
+  ],
+
+  PrintStream: [
+    { label: 'println', kind: 'Method', detail: 'void println(Object x)', doc: 'Prints a value and terminates the line.', body: 'println(${1});' },
+    { label: 'println()', kind: 'Method', detail: 'void println()', doc: 'Terminates the current line by writing the line separator string.', body: 'println();' },
+    { label: 'print', kind: 'Method', detail: 'void print(Object x)', doc: 'Prints a value without terminating the line.', body: 'print(${1});' },
+    { label: 'printf', kind: 'Method', detail: 'PrintStream printf(String format, Object... args)', doc: 'Writes a formatted string to this output stream.', body: 'printf("${1:%s\\n}", ${2:var});' },
+    { label: 'flush', kind: 'Method', detail: 'void flush()', doc: 'Flushes the stream by writing any buffered output bytes.', body: 'flush();' },
+  ],
+
+  Scanner: [
+    { label: 'nextInt', kind: 'Method', detail: 'int nextInt()', doc: 'Scans the next token of the input as an int.', body: 'nextInt()' },
+    { label: 'nextLine', kind: 'Method', detail: 'String nextLine()', doc: 'Advances this scanner past the current line and returns skipped input.', body: 'nextLine()' },
+    { label: 'next', kind: 'Method', detail: 'String next()', doc: 'Finds and returns the next complete token from this scanner.', body: 'next()' },
+    { label: 'nextDouble', kind: 'Method', detail: 'double nextDouble()', doc: 'Scans the next token of the input as a double.', body: 'nextDouble()' },
+    { label: 'nextLong', kind: 'Method', detail: 'long nextLong()', doc: 'Scans the next token of the input as a long.', body: 'nextLong()' },
+    { label: 'nextFloat', kind: 'Method', detail: 'float nextFloat()', doc: 'Scans the next token of the input as a float.', body: 'nextFloat()' },
+    { label: 'nextBoolean', kind: 'Method', detail: 'boolean nextBoolean()', doc: 'Scans the next token of the input as a boolean.', body: 'nextBoolean()' },
+    { label: 'hasNext', kind: 'Method', detail: 'boolean hasNext()', doc: 'Returns true if this scanner has another token in its input.', body: 'hasNext()' },
+    { label: 'hasNextInt', kind: 'Method', detail: 'boolean hasNextInt()', doc: 'Returns true if the next token in this scanner input can be interpreted as an int.', body: 'hasNextInt()' },
+    { label: 'hasNextLine', kind: 'Method', detail: 'boolean hasNextLine()', doc: 'Returns true if there is another line in the input of this scanner.', body: 'hasNextLine()' },
+    { label: 'close', kind: 'Method', detail: 'void close()', doc: 'Closes this scanner.', body: 'close();' },
+  ],
+
+  List: [
+    { label: 'add', kind: 'Method', detail: 'boolean add(E e)', doc: 'Appends the specified element to the end of this list.', body: 'add(${1:e})' },
+    { label: 'add(index, e)', kind: 'Method', detail: 'void add(int index, E element)', doc: 'Inserts the specified element at the specified position in this list.', body: 'add(${1:index}, ${2:element})' },
+    { label: 'get', kind: 'Method', detail: 'E get(int index)', doc: 'Returns the element at the specified position in this list.', body: 'get(${1:index})' },
+    { label: 'set', kind: 'Method', detail: 'E set(int index, E element)', doc: 'Replaces the element at the specified position with the specified element.', body: 'set(${1:index}, ${2:element})' },
+    { label: 'remove', kind: 'Method', detail: 'E remove(int index)', doc: 'Removes the element at the specified position in this list.', body: 'remove(${1:index})' },
+    { label: 'size', kind: 'Method', detail: 'int size()', doc: 'Returns the number of elements in this list.', body: 'size()' },
+    { label: 'isEmpty', kind: 'Method', detail: 'boolean isEmpty()', doc: 'Returns true if this list contains no elements.', body: 'isEmpty()' },
+    { label: 'contains', kind: 'Method', detail: 'boolean contains(Object o)', doc: 'Returns true if this list contains the specified element.', body: 'contains(${1:o})' },
+    { label: 'clear', kind: 'Method', detail: 'void clear()', doc: 'Removes all of the elements from this list.', body: 'clear()' },
+    { label: 'indexOf', kind: 'Method', detail: 'int indexOf(Object o)', doc: 'Returns the index of the first occurrence of the specified element.', body: 'indexOf(${1:o})' },
+    { label: 'toArray', kind: 'Method', detail: 'Object[] toArray()', doc: 'Returns an array containing all of the elements in this list in proper sequence.', body: 'toArray()' },
+    { label: 'stream', kind: 'Method', detail: 'Stream<E> stream()', doc: 'Returns a sequential Stream with this collection as its source.', body: 'stream()' },
+    { label: 'sort', kind: 'Method', detail: 'void sort(Comparator<? super E> c)', doc: 'Sorts this list according to the order induced by the specified Comparator.', body: 'sort(${1:Comparator.naturalOrder()})' },
+  ],
+
+  Map: [
+    { label: 'put', kind: 'Method', detail: 'V put(K key, V value)', doc: 'Associates the specified value with the specified key in this map.', body: 'put(${1:key}, ${2:value})' },
+    { label: 'get', kind: 'Method', detail: 'V get(Object key)', doc: 'Returns the value to which the specified key is mapped, or null.', body: 'get(${1:key})' },
+    { label: 'getOrDefault', kind: 'Method', detail: 'V getOrDefault(Object key, V defaultValue)', doc: 'Returns the value mapped to key, or defaultValue if not present.', body: 'getOrDefault(${1:key}, ${2:defaultValue})' },
+    { label: 'containsKey', kind: 'Method', detail: 'boolean containsKey(Object key)', doc: 'Returns true if this map contains a mapping for the specified key.', body: 'containsKey(${1:key})' },
+    { label: 'containsValue', kind: 'Method', detail: 'boolean containsValue(Object value)', doc: 'Returns true if this map maps one or more keys to the specified value.', body: 'containsValue(${1:value})' },
+    { label: 'remove', kind: 'Method', detail: 'V remove(Object key)', doc: 'Removes the mapping for a key from this map if it is present.', body: 'remove(${1:key})' },
+    { label: 'size', kind: 'Method', detail: 'int size()', doc: 'Returns the number of key-value mappings in this map.', body: 'size()' },
+    { label: 'isEmpty', kind: 'Method', detail: 'boolean isEmpty()', doc: 'Returns true if this map contains no key-value mappings.', body: 'isEmpty()' },
+    { label: 'keySet', kind: 'Method', detail: 'Set<K> keySet()', doc: 'Returns a Set view of the keys contained in this map.', body: 'keySet()' },
+    { label: 'values', kind: 'Method', detail: 'Collection<V> values()', doc: 'Returns a Collection view of the values contained in this map.', body: 'values()' },
+    { label: 'entrySet', kind: 'Method', detail: 'Set<Map.Entry<K, V>> entrySet()', doc: 'Returns a Set view of the mappings contained in this map.', body: 'entrySet()' },
+    { label: 'putIfAbsent', kind: 'Method', detail: 'V putIfAbsent(K key, V value)', doc: 'If the specified key is not already associated with a value, associates it with the given value.', body: 'putIfAbsent(${1:key}, ${2:value})' },
+    { label: 'clear', kind: 'Method', detail: 'void clear()', doc: 'Removes all mappings from this map.', body: 'clear()' },
+  ],
+
+  Set: [
+    { label: 'add', kind: 'Method', detail: 'boolean add(E e)', doc: 'Adds the specified element to this set if it is not already present.', body: 'add(${1:e})' },
+    { label: 'contains', kind: 'Method', detail: 'boolean contains(Object o)', doc: 'Returns true if this set contains the specified element.', body: 'contains(${1:o})' },
+    { label: 'remove', kind: 'Method', detail: 'boolean remove(Object o)', doc: 'Removes the specified element from this set if it is present.', body: 'remove(${1:o})' },
+    { label: 'size', kind: 'Method', detail: 'int size()', doc: 'Returns the number of elements in this set.', body: 'size()' },
+    { label: 'isEmpty', kind: 'Method', detail: 'boolean isEmpty()', doc: 'Returns true if this set contains no elements.', body: 'isEmpty()' },
+    { label: 'clear', kind: 'Method', detail: 'void clear()', doc: 'Removes all elements from this set.', body: 'clear()' },
+  ],
+
+  String: [
+    { label: 'length', kind: 'Method', detail: 'int length()', doc: 'Returns the length of this string.', body: 'length()' },
+    { label: 'charAt', kind: 'Method', detail: 'char charAt(int index)', doc: 'Returns the char value at the specified index.', body: 'charAt(${1:index})' },
+    { label: 'substring', kind: 'Method', detail: 'String substring(int beginIndex)', doc: 'Returns a string that is a substring of this string starting from beginIndex.', body: 'substring(${1:beginIndex})' },
+    { label: 'substring(b, e)', kind: 'Method', detail: 'String substring(int beginIndex, int endIndex)', doc: 'Returns a string that is a substring from beginIndex up to endIndex.', body: 'substring(${1:beginIndex}, ${2:endIndex})' },
+    { label: 'indexOf', kind: 'Method', detail: 'int indexOf(String str)', doc: 'Returns the index within this string of the first occurrence of substring.', body: 'indexOf(${1:str})' },
+    { label: 'contains', kind: 'Method', detail: 'boolean contains(CharSequence s)', doc: 'Returns true if string contains the specified sequence of char values.', body: 'contains(${1:s})' },
+    { label: 'equals', kind: 'Method', detail: 'boolean equals(Object anObject)', doc: 'Compares this string to the specified object for value equality.', body: 'equals(${1:anObject})' },
+    { label: 'equalsIgnoreCase', kind: 'Method', detail: 'boolean equalsIgnoreCase(String anotherString)', doc: 'Compares this string to another string, ignoring case considerations.', body: 'equalsIgnoreCase(${1:anotherString})' },
+    { label: 'startsWith', kind: 'Method', detail: 'boolean startsWith(String prefix)', doc: 'Tests if this string starts with the specified prefix.', body: 'startsWith(${1:prefix})' },
+    { label: 'endsWith', kind: 'Method', detail: 'boolean endsWith(String suffix)', doc: 'Tests if this string ends with the specified suffix.', body: 'endsWith(${1:suffix})' },
+    { label: 'toUpperCase', kind: 'Method', detail: 'String toUpperCase()', doc: 'Converts all characters in this String to upper case.', body: 'toUpperCase()' },
+    { label: 'toLowerCase', kind: 'Method', detail: 'String toLowerCase()', doc: 'Converts all characters in this String to lower case.', body: 'toLowerCase()' },
+    { label: 'trim', kind: 'Method', detail: 'String trim()', doc: 'Returns a string with leading and trailing whitespace removed.', body: 'trim()' },
+    { label: 'replace', kind: 'Method', detail: 'String replace(char oldChar, char newChar)', doc: 'Returns a string resulting from replacing all occurrences of oldChar with newChar.', body: 'replace(${1:oldChar}, ${2:newChar})' },
+    { label: 'split', kind: 'Method', detail: 'String[] split(String regex)', doc: 'Splits this string around matches of the given regular expression.', body: 'split(${1:regex})' },
+    { label: 'toCharArray', kind: 'Method', detail: 'char[] toCharArray()', doc: 'Converts this string to a new character array.', body: 'toCharArray()' },
+    { label: 'isEmpty', kind: 'Method', detail: 'boolean isEmpty()', doc: 'Returns true if length() is 0.', body: 'isEmpty()' },
+  ],
+
+  StringBuilder: [
+    { label: 'append', kind: 'Method', detail: 'StringBuilder append(String str)', doc: 'Appends the specified string to this character sequence.', body: 'append(${1:str})' },
+    { label: 'insert', kind: 'Method', detail: 'StringBuilder insert(int offset, String str)', doc: 'Inserts the string into this character sequence at specified offset.', body: 'insert(${1:offset}, ${2:str})' },
+    { label: 'delete', kind: 'Method', detail: 'StringBuilder delete(int start, int end)', doc: 'Removes the characters in a substring of this sequence.', body: 'delete(${1:start}, ${2:end})' },
+    { label: 'reverse', kind: 'Method', detail: 'StringBuilder reverse()', doc: 'Causes this character sequence to be replaced by the reverse of the sequence.', body: 'reverse()' },
+    { label: 'toString', kind: 'Method', detail: 'String toString()', doc: 'Returns a string representing the data in this sequence.', body: 'toString()' },
+    { label: 'length', kind: 'Method', detail: 'int length()', doc: 'Returns the length (character count).', body: 'length()' },
+  ],
+
+  Math: [
+    { label: 'max', kind: 'Method', detail: 'static int/double max(a, b)', doc: 'Returns the greater of two numbers.', body: 'max(${1:a}, ${2:b})' },
+    { label: 'min', kind: 'Method', detail: 'static int/double min(a, b)', doc: 'Returns the smaller of two numbers.', body: 'min(${1:a}, ${2:b})' },
+    { label: 'abs', kind: 'Method', detail: 'static int/double abs(n)', doc: 'Returns the absolute value of a number.', body: 'abs(${1:n})' },
+    { label: 'pow', kind: 'Method', detail: 'static double pow(double a, double b)', doc: 'Returns the value of the first argument raised to the power of the second argument.', body: 'pow(${1:base}, ${2:exp})' },
+    { label: 'sqrt', kind: 'Method', detail: 'static double sqrt(double a)', doc: 'Returns the correctly rounded positive square root of a double value.', body: 'sqrt(${1:a})' },
+    { label: 'round', kind: 'Method', detail: 'static long round(double a)', doc: 'Returns the closest long to the argument.', body: 'round(${1:a})' },
+    { label: 'floor', kind: 'Method', detail: 'static double floor(double a)', doc: 'Returns the largest double less than or equal to argument and equal to a mathematical integer.', body: 'floor(${1:a})' },
+    { label: 'ceil', kind: 'Method', detail: 'static double ceil(double a)', doc: 'Returns the smallest double greater than or equal to argument and equal to a mathematical integer.', body: 'ceil(${1:a})' },
+    { label: 'random', kind: 'Method', detail: 'static double random()', doc: 'Returns a pseudorandom double between 0.0 and 1.0.', body: 'random()' },
+    { label: 'PI', kind: 'Field', detail: 'static final double PI', doc: 'The ratio of circumference to diameter of circle (3.141592653589793).', body: 'PI' },
+    { label: 'E', kind: 'Field', detail: 'static final double E', doc: 'Base of natural logarithms (2.718281828459045).', body: 'E' },
+  ],
+
+  Arrays: [
+    { label: 'sort', kind: 'Method', detail: 'static void sort(arr)', doc: 'Sorts the specified array into ascending numerical or natural order.', body: 'sort(${1:arr});' },
+    { label: 'binarySearch', kind: 'Method', detail: 'static int binarySearch(arr, key)', doc: 'Searches the specified array for key using binary search.', body: 'binarySearch(${1:arr}, ${2:key})' },
+    { label: 'toString', kind: 'Method', detail: 'static String toString(arr)', doc: 'Returns a string representation of the contents of the specified 1D array.', body: 'toString(${1:arr})' },
+    { label: 'deepToString', kind: 'Method', detail: 'static String deepToString(matrix)', doc: 'Returns string representation of deep contents of 2D/multi-dimensional array.', body: 'deepToString(${1:matrix})' },
+    { label: 'fill', kind: 'Method', detail: 'static void fill(arr, val)', doc: 'Assigns the specified value to each element of the specified array.', body: 'fill(${1:arr}, ${2:val});' },
+    { label: 'equals', kind: 'Method', detail: 'static boolean equals(a, b)', doc: 'Returns true if the two specified arrays are equal.', body: 'equals(${1:arr1}, ${2:arr2})' },
+    { label: 'copyOf', kind: 'Method', detail: 'static T[] copyOf(arr, newLength)', doc: 'Copies the specified array, truncating or padding with zeros.', body: 'copyOf(${1:arr}, ${2:arr}.length)' },
+    { label: 'asList', kind: 'Method', detail: 'static <T> List<T> asList(T... a)', doc: 'Returns a fixed-size list backed by the specified array.', body: 'asList(${1:elements})' },
+  ],
+
+  Collections: [
+    { label: 'sort', kind: 'Method', detail: 'static <T> void sort(List<T> list)', doc: 'Sorts the specified list into ascending order.', body: 'sort(${1:list});' },
+    { label: 'reverse', kind: 'Method', detail: 'static void reverse(List<?> list)', doc: 'Reverses the order of the elements in the specified list.', body: 'reverse(${1:list});' },
+    { label: 'max', kind: 'Method', detail: 'static <T> T max(Collection<T> coll)', doc: 'Returns the maximum element of the given collection.', body: 'max(${1:list})' },
+    { label: 'min', kind: 'Method', detail: 'static <T> T min(Collection<T> coll)', doc: 'Returns the minimum element of the given collection.', body: 'min(${1:list})' },
+    { label: 'swap', kind: 'Method', detail: 'static void swap(List<?> list, int i, int j)', doc: 'Swaps the elements at specified positions in the specified list.', body: 'swap(${1:list}, ${2:i}, ${3:j});' },
+    { label: 'shuffle', kind: 'Method', detail: 'static void shuffle(List<?> list)', doc: 'Randomly permutes the specified list using default randomness.', body: 'shuffle(${1:list});' },
+    { label: 'reverseOrder', kind: 'Method', detail: 'static <T> Comparator<T> reverseOrder()', doc: 'Returns a comparator that imposes reverse of natural ordering.', body: 'reverseOrder()' },
+  ],
+
+  Integer: [
+    { label: 'parseInt', kind: 'Method', detail: 'static int parseInt(String s)', doc: 'Parses the string argument as a signed decimal integer.', body: 'parseInt(${1:s})' },
+    { label: 'valueOf', kind: 'Method', detail: 'static Integer valueOf(String s)', doc: 'Returns an Integer object holding the value of specified String.', body: 'valueOf(${1:s})' },
+    { label: 'toString', kind: 'Method', detail: 'static String toString(int i)', doc: 'Returns a String object representing the specified integer.', body: 'toString(${1:i})' },
+    { label: 'compare', kind: 'Method', detail: 'static int compare(int x, int y)', doc: 'Compares two int values numerically.', body: 'compare(${1:x}, ${2:y})' },
+    { label: 'max', kind: 'Method', detail: 'static int max(int a, int b)', doc: 'Returns the greater of two int values.', body: 'max(${1:a}, ${2:b})' },
+    { label: 'min', kind: 'Method', detail: 'static int min(int a, int b)', doc: 'Returns the smaller of two int values.', body: 'min(${1:a}, ${2:b})' },
+    { label: 'MAX_VALUE', kind: 'Field', detail: 'static final int MAX_VALUE = 2147483647', doc: 'Constant holding maximum int value (2^31 - 1).', body: 'MAX_VALUE' },
+    { label: 'MIN_VALUE', kind: 'Field', detail: 'static final int MIN_VALUE = -2147483648', doc: 'Constant holding minimum int value (-2^31).', body: 'MIN_VALUE' },
+  ],
+
+  Double: [
+    { label: 'parseDouble', kind: 'Method', detail: 'static double parseDouble(String s)', doc: 'Returns a new double initialized to value of specified String.', body: 'parseDouble(${1:s})' },
+    { label: 'valueOf', kind: 'Method', detail: 'static Double valueOf(String s)', doc: 'Returns a Double object holding value of specified String.', body: 'valueOf(${1:s})' },
+    { label: 'toString', kind: 'Method', detail: 'static String toString(double d)', doc: 'Returns a string representation of the double argument.', body: 'toString(${1:d})' },
+    { label: 'compare', kind: 'Method', detail: 'static int compare(double d1, double d2)', doc: 'Compares two double values numerically.', body: 'compare(${1:d1}, ${2:d2})' },
+    { label: 'MAX_VALUE', kind: 'Field', detail: 'static final double MAX_VALUE', doc: 'Largest positive finite value of type double.', body: 'MAX_VALUE' },
+    { label: 'MIN_VALUE', kind: 'Field', detail: 'static final double MIN_VALUE', doc: 'Smallest positive nonzero value of type double.', body: 'MIN_VALUE' },
+  ],
+
+  Object: [
+    { label: 'toString', kind: 'Method', detail: 'String toString()', doc: 'Returns a string representation of the object.', body: 'toString()' },
+    { label: 'equals', kind: 'Method', detail: 'boolean equals(Object obj)', doc: 'Indicates whether some other object is "equal to" this one.', body: 'equals(${1:obj})' },
+    { label: 'hashCode', kind: 'Method', detail: 'int hashCode()', doc: 'Returns a hash code value for the object.', body: 'hashCode()' },
+    { label: 'getClass', kind: 'Method', detail: 'Class<?> getClass()', doc: 'Returns the runtime class of this Object.', body: 'getClass()' },
+  ],
+};
+
+// ─── Java VS Code Hover Documentation ──────────────────────────────────────
+const JAVA_HOVER_DOCS = {
+  System: { header: 'class java.lang.System', doc: 'The `System` class contains several useful class fields and methods. It cannot be instantiated.' },
+  out: { header: 'System.out: PrintStream', doc: 'The "standard" output stream. Already open and ready to accept output data.' },
+  err: { header: 'System.err: PrintStream', doc: 'The "standard" error output stream.' },
+  in: { header: 'System.in: InputStream', doc: 'The "standard" input stream.' },
+  println: { header: 'void PrintStream.println(...)', doc: 'Prints a value and terminates the current line.' },
+  print: { header: 'void PrintStream.print(...)', doc: 'Prints a value without writing a newline.' },
+  printf: { header: 'PrintStream.printf(...)', doc: 'Writes a formatted string to this output stream using the specified format string and arguments.' },
+  Scanner: { header: 'class java.util.Scanner', doc: 'A simple text scanner which can parse primitive types and strings using regular expressions.' },
+  public: { header: 'public keyword', doc: 'Access modifier that makes a class, method, or field accessible from any other class.' },
+  static: { header: 'static keyword', doc: 'Specifies that a method, variable, or nested class belongs to the class itself, rather than instances of the class.' },
+  void: { header: 'void keyword', doc: 'Used to specify that a method does not return any value.' },
+  main: { header: 'public static void main(String[] args)', doc: 'The primary entry point method required for Java program execution.' },
+  String: { header: 'class java.lang.String', doc: 'Immutable character sequence. All string literals in Java programs are implemented as instances of this class.' },
+  StringBuilder: { header: 'class java.lang.StringBuilder', doc: 'A mutable sequence of characters for high-speed string concatenation.' },
+  Math: { header: 'class java.lang.Math', doc: 'Contains static methods for performing basic numeric operations such as power, root, min, max, and trigonometric functions.' },
+  Arrays: { header: 'class java.util.Arrays', doc: 'Contains various static methods for manipulating arrays (such as sorting, binary search, and fill).' },
+  Collections: { header: 'class java.util.Collections', doc: 'Consists exclusively of static methods that operate on or return collections (e.g. sort, reverse, shuffle).' },
+  List: { header: 'interface java.util.List<E>', doc: 'An ordered collection (also known as a sequence). Provides precise control over element insertion position.' },
+  ArrayList: { header: 'class java.util.ArrayList<E>', doc: 'Resizable-array implementation of the `List` interface.' },
+  Map: { header: 'interface java.util.Map<K, V>', doc: 'An object that maps keys to values. A map cannot contain duplicate keys.' },
+  HashMap: { header: 'class java.util.HashMap<K, V>', doc: 'Hash table based implementation of the `Map` interface.' },
+  Set: { header: 'interface java.util.Set<E>', doc: 'A collection that contains no duplicate elements.' },
+  HashSet: { header: 'class java.util.HashSet<E>', doc: 'Hash table based implementation of the `Set` interface.' },
+  Integer: { header: 'class java.lang.Integer', doc: 'Wraps a value of the primitive type `int` in an object with utility parsing methods.' },
+  Double: { header: 'class java.lang.Double', doc: 'Wraps a value of the primitive type `double` in an object with utility parsing methods.' },
+};
+
+/**
+ * Resolves dot-member completions for Java expressions like System.out. or list. or sc.
+ */
+function getJavaMemberCompletions(model, position, range, monaco) {
+  const lineContent = model.getLineContent(position.lineNumber);
+  const textBeforeCursor = lineContent.substring(0, position.column - 1);
+  const dotMatch = textBeforeCursor.match(/([a-zA-Z0-9_$]+(?:\.[a-zA-Z0-9_$]+)*)\.([a-zA-Z0-9_$]*)$/);
+  if (!dotMatch) return null;
+
+  const rawExpr = dotMatch[1].trim();
+  const filterText = dotMatch[2].toLowerCase();
+
+  let targetType = rawExpr;
+  const docText = model.getValue();
+
+  if (rawExpr === 'System.out' || rawExpr === 'out' || rawExpr === 'System.err' || rawExpr === 'err') {
+    targetType = 'PrintStream';
+  } else if (rawExpr === 'System') {
+    targetType = 'System';
+  } else if (rawExpr === 'Math') {
+    targetType = 'Math';
+  } else if (rawExpr === 'Arrays') {
+    targetType = 'Arrays';
+  } else if (rawExpr === 'Collections') {
+    targetType = 'Collections';
+  } else if (rawExpr === 'Integer') {
+    targetType = 'Integer';
+  } else if (rawExpr === 'Double') {
+    targetType = 'Double';
+  } else {
+    const lastVar = rawExpr.split('.').pop();
+    if (/^(sc|scanner|cin|in)$/i.test(lastVar)) {
+      targetType = 'Scanner';
+    } else if (/^(list|al|nums|arrList|items|words|res|ans)$/i.test(lastVar)) {
+      targetType = 'List';
+    } else if (/^(map|hm|dict|counts|freq|memo)$/i.test(lastVar)) {
+      targetType = 'Map';
+    } else if (/^(set|hs|seen|visited|unique)$/i.test(lastVar)) {
+      targetType = 'Set';
+    } else if (/^(s|str|text|line|word|val|msg)$/i.test(lastVar)) {
+      targetType = 'String';
+    } else if (/^(sb|builder)$/i.test(lastVar)) {
+      targetType = 'StringBuilder';
+    } else {
+      const declRegex = new RegExp(`\\b([A-Z][a-zA-Z0-9_]*)(?:<[^>]+>)?\\s+${lastVar}\\b`);
+      const match = docText.match(declRegex);
+      if (match) {
+        const declaredType = match[1];
+        if (['Scanner', 'List', 'ArrayList', 'LinkedList'].includes(declaredType)) targetType = declaredType.includes('List') ? 'List' : 'Scanner';
+        else if (['Map', 'HashMap', 'TreeMap'].includes(declaredType)) targetType = 'Map';
+        else if (['Set', 'HashSet', 'TreeSet'].includes(declaredType)) targetType = 'Set';
+        else if (declaredType === 'String') targetType = 'String';
+        else if (declaredType === 'StringBuilder' || declaredType === 'StringBuffer') targetType = 'StringBuilder';
+        else targetType = 'Object';
+      } else {
+        targetType = 'Object';
+      }
+    }
+  }
+
+  const memberList = JAVA_MEMBER_DATABASE[targetType] || JAVA_MEMBER_DATABASE['Object'] || [];
+  return memberList
+    .filter((m) => !filterText || (m.filterText || m.label).toLowerCase().startsWith(filterText))
+    .map((m, idx) => ({
+      label: m.label,
+      filterText: m.filterText || m.label,
+      kind: m.kind ? monaco.languages.CompletionItemKind[m.kind] : monaco.languages.CompletionItemKind.Method,
+      detail: m.detail,
+      documentation: {
+        value: `**${m.detail}**\n\n${m.doc}`,
+      },
+      insertText: m.body,
+      insertTextRules: m.body.includes('$')
+        ? monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet
+        : monaco.languages.CompletionItemInsertTextRule.KeepWhitespace,
+      range,
+      sortText: `0000_${String(idx).padStart(4, '0')}`,
+    }));
+}
+
+/**
+ * Registers Java rich hover documentation (VS Code tooltip experience)
+ */
+export function registerJavaHoverProvider(monaco) {
+  if (!monaco || !monaco.languages) return;
+  if (registeredLanguages.has('java_hover')) return;
+  registeredLanguages.add('java_hover');
+
+  monaco.languages.registerHoverProvider('java', {
+    provideHover: (model, position) => {
+      const word = model.getWordAtPosition(position);
+      if (!word) return null;
+      const term = word.word;
+      const info = JAVA_HOVER_DOCS[term];
+      if (!info) return null;
+
+      return {
+        range: new monaco.Range(
+          position.lineNumber,
+          word.startColumn,
+          position.lineNumber,
+          word.endColumn
+        ),
+        contents: [
+          { value: info.header ? `**${info.header}**` : `\`${term}\`` },
+          { value: info.doc },
+        ],
+      };
+    },
+  });
+}
+
 // Global registry to prevent registering duplicate completion providers
 const registeredLanguages = new Set();
 
@@ -48,6 +357,8 @@ const registeredLanguages = new Set();
  */
 export function registerSnippets(monaco) {
   if (!monaco || !monaco.languages) return;
+
+  registerJavaHoverProvider(monaco);
 
   const languages = [
     'python', 'cpp', 'c', 'java', 'javascript', 'typescript',
@@ -63,7 +374,9 @@ export function registerSnippets(monaco) {
 
     monaco.languages.registerCompletionItemProvider(langId, {
       triggerCharacters: ['.', '(', '@', '<', '$', '_'],
-      provideCompletionItems: (model, position) => {
+      provideCompletionItems: (model, position, context) => {
+        const lineContent = model.getLineContent(position.lineNumber);
+        const textBeforeCursor = lineContent.substring(0, position.column - 1);
         const word = model.getWordUntilPosition(position);
         const currentWord = word.word;
         const text = model.getValue();
@@ -74,6 +387,18 @@ export function registerSnippets(monaco) {
           startColumn: word.startColumn,
           endColumn: word.endColumn,
         };
+
+        const isTriggerChar =
+          context?.triggerKind === monaco.languages.CompletionTriggerKind.TriggerCharacter ||
+          /[.(@<$_]$/.test(textBeforeCursor);
+
+        // ── Java VS Code Dot-Member IntelliSense ──
+        if (langId === 'java') {
+          const javaMembers = getJavaMemberCompletions(model, position, range, monaco);
+          if (javaMembers && javaMembers.length > 0) {
+            return { suggestions: javaMembers };
+          }
+        }
 
         // ── Show suggestions starting on first typed character or trigger char ──
         if (currentWord.length < 1 && !isTriggerChar) {

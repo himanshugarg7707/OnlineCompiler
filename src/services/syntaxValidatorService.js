@@ -218,10 +218,52 @@ function validatePython(code) {
 function validateJavaCpp(code, langId) {
   const errors = checkBracketMatching(code);
   const lines = code.split('\n');
+  const isJava = String(langId).includes('java') || String(langId) === '62';
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     const trimmed = line.trim();
+
+    // Java-specific friendly diagnostics
+    if (isJava) {
+      // 1. Check lowercase system.out / system.err
+      const lowerSysMatch = line.match(/\bsystem\.(out|err|in)\b/);
+      if (lowerSysMatch) {
+        errors.push({
+          startLineNumber: i + 1,
+          startColumn: line.indexOf(lowerSysMatch[0]) + 1,
+          endLineNumber: i + 1,
+          endColumn: line.indexOf(lowerSysMatch[0]) + 7,
+          message: `Java is case-sensitive. Did you mean 'System.${lowerSysMatch[1]}'?`,
+          severity: 4, // MarkerSeverity.Warning
+        });
+      }
+
+      // 2. Check lowercase string type declaration
+      const lowerStringMatch = line.match(/\bstring\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\s*(=|;|,|\))/);
+      if (lowerStringMatch) {
+        errors.push({
+          startLineNumber: i + 1,
+          startColumn: line.indexOf('string') + 1,
+          endLineNumber: i + 1,
+          endColumn: line.indexOf('string') + 7,
+          message: `In Java, 'String' is an object and must be capitalized: 'String'.`,
+          severity: 4,
+        });
+      }
+
+      // 3. Check public static void Main (capital M)
+      if (/\bpublic\s+static\s+void\s+Main\s*\(/.test(line)) {
+        errors.push({
+          startLineNumber: i + 1,
+          startColumn: line.indexOf('Main') + 1,
+          endLineNumber: i + 1,
+          endColumn: line.indexOf('Main') + 5,
+          message: `The entry point method name must be lowercase 'main' instead of 'Main'.`,
+          severity: 4,
+        });
+      }
+    }
 
     // Common missing semicolon check for simple statements
     if (
@@ -237,10 +279,11 @@ function validateJavaCpp(code, langId) {
       !trimmed.endsWith(',') &&
       !trimmed.endsWith('\\')
     ) {
-      // If it looks like a variable assignment or return statement
+      // If it looks like a variable assignment, declaration, method call or return statement
       if (
         /^(return|int|long|double|float|boolean|char|String|auto|var)\s+.+=.+/.test(trimmed) ||
-        /^(System\.out\.println|cout|printf)\s*\(.+/.test(trimmed) ||
+        /^(System\.(out|err)\.(println|print|printf)|cout|printf)\s*\(.+/.test(trimmed) ||
+        (isJava && /\b(sc|scanner|list|map|set|sb)\.[a-zA-Z0-9_$]+\s*\(.+/.test(trimmed)) ||
         /^(import|package)\s+[\w.]+/.test(trimmed)
       ) {
         errors.push({

@@ -229,13 +229,10 @@ export async function executeCode(code, languageId, stdin = '', allFiles = []) {
     }
   }
 
-  // 6. Cloud Compiled Languages — Godbolt (primary) → Wandbox (fallback)
-  // Preprocess Java: replace 'public class' with 'class' and strip package header
+  // 6. Cloud Compiled Languages — Judge0 CE (fast primary) → Godbolt (secondary) → Wandbox (tertiary)
   let processedCode = code;
   if (languageId === 62) {
-    processedCode = code
-      .replace(/\bpublic\s+class\b/g, 'class')
-      .replace(/^\s*package\s+[\w.]+;\s*$/gm, '// package stripped');
+    processedCode = prepareJavaForExecution(code);
   }
 
   const result = await cloudExecuteWithFallback(processedCode, languageId, stdin);
@@ -246,10 +243,198 @@ export async function executeCode(code, languageId, stdin = '', allFiles = []) {
 }
 
 /**
- * Cloud execution with Godbolt → Wandbox → error message fallback chain
+ * Preprocesses Java code to ensure 100% reliable execution in the sandbox:
+ * 1. Automatically wraps bare statements without class/method into standard Main
+ * 2. Renames class containing main() to 'public class Main' so javac matches Main.java
+ * 3. Demotes other public classes to package-private to avoid single-public-class errors
+ * 4. Updates constructor names to match Main
+ * 5. Strips package headers
+ */
+export function prepareJavaForExecution(code) {
+  let clean = code.replace(/^\s*package\s+[\w.]+;\s*$/gm, '// package stripped');
+
+  // If no class keyword exists at all, wrap bare statements in standard Main
+  if (!/\bclass\s+([A-Za-z0-9_$]+)/.test(clean)) {
+    return `import java.util.*;\nimport java.io.*;\n\npublic class Main {\n    public static void main(String[] args) {\n${clean}\n    }\n}`;
+  }
+
+  // Find all classes and their positions
+  const classRegex = /\b(?:public\s+)?class\s+([A-Za-z0-9_$]+)/g;
+  const classes = [];
+  let match;
+  while ((match = classRegex.exec(clean)) !== null) {
+    classes.push({ name: match[1], index: match.index });
+  }
+
+  // Find where main method is
+  const mainMatch = clean.match(/\bpublic\s+static\s+void\s+main\s*\(/);
+  let targetClass = null;
+  if (mainMatch) {
+    const mainIndex = mainMatch.index;
+    const precedingClasses = classes.filter((c) => c.index < mainIndex);
+    if (precedingClasses.length > 0) {
+      targetClass = precedingClasses[precedingClasses.length - 1].name;
+    }
+  }
+
+  if (!targetClass) {
+    const pubMatch = clean.match(/public\s+class\s+([A-Za-z0-9_$]+)/);
+    if (pubMatch) targetClass = pubMatch[1];
+    else if (classes.length > 0) targetClass = classes[0].name;
+  }
+
+  if (targetClass && targetClass !== 'Main') {
+    clean = clean.replace(new RegExp(`\\bclass\\s+${targetClass}\\b`), 'class Main');
+    clean = clean.replace(new RegExp(`\\b${targetClass}\\s*\\(`, 'g'), 'Main(');
+  }
+
+  // Convert any other public classes to package-private to satisfy single public class rule
+  clean = clean.replace(/\bpublic\s+class\s+([A-Za-z0-9_$]+)/g, (m, name) => {
+    return name === 'Main' ? 'public class Main' : `class ${name}`;
+  });
+
+  // Ensure Main has public modifier
+  if (!/\bpublic\s+class\s+Main\b/.test(clean)) {
+    clean = clean.replace(/\bclass\s+Main\b/, 'public class Main');
+  }
+
+  return clean;
+}
+
+// Judge0 CE Language IDs (ultra-fast containerized execution)
+const JUDGE0_CE_LANGUAGES = {
+  50: 50, // C (GCC 9.2.0)
+  54: 54, // C++ (GCC 9.2.0)
+  62: 62, // Java (OpenJDK 13.0.1)
+  51: 51, // C# (Mono 6.6.0.161)
+  60: 60, // Go (1.13.5)
+  73: 73, // Rust (1.40.0)
+  68: 68, // PHP (7.4.1)
+  72: 72, // Ruby (2.7.0)
+  78: 78, // Kotlin (1.3.70)
+  74: 74, // TypeScript (3.7.4)
+  83: 83, // Swift (5.2.3)
+  81: 81, // Scala (2.13.2)
+};
+
+/**
+ * Execute via Judge0 CE API (Ultra-fast synchronous execution)
+ */
+async function judge0CeExecute(code, languageId, stdin = '') {
+  const judge0LangId = JUDGE0_CE_LANGUAGES[languageId];
+  if (!judge0LangId) return null;
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 6500);
+
+  try {
+    const startTime = performance.now();
+    const response = await fetch('https://ce.judge0.com/submissions?base64_encoded=false&wait=true', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+      body: JSON.stringify({
+        source_code: code,
+        language_id: judge0LangId,
+        stdin: stdin || '',
+      }),
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      console.warn(`Judge0 CE returned HTTP ${response.status}`);
+      return null;
+    }
+
+    let result = await response.json();
+    let statusId = result.status?.id;
+
+    // If still in queue or processing (1 = In Queue, 2 = Processing), do quick poll
+    if (statusId === 1 || statusId === 2) {
+      const token = result.token;
+      if (token) {
+        for (let i = 0; i < 4; i++) {
+          await new Promise((r) => setTimeout(r, 250));
+          try {
+            const pollRes = await fetch(`https://ce.judge0.com/submissions/${token}?base64_encoded=false`);
+            if (pollRes.ok) {
+              result = await pollRes.json();
+              statusId = result.status?.id;
+              if (statusId > 2) break;
+            }
+          } catch (e) {
+            break;
+          }
+        }
+      }
+    }
+
+    const elapsed = ((performance.now() - startTime) / 1000).toFixed(3);
+
+    // Status 3 = Accepted (Successful execution)
+    if (statusId === 3) {
+      return {
+        success: true,
+        output: result.stdout || '',
+        error: result.stderr || '',
+        time: result.time || elapsed,
+        memory: result.memory || 0,
+        statusCode: 0,
+      };
+    }
+
+    // Status 6 = Compilation Error
+    if (statusId === 6) {
+      return {
+        success: false,
+        output: result.stdout || '',
+        error: result.compile_output || result.stderr || 'Compilation Error',
+        time: elapsed,
+        memory: 0,
+        statusCode: 1,
+      };
+    }
+
+    // Status 4 = Wrong Answer, 5 = Time Limit Exceeded, 7-12 = Runtime Errors
+    if (statusId && statusId > 3) {
+      let errMsg = result.stderr || result.compile_output || result.message || result.status?.description || 'Execution Error';
+      if (statusId === 5) {
+        errMsg = 'Time Limit Exceeded (execution timed out). Check for infinite loops or provide required input.';
+      }
+      return {
+        success: false,
+        output: result.stdout || '',
+        error: errMsg,
+        time: result.time || elapsed,
+        memory: result.memory || 0,
+        statusCode: 1,
+      };
+    }
+
+    return null;
+  } catch (err) {
+    clearTimeout(timeoutId);
+    console.warn('Judge0 CE execute error:', err.message);
+    return null;
+  }
+}
+
+/**
+ * Cloud execution with Judge0 CE (fast primary) → Godbolt (secondary) → Wandbox (tertiary)
  */
 async function cloudExecuteWithFallback(code, languageId, stdin) {
-  // Try Godbolt first
+  // 1. Try Judge0 CE first (Fastest: ~1-1.5s roundtrip vs 5-8s)
+  try {
+    const judge0Res = await judge0CeExecute(code, languageId, stdin);
+    if (judge0Res) return judge0Res;
+  } catch (err) {
+    console.warn('Judge0 CE failed:', err.message, '— trying Godbolt fallback');
+  }
+
+  // 2. Try Godbolt secondary
   const godboltCompiler = GODBOLT_COMPILERS[languageId];
   if (godboltCompiler) {
     try {
@@ -260,7 +445,7 @@ async function cloudExecuteWithFallback(code, languageId, stdin) {
     }
   }
 
-  // Try Wandbox as fallback
+  // 3. Try Wandbox tertiary fallback
   const wandboxCompiler = WANDBOX_COMPILERS[languageId];
   if (wandboxCompiler) {
     try {
@@ -271,7 +456,7 @@ async function cloudExecuteWithFallback(code, languageId, stdin) {
     }
   }
 
-  // Both APIs failed — show clear error instead of fake output
+  // All APIs failed — show clear error instead of fake output
   return executionUnavailable(languageId);
 }
 
@@ -299,6 +484,7 @@ async function godboltExecute(code, compilerInfo, languageId, stdin) {
         filters: {
           execute: true,
         },
+        skipAsm: true,
       },
     }),
   });
