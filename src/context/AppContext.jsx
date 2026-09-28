@@ -434,6 +434,12 @@ function reducer(state, action) {
         ? state.openFileIds
         : [...state.openFileIds, fileId];
 
+      const isTargetNotebook = Boolean(
+        targetFile.name?.endsWith('.ipynb') ||
+        targetFile.language?.monacoLanguage === 'ipynb' ||
+        targetFile.language?.id === 710
+      );
+
       saveStateToStorage(state.files, fileId, state.stdin, state.folders, updatedOpenIds);
 
       return {
@@ -442,6 +448,7 @@ function reducer(state, action) {
         openFileIds: updatedOpenIds,
         code: targetFile.content,
         detectedLanguage: targetFile.language,
+        terminalHidden: isTargetNotebook ? state.terminalHidden : false,
         errorLine: null,
       };
     }
@@ -462,6 +469,11 @@ function reducer(state, action) {
       }
 
       const newActiveFile = state.files.find((f) => f.id === newActiveId) || state.files[0];
+      const isNewNb = Boolean(
+        newActiveFile?.name?.endsWith('.ipynb') ||
+        newActiveFile?.language?.monacoLanguage === 'ipynb' ||
+        newActiveFile?.language?.id === 710
+      );
       saveStateToStorage(state.files, newActiveId, state.stdin, state.folders, filteredOpenIds);
 
       return {
@@ -470,6 +482,7 @@ function reducer(state, action) {
         activeFileId: newActiveId,
         code: newActiveFile ? newActiveFile.content : state.code,
         detectedLanguage: newActiveFile ? newActiveFile.language : state.detectedLanguage,
+        terminalHidden: isNewNb ? state.terminalHidden : false,
         errorLine: null,
       };
     }
@@ -497,6 +510,7 @@ function reducer(state, action) {
           activeFileId: defaultFile.id,
           code: defaultFile.content,
           detectedLanguage: defaultFile.language,
+          terminalHidden: false,
           errorLine: null,
         };
       }
@@ -507,6 +521,11 @@ function reducer(state, action) {
       }
 
       const newActiveFile = filteredFiles.find((f) => f.id === newActiveId) || filteredFiles[0];
+      const isNewNb = Boolean(
+        newActiveFile?.name?.endsWith('.ipynb') ||
+        newActiveFile?.language?.monacoLanguage === 'ipynb' ||
+        newActiveFile?.language?.id === 710
+      );
       const finalOpenIds = filteredOpenIds.includes(newActiveFile.id)
         ? filteredOpenIds
         : [...filteredOpenIds, newActiveFile.id];
@@ -520,6 +539,7 @@ function reducer(state, action) {
         activeFileId: newActiveId,
         code: newActiveFile.content,
         detectedLanguage: newActiveFile.language,
+        terminalHidden: isNewNb ? state.terminalHidden : false,
         errorLine: null,
       };
     }
@@ -827,10 +847,32 @@ function reducer(state, action) {
       } catch {}
       return { ...state, navbarMinimized: Boolean(action.payload) };
     }
-    case 'TOGGLE_TERMINAL':
+    case 'TOGGLE_TERMINAL': {
+      const curFile = state.files.find((f) => f.id === state.activeFileId) || state.files[0];
+      const isCurNb = Boolean(
+        curFile?.name?.endsWith('.ipynb') ||
+        state.detectedLanguage?.monacoLanguage === 'ipynb' ||
+        state.detectedLanguage?.id === 710
+      );
+      if (!isCurNb) {
+        // Without notebook files, terminal should NOT be hidden
+        return { ...state, terminalHidden: false };
+      }
       return { ...state, terminalHidden: !state.terminalHidden };
-    case 'SET_TERMINAL_HIDDEN':
+    }
+    case 'SET_TERMINAL_HIDDEN': {
+      const curFile = state.files.find((f) => f.id === state.activeFileId) || state.files[0];
+      const isCurNb = Boolean(
+        curFile?.name?.endsWith('.ipynb') ||
+        state.detectedLanguage?.monacoLanguage === 'ipynb' ||
+        state.detectedLanguage?.id === 710
+      );
+      if (!isCurNb && action.payload === true) {
+        // Without notebook files, terminal should NOT be hidden
+        return { ...state, terminalHidden: false };
+      }
       return { ...state, terminalHidden: action.payload };
+    }
     case 'REORDER_TABS': {
       const { sourceId, targetId } = action.payload;
       if (!sourceId || !targetId || sourceId === targetId) return state;
@@ -1294,9 +1336,9 @@ export function AppProvider({ children }) {
     showToast('Logged out 👋 Switched to Guest workspace');
   }, [state.activeUser, state.files, state.folders, state.activeFileId, state.openFileIds, state.stdin, state.config, showToast]);
 
-  // Execute Code with Instant Auto-Input Detection
   const handleRunCode = useCallback(async () => {
     dispatch({ type: 'SET_EXECUTION_STATUS', payload: 'running' });
+    dispatch({ type: 'SET_TERMINAL_HIDDEN', payload: false });
 
     try {
       const activeFile = state.files.find((f) => f.id === state.activeFileId) || state.files[0];
@@ -1778,8 +1820,22 @@ export function AppProvider({ children }) {
   }, []);
 
   const handleToggleTerminal = useCallback(() => {
+    const activeFile = state.files.find((f) => f.id === state.activeFileId) || state.files[0];
+    const isNotebook = Boolean(
+      activeFile?.name?.endsWith('.ipynb') ||
+      state.detectedLanguage?.monacoLanguage === 'ipynb' ||
+      state.detectedLanguage?.id === 710
+    );
+
+    if (!isNotebook) {
+      dispatch({ type: 'SET_TERMINAL_HIDDEN', payload: false });
+      dispatch({ type: 'SET_TERMINAL_TAB', payload: 'output' });
+      showToast('Terminal output is required for simple files 🖥️');
+      return;
+    }
+
     dispatch({ type: 'TOGGLE_TERMINAL' });
-  }, []);
+  }, [state.files, state.activeFileId, state.detectedLanguage, showToast]);
 
   const handleLoadWorkspaceState = useCallback((workspace) => {
     if (!workspace) return;

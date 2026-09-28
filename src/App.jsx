@@ -44,6 +44,16 @@ function AppContent() {
   } = useApp();
   const { explorerOpen, practiceOpen, toast, terminalHidden } = state;
 
+  const activeFile = state.files.find((f) => f.id === state.activeFileId) || state.files[0];
+  const isNotebookActive = Boolean(
+    activeFile?.name?.endsWith('.ipynb') ||
+    state.detectedLanguage?.monacoLanguage === 'ipynb' ||
+    state.detectedLanguage?.id === 710
+  );
+
+  // Rule: In simple files (without notebooks), the terminal is necessary and MUST NOT be hidden!
+  const effectiveTerminalHidden = isNotebookActive ? terminalHidden : false;
+
   // Vertical Editor/Terminal Split
   const [splitPercent, setSplitPercent] = useState(() => {
     try {
@@ -55,6 +65,8 @@ function AppContent() {
     } catch {}
     return 58;
   });
+
+  const effectiveSplitPercent = (!isNotebookActive && splitPercent >= 92) ? 62 : splitPercent;
 
   // Horizontal Left Explorer Split (width in px)
   const [explorerWidth, setExplorerWidth] = useState(() => {
@@ -307,7 +319,11 @@ function AppContent() {
   }, [isPracticeDragging, practiceWidth]);
 
   return (
-    <div className={`app-container ${state.focusMode ? 'focus-mode-active' : ''} ${state.navbarMinimized ? 'navbar-is-minimized' : ''}`}>
+    <div
+      className={`app-container ${state.focusMode ? 'focus-mode-active' : ''} ${
+        state.navbarMinimized ? 'navbar-is-minimized' : ''
+      } ${isNotebookActive ? 'notebook-active' : 'simple-file-active'}`}
+    >
       <Header />
       <SharedWorkspaceBanner />
 
@@ -390,14 +406,14 @@ function AppContent() {
           <div
             className="editor-section"
             style={{
-              height: terminalHidden ? '100%' : `${splitPercent}%`,
+              height: effectiveTerminalHidden ? '100%' : `${effectiveSplitPercent}%`,
               flex: 'none',
             }}
           >
             <CodeEditor />
           </div>
 
-          {!terminalHidden && (
+          {!effectiveTerminalHidden && (
             <>
               <div
                 className={`split-resizer ${isVerticalDragging ? 'dragging' : ''}`}
@@ -410,7 +426,7 @@ function AppContent() {
 
               <div
                 className="output-section"
-                style={{ height: `${100 - splitPercent}%`, flex: 'none' }}
+                style={{ height: `${100 - effectiveSplitPercent}%`, flex: 'none' }}
               >
                 <OutputPanel />
               </div>

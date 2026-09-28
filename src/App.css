@@ -464,10 +464,44 @@ body.resizing-vertical * {
 .app-container.focus-mode-active .explorer-container,
 .app-container.focus-mode-active .horizontal-resizer,
 .app-container.focus-mode-active .practice-container,
-.app-container.focus-mode-active .practice-resizer,
-.app-container.focus-mode-active .split-resizer,
-.app-container.focus-mode-active .output-section {
+.app-container.focus-mode-active .practice-resizer {
   display: none !important;
+}
+
+/* For notebooks in focus mode: cell outputs are inline, so hide terminal and make editor 100vh */
+.app-container.focus-mode-active.notebook-active .split-resizer,
+.app-container.focus-mode-active.notebook-active .output-section {
+  display: none !important;
+}
+
+.app-container.focus-mode-active.notebook-active .editor-section {
+  height: 100vh !important;
+  max-height: 100vh !important;
+  width: 100vw !important;
+  max-width: 100vw !important;
+  flex: 1 1 100% !important;
+}
+
+.app-container.focus-mode-active.notebook-active .code-editor-container,
+.app-container.focus-mode-active.notebook-active .editor-wrapper {
+  height: 100vh !important;
+  max-height: 100vh !important;
+}
+
+/* For simple files (without notebooks) in focus mode: terminal is necessary and MUST NOT be hidden */
+.app-container.focus-mode-active.simple-file-active .editor-section {
+  width: 100vw !important;
+  max-width: 100vw !important;
+}
+
+.app-container.focus-mode-active.simple-file-active .output-section {
+  width: 100vw !important;
+  max-width: 100vw !important;
+  display: flex !important;
+}
+
+.app-container.focus-mode-active.simple-file-active .split-resizer {
+  display: flex !important;
 }
 
 .app-container.focus-mode-active .app-body {
@@ -484,24 +518,6 @@ body.resizing-vertical * {
   height: 100vh !important;
   max-height: 100vh !important;
   flex: 1 1 100% !important;
-}
-
-.app-container.focus-mode-active .editor-section {
-  height: 100vh !important;
-  max-height: 100vh !important;
-  width: 100vw !important;
-  max-width: 100vw !important;
-  flex: 1 1 100% !important;
-}
-
-.app-container.focus-mode-active .code-editor-container {
-  height: 100vh !important;
-  max-height: 100vh !important;
-}
-
-.app-container.focus-mode-active .editor-wrapper {
-  height: 100vh !important;
-  max-height: 100vh !important;
 }
 
 .app-container.focus-mode-active .jupyter-container {

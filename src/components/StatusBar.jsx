@@ -22,6 +22,11 @@ export default function StatusBar() {
   const { detectedLanguage, cursorPosition, executionTime, executionMemory, terminalHidden, code, files, activeFileId } = state;
   const activeFile = files?.find((f) => f.id === activeFileId);
   const displayName = getFriendlyLanguageName(detectedLanguage, activeFile?.name);
+  const isNotebook = Boolean(
+    activeFile?.name?.endsWith('.ipynb') ||
+    detectedLanguage?.monacoLanguage === 'ipynb' ||
+    detectedLanguage?.id === 710
+  );
 
   const complexity = useMemo(() => {
     return analyzeComplexity(code, detectedLanguage);
@@ -75,25 +80,39 @@ export default function StatusBar() {
           </span>
         )}
 
-        {/* Prominent Footer Terminal Toggle Button */}
-        <button
-          className={`status-terminal-btn ${terminalHidden ? 'terminal-hidden-badge' : 'terminal-active-badge'}`}
-          onClick={handleToggleTerminal}
-          title={terminalHidden ? "Show Terminal & Output (Ctrl+`)" : "Hide Terminal & Output (Ctrl+`)"}
-        >
-          {terminalHidden ? (
-            <>
-              <Plus size={12} className="terminal-btn-plus" />
-              <Terminal size={12} />
-              <span>Show Terminal</span>
-            </>
-          ) : (
-            <>
-              <Terminal size={12} />
-              <span>Terminal</span>
-            </>
-          )}
-        </button>
+        {/* Prominent Footer Terminal Button */}
+        {isNotebook ? (
+          <button
+            className={`status-terminal-btn ${terminalHidden ? 'terminal-hidden-badge' : 'terminal-active-badge'}`}
+            onClick={handleToggleTerminal}
+            title={terminalHidden ? "Show Terminal & Output (Ctrl+`)" : "Hide Terminal & Output (Ctrl+`)"}
+          >
+            {terminalHidden ? (
+              <>
+                <Plus size={12} className="terminal-btn-plus" />
+                <Terminal size={12} />
+                <span>Show Terminal</span>
+              </>
+            ) : (
+              <>
+                <Terminal size={12} />
+                <span>Terminal</span>
+              </>
+            )}
+          </button>
+        ) : (
+          <button
+            className="status-terminal-btn terminal-active-badge"
+            onClick={() => {
+              dispatch({ type: 'SET_TERMINAL_HIDDEN', payload: false });
+              dispatch({ type: 'SET_TERMINAL_TAB', payload: 'output' });
+            }}
+            title="Terminal & Output Panel Active (Ctrl+`)"
+          >
+            <Terminal size={12} />
+            <span>Terminal</span>
+          </button>
+        )}
 
         <span className="status-item brand">Full Code</span>
       </div>
