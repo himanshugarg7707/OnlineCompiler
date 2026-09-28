@@ -4,7 +4,9 @@ import dotenv from 'dotenv';
 import dbRoutes from './routes/dbRoutes.js';
 import executeRoutes from './routes/executeRoutes.js';
 import collabRoutes from './routes/collabRoutes.js';
+import chatgptRoutes from './routes/chatgptRoutes.js';
 import { seedSampleDatabases } from './dbManager.js';
+import { chatgptBridge } from './chatgptClassicBridge.js';
 
 dotenv.config();
 
@@ -29,9 +31,13 @@ app.get(['/api/health', '/health'], (req, res) => {
 app.use(['/api/db', '/db'], dbRoutes);
 app.use(['/api/execute', '/execute'], executeRoutes);
 app.use(['/api/collab', '/collab'], collabRoutes);
+app.use(['/api/chatgpt', '/chatgpt'], chatgptRoutes);
 
 // Seed sample databases and start server for local dev
 if (!process.env.VERCEL) {
+  // Start ChatGPT Classic macOS App Pairing Bridge
+  chatgptBridge.init();
+
   seedSampleDatabases().then(() => {
     app.listen(PORT, () => {
       console.log(`🚀 Full Code Backend Server running on http://localhost:${PORT}`);

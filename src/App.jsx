@@ -137,7 +137,7 @@ function AppContent() {
         e.preventDefault();
         dispatch({ type: 'TOGGLE_NAVBAR_MINIMIZED' });
       }
-      // Option+Space (Alt+Space): Real-time live context sync for macOS ChatGPT App
+      // Option+Space (Alt+Space): Real-time live context sync for macOS ChatGPT Classic App
       if (e.altKey && (e.code === 'Space' || e.key === ' ' || e.keyCode === 32)) {
         try {
           const curFile = state.files.find((f) => f.id === state.activeFileId) || state.files[0];
@@ -145,6 +145,24 @@ function AppContent() {
           const codeSnippet = hasSelection ? state.selectedCode.trim() : (curFile?.content || state.code || '');
           const errorSnippet = state.stderr || state.compileOutput || '';
 
+          // 1. Send direct update to ChatGPT Classic macOS bridge
+          fetch('/api/chatgpt/sync', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              fileName: curFile?.name || 'Main.java',
+              content: curFile?.content || state.code || '',
+              language: state.detectedLanguage?.name || 'java',
+              selectedCode: hasSelection ? state.selectedCode : null,
+              selectionRange: state.selectionRange || null,
+              selectionLine: state.selectionLine ?? null,
+              errorSnippet,
+              outputSnippet: state.stdout || '',
+              files: state.files.map((f) => ({ name: f.name, content: f.content })),
+            }),
+          }).catch(() => {});
+
+          // 2. Also copy to macOS clipboard as instantaneous fallback
           let payload = `[File: ${curFile?.name || 'main'} (${state.detectedLanguage?.name || 'Code'})]\n\`\`\`${state.detectedLanguage?.monacoLanguage || ''}\n${codeSnippet}\n\`\`\``;
           if (errorSnippet) {
             payload += `\n\n[Compiler Output / Error]:\n${errorSnippet}`;
@@ -155,10 +173,10 @@ function AppContent() {
           }
           dispatch({
             type: 'SHOW_TOAST',
-            payload: 'Live code & errors synced for ChatGPT! (⌥ + Space) 🤖',
+            payload: 'ChatGPT Classic linked! (⌥␣ pill has your live code) 🤖',
           });
         } catch (err) {
-          console.warn('ChatGPT sync pasteboard error:', err);
+          console.warn('ChatGPT sync error:', err);
         }
       }
       // Escape to exit Full Page Code Mode
@@ -169,7 +187,75 @@ function AppContent() {
 
     window.addEventListener('keydown', handleKeyDown, { capture: true });
     return () => window.removeEventListener('keydown', handleKeyDown, { capture: true });
-  }, [handleRunCode, handleSaveActiveFile, handleCreateSequentialFile, handleToggleTerminal, dispatch, state.focusMode]);
+  }, [handleRunCode, handleSaveActiveFile, handleCreateSequentialFile, handleToggleTerminal, dispatch, state.focusMode, state.files, state.activeFileId, state.selectedCode, state.selectionRange, state.selectionLine, state.code, state.stderr, state.compileOutput, state.stdout, state.detectedLanguage]);
+
+  // Real-time debounced synchronization with ChatGPT Classic macOS Bridge
+  useEffect(() => {
+    const curFile = state.files.find((f) => f.id === state.activeFileId) || state.files[0];
+    const codeSnippet = curFile?.content || state.code || '';
+    const hasSelection = Boolean(state.selectedCode && state.selectedCode.trim());
+    const errorSnippet = state.stderr || state.compileOutput || '';
+
+    const timer = setTimeout(() => {
+      fetch('/api/chatgpt/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fileName: curFile?.name || 'Main.java',
+          content: codeSnippet,
+          language: state.detectedLanguage?.name || 'java',
+          selectedCode: hasSelection ? state.selectedCode : null,
+          selectionRange: state.selectionRange || null,
+          selectionLine: state.selectionLine ?? null,
+          errorSnippet,
+          outputSnippet: state.stdout || '',
+          files: state.files.map((f) => ({ name: f.name, content: f.content })),
+        }),
+      }).catch(() => {});
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [
+    state.activeFileId,
+    state.files,
+    state.code,
+    state.selectedCode,
+    state.selectionRange,
+    state.selectionLine,
+    state.stderr,
+    state.compileOutput,
+    state.stdout,
+    state.detectedLanguage,
+  ]);
+
+  // Inbound code edits listener from ChatGPT Classic (setContent / replaceSelection)
+  useEffect(() => {
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch('/api/chatgpt/pending-edits');
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data.edits && data.edits.length > 0) {
+          for (const edit of data.edits) {
+            if (edit.content !== undefined) {
+              dispatch({
+                type: 'SET_CODE',
+                payload: edit.content,
+              });
+              dispatch({
+                type: 'SHOW_TOAST',
+                payload: 'Code updated by ChatGPT Classic ✨',
+              });
+            }
+          }
+        }
+      } catch (e) {
+        // ignore network error when backend restarting
+      }
+    }, 1200);
+
+    return () => clearInterval(interval);
+  }, [dispatch]);
 
   // Handle Vertical Dragging (Editor vs Output)
   const handleVerticalMouseDown = useCallback((e) => {

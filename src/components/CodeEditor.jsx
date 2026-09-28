@@ -360,14 +360,21 @@ export default function CodeEditor() {
       const model = editor.getModel();
       if (selection && model && !selection.isEmpty()) {
         const selectedText = model.getValueInRange(selection);
+        const startOffset = model.getOffsetAt(selection.getStartPosition());
+        const endOffset = model.getOffsetAt(selection.getEndPosition());
+        const startLine = selection.startLineNumber;
         dispatch({
           type: 'SET_SELECTION',
           payload: selectedText.trim() ? selectedText : null,
+          range: { location: startOffset, length: Math.max(0, endOffset - startOffset) },
+          line: startLine,
         });
       } else {
         dispatch({
           type: 'SET_SELECTION',
           payload: null,
+          range: null,
+          line: null,
         });
       }
     });

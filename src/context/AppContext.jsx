@@ -229,6 +229,8 @@ const initialState = {
   config: initialConfig,
   cursorPosition: { line: 1, column: 1 },
   selectedCode: null,
+  selectionRange: null,
+  selectionLine: null,
   toast: null,
   practiceOpen: false,
   focusMode: false,
@@ -714,7 +716,12 @@ function reducer(state, action) {
     case 'SET_HINT_LEVEL':
       return { ...state, hintLevel: action.payload };
     case 'SET_SELECTION':
-      return { ...state, selectedCode: action.payload };
+      return {
+        ...state,
+        selectedCode: action.payload,
+        selectionRange: action.range || null,
+        selectionLine: action.line !== undefined ? action.line : null,
+      };
     case 'TOGGLE_PRACTICE':
       return { ...state, practiceOpen: !state.practiceOpen };
     case 'TOGGLE_SHARE_MODAL':

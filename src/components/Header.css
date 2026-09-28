@@ -1011,3 +1011,33 @@
   border-color: rgba(16, 163, 127, 0.4);
   color: #10a37f;
 }
+
+.chatgpt-live-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #10a37f;
+  box-shadow: 0 0 8px #10a37f;
+  animation: chatgptPulse 2s infinite ease-in-out;
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+@keyframes chatgptPulse {
+  0% {
+    transform: scale(0.9);
+    opacity: 0.6;
+    box-shadow: 0 0 4px #10a37f;
+  }
+  50% {
+    transform: scale(1.25);
+    opacity: 1;
+    box-shadow: 0 0 10px #10a37f;
+  }
+  100% {
+    transform: scale(0.9);
+    opacity: 0.6;
+    box-shadow: 0 0 4px #10a37f;
+  }
+}
+

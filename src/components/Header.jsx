@@ -328,7 +328,7 @@ export default function Header() {
           )}
         </button>
 
-        {/* ChatGPT Companion Sync Button */}
+        {/* ChatGPT Classic macOS Companion Sync Button */}
         <button
           className="btn-header-tool btn-chatgpt-sync"
           onClick={() => {
@@ -338,6 +338,24 @@ export default function Header() {
               const codeSnippet = hasSelection ? state.selectedCode.trim() : (activeFile?.content || state.code || '');
               const errorSnippet = state.stderr || state.compileOutput || '';
 
+              // 1. Post to local ChatGPT Classic bridge
+              fetch('/api/chatgpt/sync', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  fileName: activeFile?.name || 'Main.java',
+                  content: activeFile?.content || state.code || '',
+                  language: state.detectedLanguage?.name || 'java',
+                  selectedCode: hasSelection ? state.selectedCode : null,
+                  selectionRange: state.selectionRange || null,
+                  selectionLine: state.selectionLine ?? null,
+                  errorSnippet,
+                  outputSnippet: state.stdout || '',
+                  files: state.files.map((f) => ({ name: f.name, content: f.content })),
+                }),
+              }).catch(() => {});
+
+              // 2. Also copy to macOS clipboard as instantaneous fallback
               let payload = `[File: ${activeFile?.name || 'main'} (${state.detectedLanguage?.name || 'Code'})]\n\`\`\`${state.detectedLanguage?.monacoLanguage || ''}\n${codeSnippet}\n\`\`\``;
               if (errorSnippet) {
                 payload += `\n\n[Compiler Output / Error]:\n${errorSnippet}`;
@@ -346,15 +364,16 @@ export default function Header() {
               if (navigator.clipboard?.writeText) {
                 navigator.clipboard.writeText(payload);
               }
-              showToast('Code & Error synced for ChatGPT! (Press ⌘V in floating bar) 🤖');
+              showToast('ChatGPT Classic linked! (⌥␣ pill has your live code) 🤖');
             } catch (err) {
               console.warn('Sync error:', err);
             }
           }}
-          title="Sync live code & errors to macOS ChatGPT App (⌥ + Space)"
+          title="Linked with ChatGPT Classic macOS App (⌥ + Space floating pill)"
         >
+          <span className="chatgpt-live-dot" />
           <Sparkles size={13} />
-          <span className="btn-chatgpt-label">ChatGPT</span>
+          <span className="btn-chatgpt-label">ChatGPT Classic</span>
           <kbd className="btn-shortcut-pill">⌥␣</kbd>
         </button>
 
