@@ -1449,3 +1449,65 @@ export function setupFileDragDataTransfer(e, file) {
   }
 }
 
+/**
+ * Converts multiple Java files into a single unified Java Notebook (.ipynb)
+ * Each file is encapsulated into a titled cell, ready for instant execution.
+ */
+export function convertJavaFilesToNotebook(javaFiles, notebookTitle = 'Java_Notebook.ipynb') {
+  const cells = [
+    {
+      cell_type: 'markdown',
+      metadata: {},
+      source: [
+        '# ☕ Java Notebook\n',
+        `Contains **${javaFiles.length}** imported Java program${javaFiles.length === 1 ? '' : 's'}.\n`,
+        'Run individual cells with the Play button or execute all cells sequentially.'
+      ]
+    }
+  ];
+
+  javaFiles.forEach((file, index) => {
+    const rawName = (file.name || file.path || `File_${index + 1}.java`).split('/').pop();
+    // Add header markdown cell
+    cells.push({
+      cell_type: 'markdown',
+      metadata: {},
+      source: [`### 📄 ${rawName}\n`]
+    });
+
+    // Add java code cell
+    const lines = (file.content || '').split('\n').map((l, i, arr) => (i < arr.length - 1 ? l + '\n' : l));
+    cells.push({
+      cell_type: 'code',
+      execution_count: null,
+      metadata: { language: 'java' },
+      outputs: [],
+      source: lines.length > 0 ? lines : ['// Empty Java File\n']
+    });
+  });
+
+  const notebookObj = {
+    cells,
+    metadata: {
+      kernelspec: {
+        display_name: 'Java',
+        language: 'java',
+        name: 'java'
+      },
+      language_info: {
+        name: 'java'
+      }
+    },
+    nbformat: 4,
+    nbformat_minor: 5
+  };
+
+  const finalName = notebookTitle.endsWith('.ipynb') ? notebookTitle : `${notebookTitle}.ipynb`;
+  return {
+    id: `notebook_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+    name: finalName,
+    content: JSON.stringify(notebookObj, null, 2),
+    language: { id: 710, name: 'Jupyter', monacoLanguage: 'json' }
+  };
+}
+

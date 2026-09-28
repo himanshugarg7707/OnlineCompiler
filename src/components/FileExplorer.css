@@ -305,7 +305,6 @@
   color: var(--text-primary);
 }
 
-/* Files & Folders List */
 .explorer-files-list {
   flex: 1;
   width: 100%;
@@ -313,6 +312,13 @@
   overflow-y: auto;
   overflow-x: hidden;
   padding: 4px 0;
+  transition: background var(--transition-fast, 150ms);
+}
+
+.explorer-files-list.external-drop-active {
+  outline: 2px dashed var(--accent-cyan);
+  outline-offset: -4px;
+  background: color-mix(in srgb, var(--accent-cyan) 8%, transparent);
 }
 
 /* Folder Node Hierarchy */

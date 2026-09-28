@@ -26,8 +26,8 @@ import { isItemProtected, isItemUnlocked } from '../services/securityService';
 import { sanitizeFilenameIdentifier } from '../services/identifierSanitizer';
 import PasswordPromptModal from './PasswordPromptModal';
 import { JupyterIcon, AnacondaIcon } from './LanguageIcon';
-import LanguageIcon from './LanguageIcon';
-import { createDefaultNotebookJson, setupFileDragDataTransfer } from '../services/languageDetector';
+import { createDefaultNotebookJson, setupFileDragDataTransfer, convertJavaFilesToNotebook } from '../services/languageDetector';
+import { processFileList } from '../services/importService';
 import FileOptionsMenu from './FileOptionsMenu';
 import './FileExplorer.css';
 
@@ -153,6 +153,87 @@ export default function FileExplorer() {
 
   // File Options Multi-Menu (Double-Click & Right-Click)
   const [fileOptionsMenu, setFileOptionsMenu] = useState(null);
+
+  // External File Drag & Drop + Multiple Java Import Prompt State
+  const [isDroppingExternal, setIsDroppingExternal] = useState(false);
+  const [pendingJavaImport, setPendingJavaImport] = useState(null);
+
+  const handleExternalDragOver = (e) => {
+    if (e.dataTransfer.types && Array.from(e.dataTransfer.types).includes('Files')) {
+      e.preventDefault();
+      e.stopPropagation();
+      e.dataTransfer.dropEffect = 'copy';
+      setIsDroppingExternal(true);
+    }
+  };
+
+  const handleExternalDragLeave = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDroppingExternal(false);
+  };
+
+  const handleExternalDrop = async (e) => {
+    if (!e.dataTransfer.types || !Array.from(e.dataTransfer.types).includes('Files')) {
+      return;
+    }
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDroppingExternal(false);
+
+    const rawFiles = e.dataTransfer.files;
+    if (!rawFiles || rawFiles.length === 0) return;
+
+    try {
+      const processed = await processFileList(rawFiles);
+      if (!processed || processed.length === 0) {
+        showToast('No readable code files detected in drop');
+        return;
+      }
+
+      const javaFiles = processed.filter(
+        (f) => f.path?.endsWith('.java') || f.name?.endsWith('.java')
+      );
+      const otherFiles = processed.filter(
+        (f) => !f.path?.endsWith('.java') && !f.name?.endsWith('.java')
+      );
+
+      // If 2 or more Java files are imported: ask user whether to convert or keep separate
+      if (javaFiles.length >= 2) {
+        setPendingJavaImport({ javaFiles, otherFiles });
+      } else {
+        processed.forEach((f) => {
+          handleAddFile(f.path || f.name, f.content, null, true);
+        });
+        showToast(`Imported ${processed.length} file(s) into workspace 📄`);
+      }
+    } catch (err) {
+      console.error(err);
+      showToast('Error reading dropped files');
+    }
+  };
+
+  const confirmJavaImportAsNotebook = () => {
+    if (!pendingJavaImport) return;
+    const { javaFiles, otherFiles } = pendingJavaImport;
+    const notebook = convertJavaFilesToNotebook(javaFiles, 'Java_Notebook.ipynb');
+    handleAddFile(notebook.name, notebook.content, null, true);
+    otherFiles.forEach((f) => {
+      handleAddFile(f.path || f.name, f.content, null, true);
+    });
+    showToast(`Converted ${javaFiles.length} Java files into Java_Notebook.ipynb! 📓`);
+    setPendingJavaImport(null);
+  };
+
+  const confirmJavaImportAsSeparateFiles = () => {
+    if (!pendingJavaImport) return;
+    const { javaFiles, otherFiles } = pendingJavaImport;
+    [...javaFiles, ...otherFiles].forEach((f) => {
+      handleAddFile(f.path || f.name, f.content, null, true);
+    });
+    showToast(`Imported ${javaFiles.length + otherFiles.length} files as individual files 📄`);
+    setPendingJavaImport(null);
+  };
 
   const handleOpenFileOptions = (e, file, folderPath = '') => {
     e.preventDefault();
@@ -846,7 +927,13 @@ export default function FileExplorer() {
       </div>
 
       {/* Recursive Files & Folders Tree */}
-      <div className="explorer-files-list">
+      <div
+        className={`explorer-files-list ${isDroppingExternal ? 'external-drop-active' : ''}`}
+        onDragOver={handleExternalDragOver}
+        onDragEnter={handleExternalDragOver}
+        onDragLeave={handleExternalDragLeave}
+        onDrop={handleExternalDrop}
+      >
         {/* Render Top-level Folders (Sorted A-Z) */}
         {Object.keys(treeRoot.subfolders)
           .sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase(), undefined, { numeric: true }))
@@ -1015,6 +1102,55 @@ export default function FileExplorer() {
             });
           }}
         />
+      )}
+
+      {/* Java Import Conversion Prompt Modal (Clean 2-choice prompt) */}
+      {pendingJavaImport && (
+        <div className="modal-backdrop" onClick={() => setPendingJavaImport(null)}>
+          <div className="modal-content animate-slide-up" style={{ maxWidth: '420px', padding: '22px' }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', marginBottom: '14px' }}>
+              <span style={{ fontSize: '28px', lineHeight: 1 }}>☕</span>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '16px', fontWeight: '700', color: 'var(--text-primary)' }}>
+                  Import Multiple Java Files
+                </h3>
+                <p style={{ margin: '4px 0 0', fontSize: '13px', color: 'var(--text-secondary)' }}>
+                  Found <strong>{pendingJavaImport.javaFiles.length}</strong> Java files. How would you like to add them?
+                </p>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', margin: '18px 0 16px' }}>
+              <button
+                type="button"
+                className="btn-cyber-primary"
+                style={{ justifyContent: 'center', padding: '11px 14px', fontSize: '13px' }}
+                onClick={confirmJavaImportAsNotebook}
+              >
+                📓 Convert into Java Notebook (.ipynb)
+              </button>
+              <button
+                type="button"
+                className="btn-cyber-secondary"
+                style={{ justifyContent: 'center', padding: '11px 14px', fontSize: '13px' }}
+                onClick={confirmJavaImportAsSeparateFiles}
+              >
+                📄 Import as Separate .java Files
+              </button>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+              <button
+                type="button"
+                className="btn-ghost"
+                style={{ fontSize: '12px', color: 'var(--text-secondary)' }}
+                onClick={() => setPendingJavaImport(null)}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </aside>
   );

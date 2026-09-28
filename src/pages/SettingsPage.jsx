@@ -63,6 +63,7 @@ import {
   processDataTransferItems,
   unpackZipFile,
 } from '../services/importService';
+import { convertJavaFilesToNotebook } from '../services/languageDetector';
 import './SettingsPage.css';
 
 
@@ -282,6 +283,7 @@ export default function SettingsPage() {
   // Import Files & Folders State
   const [stagedFiles, setStagedFiles] = useState([]);
   const [importMode, setImportMode] = useState('append'); // 'append' | 'replace'
+  const [javaImportFormat, setJavaImportFormat] = useState('files'); // 'files' | 'notebook'
   const [isDragging, setIsDragging] = useState(false);
   const [importSuccessCount, setImportSuccessCount] = useState(null);
   const [isProcessingImport, setIsProcessingImport] = useState(false);
@@ -633,6 +635,21 @@ export default function SettingsPage() {
   const handleCommitImport = () => {
     if (stagedFiles.length === 0) return;
 
+    const stagedJavaFiles = stagedFiles.filter(
+      (f) => f.path?.endsWith('.java') || f.name?.endsWith('.java')
+    );
+    const isConvertingToJavaNotebook =
+      javaImportFormat === 'notebook' && stagedJavaFiles.length >= 2;
+
+    let filesToCommit = stagedFiles;
+    if (isConvertingToJavaNotebook) {
+      const javaNotebook = convertJavaFilesToNotebook(stagedJavaFiles, 'Java_Notebook.ipynb');
+      const nonJavaFiles = stagedFiles.filter(
+        (f) => !f.path?.endsWith('.java') && !f.name?.endsWith('.java')
+      );
+      filesToCommit = [javaNotebook, ...nonJavaFiles];
+    }
+
     const extractFoldersFromPaths = (filePaths) => {
       const folderSet = new Set();
       filePaths.forEach((path) => {
@@ -650,9 +667,9 @@ export default function SettingsPage() {
     };
 
     if (importMode === 'replace') {
-      const newFiles = stagedFiles.map((sf) => ({
+      const newFiles = filesToCommit.map((sf) => ({
         id: sf.id,
-        name: sf.path,
+        name: sf.path || sf.name,
         content: sf.content,
         language: sf.language,
       }));
@@ -665,21 +682,25 @@ export default function SettingsPage() {
       });
       setImportSuccessCount(newFiles.length);
       setStagedFiles([]);
-      showToast(`Loaded ${newFiles.length} file(s) into workspace (Replaced) 🚀`);
+      if (isConvertingToJavaNotebook) {
+        showToast(`Converted ${stagedJavaFiles.length} Java files into Java_Notebook.ipynb! 📓`);
+      } else {
+        showToast(`Loaded ${newFiles.length} file(s) into workspace (Replaced) 🚀`);
+      }
     } else {
       const existingNames = new Set(state.files.map((f) => f.name));
       const existingFolders = new Set(state.folders);
 
       const addedFiles = [];
-      stagedFiles.forEach((sf) => {
-        let uniqueName = sf.path;
+      filesToCommit.forEach((sf) => {
+        let uniqueName = sf.path || sf.name;
         let counter = 1;
         while (existingNames.has(uniqueName)) {
-          const dotIdx = sf.path.lastIndexOf('.');
+          const dotIdx = uniqueName.lastIndexOf('.');
           if (dotIdx !== -1) {
-            uniqueName = `${sf.path.substring(0, dotIdx)}_${counter}${sf.path.substring(dotIdx)}`;
+            uniqueName = `${uniqueName.substring(0, dotIdx)}_${counter}${uniqueName.substring(dotIdx)}`;
           } else {
-            uniqueName = `${sf.path}_${counter}`;
+            uniqueName = `${uniqueName}_${counter}`;
           }
           counter++;
         }
@@ -708,7 +729,11 @@ export default function SettingsPage() {
 
       setImportSuccessCount(addedFiles.length);
       setStagedFiles([]);
-      showToast(`Imported & appended ${addedFiles.length} file(s) to workspace! 🚀`);
+      if (isConvertingToJavaNotebook) {
+        showToast(`Converted ${stagedJavaFiles.length} Java files into Java_Notebook.ipynb! 📓`);
+      } else {
+        showToast(`Imported & appended ${addedFiles.length} file(s) to workspace! 🚀`);
+      }
     }
   };
 
@@ -1054,10 +1079,43 @@ export default function SettingsPage() {
                         onClick={handleCommitImport}
                       >
                         <ArrowRight size={16} />
-                        <span>Commit & Import ({stagedFiles.length})</span>
+                        <span>
+                          {javaImportFormat === 'notebook' && stagedFiles.filter((f) => f.path?.endsWith('.java') || f.name?.endsWith('.java')).length >= 2
+                            ? `Commit as Java Notebook (${stagedFiles.length})`
+                            : `Commit & Import (${stagedFiles.length})`}
+                        </span>
                       </button>
                     </div>
                   </div>
+
+                  {/* Multiple Java Files Detection Option */}
+                  {stagedFiles.filter((f) => f.path?.endsWith('.java') || f.name?.endsWith('.java')).length >= 2 && (
+                    <div className="java-import-prompt-banner animate-slide-up">
+                      <div className="java-prompt-left">
+                        <span className="java-prompt-icon">☕</span>
+                        <div>
+                          <strong>Multiple Java Files Detected ({stagedFiles.filter((f) => f.path?.endsWith('.java') || f.name?.endsWith('.java')).length} files)</strong>
+                          <p>Would you like to combine them into an interactive Java Notebook or import as individual files?</p>
+                        </div>
+                      </div>
+                      <div className="import-mode-selector">
+                        <button
+                          type="button"
+                          className={`mode-btn ${javaImportFormat === 'files' ? 'active' : ''}`}
+                          onClick={() => setJavaImportFormat('files')}
+                        >
+                          📄 Individual Files (.java)
+                        </button>
+                        <button
+                          type="button"
+                          className={`mode-btn ${javaImportFormat === 'notebook' ? 'active' : ''}`}
+                          onClick={() => setJavaImportFormat('notebook')}
+                        >
+                          📓 Convert to Java Notebook (.ipynb)
+                        </button>
+                      </div>
+                    </div>
+                  )}
 
                   {/* Staged Files List */}
                   <div className="staged-files-list">
