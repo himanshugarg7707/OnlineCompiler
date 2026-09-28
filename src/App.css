@@ -454,27 +454,66 @@ body.resizing-vertical * {
   to { opacity: 1; }
 }
 
-/* ─── Specialized Full Page Code Mode (Zen Mode) ────────────────────────── */
+/* ─── Specialized Full Page / Full Screen Code Mode (Pure Code View) ────── */
 .app-container.focus-mode-active .app-header,
 .app-container.focus-mode-active .status-bar,
-.app-container.focus-mode-active .shared-workspace-banner {
+.app-container.focus-mode-active .shared-workspace-banner,
+.app-container.focus-mode-active .file-tabs-bar,
+.app-container.focus-mode-active .jupyter-header-toolbar,
+.app-container.focus-mode-active .explorer-collapsed-rail,
+.app-container.focus-mode-active .explorer-container,
+.app-container.focus-mode-active .horizontal-resizer,
+.app-container.focus-mode-active .practice-container,
+.app-container.focus-mode-active .practice-resizer,
+.app-container.focus-mode-active .split-resizer,
+.app-container.focus-mode-active .output-section {
   display: none !important;
 }
 
 .app-container.focus-mode-active .app-body {
   height: 100vh !important;
   max-height: 100vh !important;
+  width: 100vw !important;
+  max-width: 100vw !important;
   flex: 1 1 100vh !important;
 }
 
-.app-container.focus-mode-active .explorer-collapsed-rail {
-  display: none !important;
+.app-container.focus-mode-active .main-content {
+  width: 100vw !important;
+  max-width: 100vw !important;
+  height: 100vh !important;
+  max-height: 100vh !important;
+  flex: 1 1 100% !important;
 }
 
-/* Floating Zen Mode Pill */
+.app-container.focus-mode-active .editor-section {
+  height: 100vh !important;
+  max-height: 100vh !important;
+  width: 100vw !important;
+  max-width: 100vw !important;
+  flex: 1 1 100% !important;
+}
+
+.app-container.focus-mode-active .code-editor-container {
+  height: 100vh !important;
+  max-height: 100vh !important;
+}
+
+.app-container.focus-mode-active .editor-wrapper {
+  height: 100vh !important;
+  max-height: 100vh !important;
+}
+
+.app-container.focus-mode-active .jupyter-container {
+  height: 100vh !important;
+  max-height: 100vh !important;
+  padding-top: 14px;
+}
+
+/* Discreet Exit Button for Pure Full Screen Mode */
 .floating-zen-bar {
   position: fixed;
-  top: 10px;
+  top: 12px;
   right: 18px;
   z-index: 9999;
   display: flex;
@@ -482,90 +521,42 @@ body.resizing-vertical * {
   pointer-events: auto;
 }
 
-.zen-bar-pill {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  background: var(--bg-glass, rgba(15, 23, 42, 0.85));
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid var(--border-primary, rgba(255, 255, 255, 0.12));
-  border-radius: var(--radius-full, 9999px);
-  padding: 4px 10px 4px 12px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), 0 0 16px rgba(0, 212, 255, 0.2);
-  transition: all var(--transition-fast, 0.15s ease);
-  opacity: 0.8;
-}
-
-.zen-bar-pill:hover {
-  opacity: 1;
-  box-shadow: 0 10px 36px rgba(0, 0, 0, 0.65), 0 0 24px rgba(0, 212, 255, 0.35);
-  border-color: rgba(0, 212, 255, 0.45);
-}
-
-.zen-pill-badge {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--accent-cyan, #00d4ff);
-  letter-spacing: 0.3px;
-  text-transform: uppercase;
-  padding-right: 6px;
-  border-right: 1px solid rgba(255, 255, 255, 0.12);
-}
-
-.zen-btn-run {
+.zen-btn-exit {
   display: inline-flex;
   align-items: center;
   gap: 5px;
   padding: 4px 10px;
   border-radius: var(--radius-full, 9999px);
-  background: linear-gradient(135deg, #10b981, #059669);
-  color: #fff;
-  border: none;
+  background: rgba(15, 23, 42, 0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: var(--text-secondary, #94a3b8);
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 500;
   cursor: pointer;
-  transition: all 0.15s ease;
+  opacity: 0.28;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
 }
 
-.zen-btn-run:hover {
-  filter: brightness(1.1);
+.zen-btn-exit:hover {
+  opacity: 1;
+  background: rgba(239, 68, 68, 0.2);
+  color: #fca5a5;
+  border-color: rgba(239, 68, 68, 0.45);
+  box-shadow: 0 4px 20px rgba(239, 68, 68, 0.25);
   transform: translateY(-1px);
 }
 
-.zen-btn-run kbd,
 .zen-btn-exit kbd {
   font-size: 9px;
   font-family: inherit;
-  background: rgba(0, 0, 0, 0.28);
+  background: rgba(0, 0, 0, 0.35);
   padding: 1px 4px;
   border-radius: 4px;
   color: rgba(255, 255, 255, 0.85);
   margin-left: 2px;
-}
-
-.zen-btn-exit {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 4px 9px;
-  border-radius: var(--radius-full, 9999px);
-  background: rgba(255, 255, 255, 0.08);
-  color: var(--text-secondary, #cbd5e1);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  font-size: 11px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.zen-btn-exit:hover {
-  background: rgba(239, 68, 68, 0.25);
-  color: #fca5a5;
-  border-color: rgba(239, 68, 68, 0.4);
 }
 
 

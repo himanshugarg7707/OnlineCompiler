@@ -311,35 +311,19 @@ function AppContent() {
       <Header />
       <SharedWorkspaceBanner />
 
-      {/* Floating Zen / Full Page Code Mode Pill */}
+      {/* Floating Discreet Exit Button for Pure Full Screen Mode */}
       {state.focusMode && (
-        <div className="floating-zen-bar animate-fade-in">
-          <div className="zen-bar-pill">
-            <div className="zen-pill-badge">
-              <Maximize2 size={12} />
-              <span>Full Page Code</span>
-            </div>
-            <button
-              type="button"
-              className="zen-btn-run"
-              onClick={handleRunCode}
-              title="Run code (Ctrl+Enter)"
-            >
-              <Play size={11} fill="currentColor" />
-              <span>Run</span>
-              <kbd>Ctrl+↵</kbd>
-            </button>
-            <button
-              type="button"
-              className="zen-btn-exit"
-              onClick={() => dispatch({ type: 'SET_FOCUS_MODE', payload: false })}
-              title="Exit Full Page Code Mode (Esc / F11)"
-            >
-              <Minimize2 size={12} />
-              <span>Exit Full Page</span>
-              <kbd>Esc</kbd>
-            </button>
-          </div>
+        <div className="floating-zen-bar animate-fade-in" title="Pure Full Screen: Zero toolbars, pure code. Press Esc or click to exit.">
+          <button
+            type="button"
+            className="zen-btn-exit"
+            onClick={() => dispatch({ type: 'SET_FOCUS_MODE', payload: false })}
+            title="Exit Full Screen Mode (Esc / F11)"
+          >
+            <Minimize2 size={11} />
+            <span>Exit Full Screen</span>
+            <kbd>Esc</kbd>
+          </button>
         </div>
       )}
 
