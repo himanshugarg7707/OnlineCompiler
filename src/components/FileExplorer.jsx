@@ -25,7 +25,7 @@ import {
 import { isItemProtected, isItemUnlocked } from '../services/securityService';
 import { sanitizeFilenameIdentifier } from '../services/identifierSanitizer';
 import PasswordPromptModal from './PasswordPromptModal';
-import { JupyterIcon, AnacondaIcon } from './LanguageIcon';
+import LanguageIcon, { JupyterIcon, AnacondaIcon } from './LanguageIcon';
 import { createDefaultNotebookJson, setupFileDragDataTransfer, convertJavaFilesToNotebook } from '../services/languageDetector';
 import { processFileList } from '../services/importService';
 import FileOptionsMenu from './FileOptionsMenu';
