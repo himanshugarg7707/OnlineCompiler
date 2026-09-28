@@ -137,6 +137,30 @@ function AppContent() {
         e.preventDefault();
         dispatch({ type: 'TOGGLE_NAVBAR_MINIMIZED' });
       }
+      // Option+Space (Alt+Space): Real-time live context sync for macOS ChatGPT App
+      if (e.altKey && (e.code === 'Space' || e.key === ' ' || e.keyCode === 32)) {
+        try {
+          const curFile = state.files.find((f) => f.id === state.activeFileId) || state.files[0];
+          const hasSelection = Boolean(state.selectedCode && state.selectedCode.trim());
+          const codeSnippet = hasSelection ? state.selectedCode.trim() : (curFile?.content || state.code || '');
+          const errorSnippet = state.stderr || state.compileOutput || '';
+
+          let payload = `[File: ${curFile?.name || 'main'} (${state.detectedLanguage?.name || 'Code'})]\n\`\`\`${state.detectedLanguage?.monacoLanguage || ''}\n${codeSnippet}\n\`\`\``;
+          if (errorSnippet) {
+            payload += `\n\n[Compiler Output / Error]:\n${errorSnippet}`;
+          }
+
+          if (navigator.clipboard?.writeText) {
+            navigator.clipboard.writeText(payload);
+          }
+          dispatch({
+            type: 'SHOW_TOAST',
+            payload: 'Live code & errors synced for ChatGPT! (⌥ + Space) 🤖',
+          });
+        } catch (err) {
+          console.warn('ChatGPT sync pasteboard error:', err);
+        }
+      }
       // Escape to exit Full Page Code Mode
       if (e.key === 'Escape' && state.focusMode) {
         dispatch({ type: 'SET_FOCUS_MODE', payload: false });

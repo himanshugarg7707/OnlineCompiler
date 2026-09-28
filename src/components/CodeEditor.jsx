@@ -539,6 +539,10 @@ export default function CodeEditor() {
     },
     // Require at least 2 chars before showing word-based suggestions
     wordBasedSuggestionsMode: 'currentDocument',
+    // ── Accessibility & Screen Reader Streaming for macOS ChatGPT App ──
+    accessibilitySupport: 'on',
+    screenReaderAnnounceInlineSuggestions: true,
+    ariaLabel: `Source code editor for ${activeFile?.name || 'current file'}`,
   };
 
   const handleEditorChange = (value) => {
@@ -626,6 +630,25 @@ export default function CodeEditor() {
             )}
           </>
         )}
+
+        {/* Hidden Accessible Live Buffer for macOS Accessibility & ChatGPT app inspection */}
+        <textarea
+          readOnly
+          aria-hidden="false"
+          tabIndex={-1}
+          className="sr-only accessibility-code-mirror"
+          aria-label={`Source code of ${activeFile?.name || 'current file'} (${detectedLanguage?.name || 'Code'})`}
+          value={code || ''}
+          style={{
+            position: 'absolute',
+            left: '-9999px',
+            top: '-9999px',
+            width: '1px',
+            height: '1px',
+            opacity: 0.001,
+            pointerEvents: 'none',
+          }}
+        />
       </div>
     </div>
   );

@@ -980,3 +980,34 @@
   color: var(--accent-cyan);
   transform: translateY(-1px);
 }
+
+/* ChatGPT Live Companion Sync Button */
+.btn-chatgpt-sync {
+  background: linear-gradient(135deg, rgba(16, 163, 127, 0.15), rgba(0, 212, 255, 0.1));
+  border: 1px solid rgba(16, 163, 127, 0.4);
+  color: #10a37f;
+  gap: 5px;
+  font-weight: 600;
+  padding: 0 10px;
+  height: 32px;
+  transition: all 0.2s ease;
+}
+
+.btn-chatgpt-sync:hover {
+  background: linear-gradient(135deg, rgba(16, 163, 127, 0.3), rgba(0, 212, 255, 0.25));
+  border-color: #10a37f;
+  color: #fff;
+  box-shadow: 0 0 12px rgba(16, 163, 127, 0.4);
+  transform: translateY(-1px);
+}
+
+.btn-chatgpt-label {
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.btn-chatgpt-sync .btn-shortcut-pill {
+  background: rgba(16, 163, 127, 0.2);
+  border-color: rgba(16, 163, 127, 0.4);
+  color: #10a37f;
+}

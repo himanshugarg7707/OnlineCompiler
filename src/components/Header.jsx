@@ -19,6 +19,7 @@ import {
   ChevronUp,
   Maximize2,
   Minimize2,
+  Sparkles,
 } from 'lucide-react';
 import LanguageIcon from './LanguageIcon';
 import LanguageSelector from './LanguageSelector';
@@ -31,6 +32,7 @@ export default function Header() {
     dispatch,
     handleRunCode,
     handleFormatCode,
+    showToast,
   } = useApp();
   const { executionStatus, explorerOpen, activeUser, files, activeFileId } = state;
 
@@ -324,6 +326,44 @@ export default function Header() {
               <span>{hasSelection ? 'Run Selection' : 'Run'}</span>
             </>
           )}
+        </button>
+
+        {/* ChatGPT Companion Sync Button */}
+        <button
+          className="btn-header-tool btn-chatgpt-sync"
+          onClick={() => {
+            try {
+              const activeFile = state.files.find((f) => f.id === state.activeFileId) || state.files[0];
+              const hasSelection = Boolean(state.selectedCode && state.selectedCode.trim());
+              const codeSnippet = hasSelection ? state.selectedCode.trim() : (activeFile?.content || state.code || '');
+              const errorSnippet = state.stderr || state.compileOutput || '';
+
+              let payload = `[File: ${activeFile?.name || 'main'} (${state.detectedLanguage?.name || 'Code'})]\n\`\`\`${state.detectedLanguage?.monacoLanguage || ''}\n${codeSnippet}\n\`\`\``;
+              if (errorSnippet) {
+                payload += `\n\n[Compiler Output / Error]:\n${errorSnippet}`;
+              }
+
+              if (navigator.clipboard?.writeText) {
+                navigator.clipboard.writeText(payload);
+              }
+              showToast('Code & Error synced for ChatGPT! (⌥ + Space) 🤖');
+
+              // Launch macOS ChatGPT app if available
+              const a = document.createElement('a');
+              a.href = 'chatgpt://';
+              a.style.display = 'none';
+              document.body.appendChild(a);
+              a.click();
+              document.body.removeChild(a);
+            } catch (err) {
+              console.warn('Sync error:', err);
+            }
+          }}
+          title="Sync live code & errors to macOS ChatGPT App (⌥ + Space)"
+        >
+          <Sparkles size={13} />
+          <span className="btn-chatgpt-label">ChatGPT</span>
+          <kbd className="btn-shortcut-pill">⌥␣</kbd>
         </button>
 
         {/* Full Page Code / Zen Mode Button */}
