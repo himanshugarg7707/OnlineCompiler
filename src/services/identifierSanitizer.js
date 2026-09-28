@@ -117,7 +117,13 @@ export function syncJavaClassWithFilename(javaCode, filename) {
   // Replace public class <OldClass> with public class <className>
   const classRegex = /public\s+class\s+([a-zA-Z0-9_$]+)/;
   if (classRegex.test(javaCode)) {
-    return javaCode.replace(classRegex, `public class ${className}`);
+    const match = javaCode.match(classRegex);
+    const oldClass = match[1];
+    if (oldClass === className) return javaCode;
+    let updated = javaCode.replace(classRegex, `public class ${className}`);
+    // Also update constructor calls so it never leaves broken constructors
+    updated = updated.replace(new RegExp(`\\b${oldClass}\\s*\\(`, 'g'), `${className}(`);
+    return updated;
   }
   return javaCode;
 }

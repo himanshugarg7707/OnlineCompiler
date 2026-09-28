@@ -607,16 +607,10 @@ export function prepareJavaCellCode(cellCode) {
 
   // 1. If already contains a complete runnable class with main method
   if (/\bpublic\s+static\s+void\s+main\b/.test(text) || /\bstatic\s+void\s+main\b/.test(text)) {
-    // If it has "public class Foo", rename to "public class Main" so Judge0 can find entry point
-    if (/\bpublic\s+class\s+([A-Za-z0-9_$]+)/.test(text)) {
-      text = text.replace(/\bpublic\s+class\s+([A-Za-z0-9_$]+)/, (match, name) => {
-        return name === 'Main' ? match : 'public class Main';
-      });
-    }
-    // If it has class without public e.g. "class Solution { public static void main...", ensure Main exists
-    if (!/\bclass\s+Main\b/.test(text)) {
-      text = text.replace(/\bclass\s+([A-Za-z0-9_$]+)/, 'public class Main');
-    }
+    // Demote public class to package-private class so filename matching is not required
+    text = text.replace(/\bpublic\s+(final\s+|abstract\s+)?class\s+([A-Za-z0-9_$]+)/g, (match, mod, name) => {
+      return name === 'Main' ? match : `${mod || ''}class ${name}`;
+    });
     return text;
   }
 

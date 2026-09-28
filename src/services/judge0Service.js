@@ -251,51 +251,70 @@ export async function executeCode(code, languageId, stdin = '', allFiles = []) {
  * 5. Strips package headers
  */
 export function prepareJavaForExecution(code) {
+  if (!code || typeof code !== 'string') return code;
+
+  // 1. Strip package declaration (sandbox has flat directory structure)
   let clean = code.replace(/^\s*package\s+[\w.]+;\s*$/gm, '// package stripped');
 
-  // If no class keyword exists at all, wrap bare statements in standard Main
-  if (!/\bclass\s+([A-Za-z0-9_$]+)/.test(clean)) {
-    return `import java.util.*;\nimport java.io.*;\n\npublic class Main {\n    public static void main(String[] args) {\n${clean}\n    }\n}`;
+  // 2. Bare statements check (e.g. System.out.println("hello"))
+  if (!/\b(?:class|record|enum|interface)\s+([A-Za-z0-9_$]+)/.test(clean)) {
+    return `import java.util.*;\nimport java.io.*;\n\npublic class Main {\n    public static void main(String[] args) throws Throwable {\n${clean}\n    }\n}`;
   }
 
-  // Find all classes and their positions
-  const classRegex = /\b(?:public\s+)?class\s+([A-Za-z0-9_$]+)/g;
+  // 3. Find all top-level classes/records/enums
+  const classRegex = /\b(?:public\s+)?(?:final\s+|abstract\s+)?(class|record|enum)\s+([A-Za-z0-9_$]+)/g;
   const classes = [];
   let match;
   while ((match = classRegex.exec(clean)) !== null) {
-    classes.push({ name: match[1], index: match.index });
+    classes.push({ name: match[2], index: match.index });
   }
 
-  // Find where main method is
-  const mainMatch = clean.match(/\bpublic\s+static\s+void\s+main\s*\(/);
-  let targetClass = null;
+  // 4. Ensure any main method has public static void main
+  clean = clean.replace(/\b(?:private|protected)\s+static\s+void\s+main\b/g, 'public static void main');
+
+  // 5. Find which class contains the main method
+  const mainMatch = clean.match(/\bpublic\s+static\s+void\s+main\s*\(/) || clean.match(/\bstatic\s+void\s+main\s*\(/);
+  let classWithMain = null;
   if (mainMatch) {
     const mainIndex = mainMatch.index;
-    const precedingClasses = classes.filter((c) => c.index < mainIndex);
-    if (precedingClasses.length > 0) {
-      targetClass = precedingClasses[precedingClasses.length - 1].name;
+    const preceding = classes.filter((c) => c.index < mainIndex);
+    if (preceding.length > 0) {
+      classWithMain = preceding[preceding.length - 1].name;
     }
   }
 
-  if (!targetClass) {
-    const pubMatch = clean.match(/public\s+class\s+([A-Za-z0-9_$]+)/);
-    if (pubMatch) targetClass = pubMatch[1];
-    else if (classes.length > 0) targetClass = classes[0].name;
-  }
+  // 6. Demote any public class / record / enum / interface (except Main) to package-private
+  // This automatically removes the "file class" restriction where the class name must match filename
+  clean = clean.replace(
+    /\bpublic\s+(final\s+|abstract\s+)?(class|record|enum|interface)\s+([A-Za-z0-9_$]+)/g,
+    (m, mod, type, name) => {
+      if (name === 'Main') return m;
+      return `${mod || ''}${type} ${name}`;
+    }
+  );
 
-  if (targetClass && targetClass !== 'Main') {
-    clean = clean.replace(new RegExp(`\\bclass\\s+${targetClass}\\b`), 'class Main');
-    clean = clean.replace(new RegExp(`\\b${targetClass}\\s*\\(`, 'g'), 'Main(');
-  }
+  // 7. Check if Main class already exists
+  const hasMainClass = classes.some((c) => c.name === 'Main');
 
-  // Convert any other public classes to package-private to satisfy single public class rule
-  clean = clean.replace(/\bpublic\s+class\s+([A-Za-z0-9_$]+)/g, (m, name) => {
-    return name === 'Main' ? 'public class Main' : `class ${name}`;
-  });
-
-  // Ensure Main has public modifier
-  if (!/\bpublic\s+class\s+Main\b/.test(clean)) {
-    clean = clean.replace(/\bclass\s+Main\b/, 'public class Main');
+  if (hasMainClass) {
+    // Ensure Main has public modifier
+    if (!/\bpublic\s+(?:final\s+|abstract\s+)?class\s+Main\b/.test(clean)) {
+      clean = clean.replace(/\bclass\s+Main\b/, 'public class Main');
+    }
+    // If Main does NOT contain main method, but another class does, inject forwarder into Main
+    if (classWithMain && classWithMain !== 'Main') {
+      clean = clean.replace(
+        /(\bpublic\s+(?:final\s+|abstract\s+)?class\s+Main\b[^{]*\{)/,
+        `$1\n    public static void main(String[] args) throws Throwable {\n        ${classWithMain}.main(args);\n    }`
+      );
+    }
+  } else {
+    // No Main class exists. Create public class Main bridge.
+    if (classWithMain) {
+      clean += `\n\npublic class Main {\n    public static void main(String[] args) throws Throwable {\n        ${classWithMain}.main(args);\n    }\n}\n`;
+    } else {
+      clean += `\n\npublic class Main {\n    public static void main(String[] args) throws Throwable {\n        System.out.println("Java code compiled successfully (no main method found).");\n    }\n}\n`;
+    }
   }
 
   return clean;

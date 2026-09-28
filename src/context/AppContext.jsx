@@ -380,8 +380,8 @@ function reducer(state, action) {
         fileContent = createDefaultNotebookJson(nbLang);
       }
 
-      // If Java file, sync the class name to match sanitized filename
-      if (fileLang?.id === 62) {
+      // If Java file, sync the class name to match sanitized filename (only for newly generated starter templates)
+      if (fileLang?.id === 62 && !initialContent) {
         fileContent = syncJavaClassWithFilename(fileContent, uniqueName);
       }
 
