@@ -187,7 +187,7 @@ export default function Header() {
   const hasSelection = Boolean(state.selectedCode && state.selectedCode.trim());
   const activeFile = files.find((f) => f.id === activeFileId) || files[0];
 
-  const workspaceTitle = state.currentWorkspaceName || 'antigravity-core';
+  const workspaceTitle = state.currentWorkspaceName || 'fullcode-project';
 
   const handleMenuClick = (menuName) => {
     setActiveMenu((prev) => (prev === menuName ? null : menuName));

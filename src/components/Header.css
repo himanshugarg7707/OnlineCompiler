@@ -1038,9 +1038,8 @@
 
 /* ─── Antigravity IDE Top Bar & Menubar Styling ──────────────────────── */
 .antigravity-top-bar {
-  background-color: var(--surface-obsidian, #0b1326);
-  border-bottom: 1px solid var(--border-primary, #424754);
-  font-family: 'JetBrains Mono', monospace;
+  background-color: var(--bg-primary);
+  border-bottom: 1px solid var(--border-primary);
   padding: 0 16px;
   height: 42px;
   min-height: 42px;
@@ -1161,8 +1160,8 @@
 }
 
 .dropdown-entry:hover {
-  background: var(--surface-container, #171f33);
-  color: #ffffff;
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
 }
 
 .dropdown-entry kbd {
@@ -1398,7 +1397,7 @@
   font-family: 'JetBrains Mono', monospace;
   padding: 3px 10px;
   border-radius: 4px;
-  background: var(--surface-container, #171f33);
+  background: var(--bg-tertiary);
   color: var(--text-secondary, #c2c6d6);
   border: 1px solid rgba(66, 71, 84, 0.6);
   cursor: pointer;
@@ -1411,7 +1410,7 @@
 .workspace-badge-pill:hover {
   color: var(--text-primary, #dae2fd);
   border-color: var(--accent-purple, #adc6ff);
-  background: var(--surface-container-high, #222a3d);
+  background: var(--bg-elevated);
 }
 
 .workspace-badge-prefix {
@@ -1476,7 +1475,7 @@
 
 .btn-icon-top:hover {
   color: var(--text-primary, #dae2fd);
-  background: var(--surface-container, #171f33);
+  background: var(--bg-tertiary);
 }
 
 .header-user-avatar {

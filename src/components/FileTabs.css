@@ -4,7 +4,7 @@
   justify-content: space-between;
   height: 36px;
   min-height: 36px;
-  background: var(--surface-container-low, #131b2e);
+  background: var(--bg-secondary);
   border-bottom: 1px solid var(--border-primary, #424754);
   padding: 0;
   user-select: none;
@@ -49,12 +49,12 @@
 }
 
 .file-tab:hover {
-  background: var(--surface-container, #171f33);
+  background: var(--bg-tertiary);
   color: var(--text-primary, #dae2fd);
 }
 
 .file-tab.active {
-  background: var(--surface-obsidian, #0b1326);
+  background: var(--bg-primary);
   color: var(--text-primary, #dae2fd);
   border-top: 2px solid var(--accent-purple, #adc6ff);
   font-weight: 600;

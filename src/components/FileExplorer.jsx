@@ -1148,8 +1148,7 @@ export default function FileExplorer() {
           {/* Explorer Header */}
           <div className="explorer-header">
             <div className="explorer-title-group">
-              <span className="material-symbols-outlined text-xs">folder_open</span>
-              <span>fullcode-project</span>
+              <span className="explorer-title">EXPLORER</span>
             </div>
 
             <div className="explorer-header-actions">

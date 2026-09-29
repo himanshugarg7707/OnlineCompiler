@@ -185,9 +185,12 @@ function validatePython(code) {
     const line = lines[i];
     const trimmed = line.trim();
 
+    // Strip trailing single-line or multi-line comment before testing statement endings
+    const codePart = trimmed.replace(/#.*$/, '').trim();
+
     // Check statements requiring colon
     const needsColonRegex = /^(def\s+\w+\s*\(.*\)|if\s+.+|elif\s+.+|else|for\s+.+\s+in\s+.+|while\s+.+|class\s+\w+.*|try|except.*|finally|with\s+.+)$/;
-    if (needsColonRegex.test(trimmed) && !trimmed.endsWith(':')) {
+    if (needsColonRegex.test(codePart) && !codePart.endsWith(':')) {
       errors.push({
         startLineNumber: i + 1,
         startColumn: line.length,
@@ -265,26 +268,29 @@ function validateJavaCpp(code, langId) {
       }
     }
 
+    // Strip trailing single-line comment or multi-line comment before testing statement endings
+    const codePart = trimmed.replace(/\/\/.*$/, '').replace(/\/\*.*?\*\/$/, '').trim();
+
     // Common missing semicolon check for simple statements
     if (
-      trimmed &&
-      !trimmed.startsWith('//') &&
-      !trimmed.startsWith('/*') &&
-      !trimmed.startsWith('*') &&
-      !trimmed.startsWith('#') &&
-      !trimmed.endsWith('{') &&
-      !trimmed.endsWith('}') &&
-      !trimmed.endsWith(';') &&
-      !trimmed.endsWith(':') &&
-      !trimmed.endsWith(',') &&
-      !trimmed.endsWith('\\')
+      codePart &&
+      !codePart.startsWith('//') &&
+      !codePart.startsWith('/*') &&
+      !codePart.startsWith('*') &&
+      !codePart.startsWith('#') &&
+      !codePart.endsWith('{') &&
+      !codePart.endsWith('}') &&
+      !codePart.endsWith(';') &&
+      !codePart.endsWith(':') &&
+      !codePart.endsWith(',') &&
+      !codePart.endsWith('\\')
     ) {
       // If it looks like a variable assignment, declaration, method call or return statement
       if (
-        /^(return|int|long|double|float|boolean|char|String|auto|var)\s+.+=.+/.test(trimmed) ||
-        /^(System\.(out|err)\.(println|print|printf)|cout|printf)\s*\(.+/.test(trimmed) ||
-        (isJava && /\b(sc|scanner|list|map|set|sb)\.[a-zA-Z0-9_$]+\s*\(.+/.test(trimmed)) ||
-        /^(import|package)\s+[\w.]+/.test(trimmed)
+        /^(return|int|long|double|float|boolean|char|String|auto|var)\s+.+=.+/.test(codePart) ||
+        /^(System\.(out|err)\.(println|print|printf)|cout|printf)\s*\(.+/.test(codePart) ||
+        (isJava && /\b(sc|scanner|list|map|set|sb)\.[a-zA-Z0-9_$]+\s*\(.+/.test(codePart)) ||
+        /^(import|package)\s+[\w.]+/.test(codePart)
       ) {
         errors.push({
           startLineNumber: i + 1,

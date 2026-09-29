@@ -323,6 +323,10 @@ export async function executeCodeLocally({ code, languageId, stdin = '', filenam
         return { canExecuteLocally: false, reason: 'Java compiler (javac/java) not found' };
       }
 
+      // Detect package name (e.g., "package HashMap;")
+      const pkgMatch = code.match(/^\s*package\s+([A-Za-z0-9_$.]+)\s*;/m);
+      const packageName = pkgMatch ? pkgMatch[1] : null;
+
       // Detect entrypoint class name (the one containing main(), or public class, or Main)
       let className = 'Main';
       const mainRegex = /\b(?:public\s+)?class\s+([A-Za-z0-9_$]+)\b[^{]*\{[^}]*?\b(?:public\s+)?static\s+void\s+main\b/s;
@@ -342,11 +346,20 @@ export async function executeCodeLocally({ code, languageId, stdin = '', filenam
           }
         }
       }
-      const srcPath = path.join(tempDir, `${className}.java`);
+
+      // Create package directory structure if needed
+      let srcPath;
+      if (packageName) {
+        const pkgDir = path.join(tempDir, ...packageName.split('.'));
+        fs.mkdirSync(pkgDir, { recursive: true });
+        srcPath = path.join(pkgDir, `${className}.java`);
+      } else {
+        srcPath = path.join(tempDir, `${className}.java`);
+      }
       fs.writeFileSync(srcPath, code, 'utf8');
 
-      // Compile
-      const compileRes = await runProcess(compilers.javac, [srcPath], { cwd: tempDir });
+      // Compile with -d flag to output classes to tempDir root (respects package structure)
+      const compileRes = await runProcess(compilers.javac, ['-d', tempDir, srcPath], { cwd: tempDir });
       if (!compileRes.success) {
         return {
           success: false,
@@ -359,8 +372,9 @@ export async function executeCodeLocally({ code, languageId, stdin = '', filenam
         };
       }
 
-      // Run
-      const execRes = await runProcess(compilers.java, ['-cp', tempDir, className], { cwd: tempDir }, stdin);
+      // Run with package-qualified class name if package exists
+      const runClass = packageName ? `${packageName}.${className}` : className;
+      const execRes = await runProcess(compilers.java, ['-cp', tempDir, runClass], { cwd: tempDir }, stdin);
       return {
         success: execRes.success,
         output: execRes.stdout,

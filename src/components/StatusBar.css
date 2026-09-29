@@ -182,13 +182,12 @@
 
 /* ─── Antigravity IDE Status Bar ───────────────────────────────────────── */
 .antigravity-status-bar {
-  background-color: var(--surface-container-high, #222a3d) !important;
-  color: var(--on-surface-variant, #c2c6d6) !important;
-  font-family: 'JetBrains Mono', monospace !important;
-  font-size: 11px !important;
-  height: 26px !important;
-  min-height: 26px !important;
-  border-top: 1px solid var(--border-primary, #424754) !important;
+  background-color: var(--bg-elevated);
+  color: var(--text-secondary);
+  font-size: 11px;
+  height: 26px;
+  min-height: 26px;
+  border-top: 1px solid var(--border-primary);
   padding: 0 14px;
 }
 
@@ -258,9 +257,9 @@
 }
 
 .terminal-btn-bar:hover {
-  background: var(--surface-container, #171f33);
-  color: var(--accent-purple, #adc6ff);
-  border-color: var(--accent-purple, #adc6ff);
+  background: var(--bg-tertiary);
+  color: var(--accent-purple);
+  border-color: var(--accent-purple);
 }
 
 

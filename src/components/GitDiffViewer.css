@@ -5,15 +5,15 @@
   flex-direction: column;
   height: 100%;
   width: 100%;
-  background: var(--surface, #0b1326);
-  color: var(--on-surface, #dae2fd);
+  background: var(--bg-primary);
+  color: var(--text-primary);
   overflow: hidden;
   user-select: text;
 }
 
 .diff-header-bar {
   border-bottom: 1px solid var(--border-primary, #424754);
-  background: var(--surface-container-low, #131b2e);
+  background: var(--bg-secondary);
   color: var(--text-primary, #dae2fd);
   font-family: 'JetBrains Mono', monospace, -apple-system;
 }
@@ -22,7 +22,7 @@
   display: flex;
   flex: 1;
   overflow: hidden;
-  background: var(--surface, #0b1326);
+  background: var(--bg-primary);
 }
 
 .diff-panel {
