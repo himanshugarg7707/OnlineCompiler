@@ -29,6 +29,7 @@ import {
 import LanguageSelector from './LanguageSelector';
 import LanguageIcon from './LanguageIcon';
 import { isLocalEnvironment } from '../services/judge0Service';
+import { processFileList } from '../services/importService';
 import './Header.css';
 
 export default function Header() {
@@ -45,6 +46,73 @@ export default function Header() {
   } = useApp();
   const { executionStatus, explorerOpen, activeUser, files, activeFileId, config } = state;
   const isGoogleTheme = config?.theme === 'antigravity-google';
+
+  const fileInputRef = useRef(null);
+  const folderInputRef = useRef(null);
+
+  const handleTriggerImportFile = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleTriggerImportFolder = () => {
+    folderInputRef.current?.click();
+  };
+
+  const handleFileInputChange = async (e) => {
+    const rawFiles = e.target.files;
+    if (!rawFiles || rawFiles.length === 0) return;
+    try {
+      const processed = await processFileList(rawFiles);
+      if (!processed || processed.length === 0) {
+        showToast('No readable code files found');
+        return;
+      }
+      processed.forEach((f, idx) => {
+        dispatch({
+          type: 'ADD_FILE',
+          payload: {
+            name: f.path || f.name,
+            content: f.content,
+            shouldOpen: idx === 0,
+          },
+        });
+      });
+      showToast(`Imported ${processed.length} file(s) into workspace 📄`);
+    } catch (err) {
+      console.error(err);
+      showToast('Error reading imported files');
+    } finally {
+      e.target.value = '';
+    }
+  };
+
+  const handleFolderInputChange = async (e) => {
+    const rawFiles = e.target.files;
+    if (!rawFiles || rawFiles.length === 0) return;
+    try {
+      const processed = await processFileList(rawFiles);
+      if (!processed || processed.length === 0) {
+        showToast('No readable code files found in selected folder');
+        return;
+      }
+      processed.forEach((f, idx) => {
+        dispatch({
+          type: 'ADD_FILE',
+          payload: {
+            name: f.path || f.name,
+            content: f.content,
+            shouldOpen: idx === 0,
+          },
+        });
+      });
+      showToast(`Imported folder with ${processed.length} file(s) 📁`);
+    } catch (err) {
+      console.error(err);
+      showToast('Error reading folder contents');
+    } finally {
+      e.target.value = '';
+    }
+  };
 
   const handleToggleGoogleTheme = () => {
     if (handleUpdateConfig) {
@@ -151,12 +219,12 @@ export default function Header() {
           <div
             className="brand-min"
             onClick={() => dispatch({ type: 'NAVIGATE_PAGE', payload: 'editor' })}
-            title="Antigravity IDE"
+            title="Full Code"
           >
             <span className="material-symbols-outlined text-primary text-sm" style={{ fontVariationSettings: "'FILL' 1" }}>
               bolt
             </span>
-            <span className="brand-title-min">Antigravity IDE</span>
+            <span className="brand-title-min">Full Code</span>
           </div>
           {activeFile && (
             <div className="min-active-file-badge" title={activeFile.name}>
@@ -231,12 +299,12 @@ export default function Header() {
         <div
           className="brand"
           onClick={() => dispatch({ type: 'NAVIGATE_PAGE', payload: 'editor' })}
-          title="Antigravity IDE — Return to Workspace"
+          title="Full Code — Return to Workspace"
         >
           <span className="material-symbols-outlined brand-bolt-icon" style={{ fontVariationSettings: "'FILL' 1" }}>
             bolt
           </span>
-          <span className="brand-title">Antigravity IDE</span>
+          <span className="brand-title">Full Code</span>
         </div>
 
         {/* Menubar */}
@@ -264,6 +332,20 @@ export default function Header() {
                   onClick={() => closeMenuAndRun(() => window.dispatchEvent(new CustomEvent('editor-new-folder')))}
                 >
                   <span>New Folder</span>
+                </button>
+                <div className="dropdown-divider" />
+                <button
+                  className="dropdown-entry"
+                  onClick={() => closeMenuAndRun(handleTriggerImportFile)}
+                >
+                  <span>Import File...</span>
+                  <kbd>Ctrl+O</kbd>
+                </button>
+                <button
+                  className="dropdown-entry"
+                  onClick={() => closeMenuAndRun(handleTriggerImportFolder)}
+                >
+                  <span>Import Folder...</span>
                 </button>
                 <div className="dropdown-divider" />
                 <button
@@ -768,8 +850,8 @@ export default function Header() {
                       bolt
                     </span>
                     <div>
-                      <div className="more-entry-title">About Google Antigravity IDE</div>
-                      <div className="more-entry-desc">Version 2.4.0 Core • Antigravity Engine Architecture</div>
+                      <div className="more-entry-title">About Full Code</div>
+                      <div className="more-entry-desc">Version 2.4.0 Core • Universal Cloud Workspace & Engine</div>
                     </div>
                   </div>
                 </button>
@@ -893,6 +975,24 @@ export default function Header() {
           <ChevronUp size={15} />
         </button>
       </div>
+
+      {/* Hidden File and Folder Pickers */}
+      <input
+        type="file"
+        ref={fileInputRef}
+        multiple
+        style={{ display: 'none' }}
+        onChange={handleFileInputChange}
+      />
+      <input
+        type="file"
+        ref={folderInputRef}
+        webkitdirectory=""
+        directory=""
+        multiple
+        style={{ display: 'none' }}
+        onChange={handleFolderInputChange}
+      />
     </header>
   );
 }
