@@ -50,19 +50,86 @@ const STORAGE_STDIN_KEY = 'fullcode_stdin_v3';
 const STORAGE_FOLDERS_KEY = 'fullcode_folders_v3';
 const STORAGE_OPEN_TABS_KEY = 'fullcode_open_tabs_v3';
 
+function normalizeLoadedFiles(files) {
+  if (!Array.isArray(files)) return files;
+  const hasJava = files.some(
+    (f) => f.name?.endsWith('.java') || f.name?.includes('Main.java') || f.language?.id === 62 || f.language?.monacoLanguage === 'java'
+  );
+  const hasCpp = files.some(
+    (f) => f.name?.endsWith('.cpp') || f.name?.endsWith('.cc') || f.language?.id === 54 || f.language?.monacoLanguage === 'cpp'
+  );
+  const hasJs = files.some(
+    (f) => (f.name?.endsWith('.js') && !f.name?.endsWith('.ipynb')) || f.language?.id === 63 || f.language?.monacoLanguage === 'javascript'
+  );
+
+  return files.map((f) => {
+    const isIpynb = f.name?.endsWith('.ipynb') || f.language?.id === 710 || f.language?.monacoLanguage === 'ipynb';
+    if (!isIpynb) return f;
+
+    const lower = (f.name || '').toLowerCase();
+    let targetLang = 'python';
+    if (lower.includes('java')) targetLang = 'java';
+    else if (lower.includes('cpp') || lower.includes('c++')) targetLang = 'cpp';
+    else if (lower.includes('js') || lower.includes('javascript')) targetLang = 'javascript';
+    else if (lower.includes('python') || lower.includes('py_')) targetLang = 'python';
+    else if (hasJava) targetLang = 'java';
+    else if (hasCpp) targetLang = 'cpp';
+    else if (hasJs) targetLang = 'javascript';
+
+    if (targetLang === 'java') {
+      return {
+        ...f,
+        language: {
+          ...f.language,
+          id: 710,
+          name: 'Java Notebook',
+          notebookLanguage: 'java',
+          kernel: 'java',
+          monacoLanguage: 'ipynb',
+          extension: 'ipynb',
+          icon: '☕',
+        },
+      };
+    } else if (targetLang === 'cpp') {
+      return {
+        ...f,
+        language: {
+          ...f.language,
+          id: 710,
+          name: 'C++ Notebook',
+          notebookLanguage: 'cpp',
+          kernel: 'cpp',
+          monacoLanguage: 'ipynb',
+          extension: 'ipynb',
+          icon: '⚡',
+        },
+      };
+    } else if (targetLang === 'javascript') {
+      return {
+        ...f,
+        language: {
+          ...f.language,
+          id: 710,
+          name: 'JavaScript Notebook',
+          notebookLanguage: 'javascript',
+          kernel: 'javascript',
+          monacoLanguage: 'ipynb',
+          extension: 'ipynb',
+          icon: '🟨',
+        },
+      };
+    }
+    return f;
+  });
+}
+
 function loadSavedFiles() {
   try {
     const raw = localStorage.getItem(STORAGE_FILES_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed) && parsed.length > 0) {
-        // Remove existing legacy/starter jupyter notebook files as requested
-        const cleanFiles = parsed.filter(
-          (f) => !f.name?.endsWith('.ipynb') && f.language?.id !== 710 && f.language?.monacoLanguage !== 'ipynb'
-        );
-        if (cleanFiles.length > 0) {
-          return cleanFiles;
-        }
+        return normalizeLoadedFiles(parsed);
       }
     }
   } catch (e) {
@@ -496,14 +563,22 @@ function reducer(state, action) {
       );
 
       let activeLang = targetFile.language;
+      let updatedFiles = state.files;
+
       if (isTargetNotebook) {
         const wsHasJava = state.files.some(
-          (f) => f.name?.endsWith('.java') || f.language?.id === 62 || f.language?.monacoLanguage === 'java'
+          (f) => f.name?.endsWith('.java') || f.name?.includes('Main.java') || f.language?.id === 62 || f.language?.monacoLanguage === 'java'
         );
         const lowerName = (targetFile.name || '').toLowerCase();
-        const nbLang = targetFile.language?.notebookLanguage || targetFile.language?.kernel;
 
-        if ((!nbLang || nbLang === 'python') && !lowerName.includes('python') && !lowerName.includes('py_') && wsHasJava) {
+        // Check if content has Java markers
+        const contentHasJava =
+          targetFile.content &&
+          (/System\.(out|err|in)\b|(?:public|private|protected)?\s*(?:class|interface|enum|record)\s+\w+|public\s+static\s+void\s+main|Scanner\s+\w+|import\s+java\.|List<\w+>|ArrayList<\w+>|Map<\w+|HashMap<\w+|Set<\w+|\/\/.*(?:Java|JShell)/i.test(
+            targetFile.content
+          ));
+
+        if ((wsHasJava || contentHasJava) && !lowerName.includes('python') && !lowerName.includes('py_')) {
           activeLang = {
             ...targetFile.language,
             id: 710,
@@ -511,15 +586,20 @@ function reducer(state, action) {
             notebookLanguage: 'java',
             kernel: 'java',
             monacoLanguage: 'ipynb',
+            extension: 'ipynb',
             icon: '☕',
           };
+          updatedFiles = state.files.map((f) =>
+            f.id === fileId ? { ...f, language: activeLang } : f
+          );
         }
       }
 
-      saveStateToStorage(state.files, fileId, state.stdin, state.folders, updatedOpenIds);
+      saveStateToStorage(updatedFiles, fileId, state.stdin, state.folders, updatedOpenIds);
 
       return {
         ...state,
+        files: updatedFiles,
         activeFileId: fileId,
         openFileIds: updatedOpenIds,
         code: targetFile.content,

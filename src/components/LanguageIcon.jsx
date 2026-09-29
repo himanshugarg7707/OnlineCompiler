@@ -378,41 +378,42 @@ export function resolveLanguageKey(language, filename = '', workspaceFiles = [])
     language?.monacoLanguage === 'ipynb';
 
   if (isIpynb) {
+    const lower = (filename && typeof filename === 'string') ? filename.toLowerCase() : '';
+
+    // Check workspace context
+    const hasJava = Array.isArray(workspaceFiles) && workspaceFiles.some(
+      (f) => f.name?.endsWith('.java') || f.name?.includes('Main.java') || f.language?.id === 62 || f.language?.monacoLanguage === 'java'
+    );
+    const hasCpp = Array.isArray(workspaceFiles) && workspaceFiles.some(
+      (f) => f.name?.endsWith('.cpp') || f.name?.endsWith('.cc') || f.language?.id === 54 || f.language?.monacoLanguage === 'cpp'
+    );
+    const hasJs = Array.isArray(workspaceFiles) && workspaceFiles.some(
+      (f) => (f.name?.endsWith('.js') && !f.name?.endsWith('.ipynb')) || f.language?.id === 63 || f.language?.monacoLanguage === 'javascript'
+    );
+
+    // 1. Explicit filename
+    if (lower.includes('java')) return 'jupyter-java';
+    if (lower.includes('cpp') || lower.includes('c++')) return 'jupyter-cpp';
+    if (lower.includes('js') || lower.includes('javascript')) return 'jupyter-js';
+    if (lower.includes('python') || lower.includes('py_')) return 'jupyter';
+
+    // 2. In a Java workspace (Java section), notebook icon is ALWAYS Java Notebook!
+    if (hasJava) return 'jupyter-java';
+    if (hasCpp) return 'jupyter-cpp';
+    if (hasJs) return 'jupyter-js';
+
+    // 3. Explicit language tag
     const nb = language?.notebookLanguage || language?.kernel;
     if (nb === 'java') return 'jupyter-java';
     if (nb === 'cpp' || nb === 'c++') return 'jupyter-cpp';
     if (nb === 'javascript' || nb === 'js') return 'jupyter-js';
     if (nb === 'python') return 'jupyter';
 
-    if (filename && typeof filename === 'string') {
-      const lower = filename.toLowerCase();
-      if (lower.includes('java')) return 'jupyter-java';
-      if (lower.includes('cpp') || lower.includes('c++')) return 'jupyter-cpp';
-      if (lower.includes('js') || lower.includes('javascript')) return 'jupyter-js';
-      if (lower.includes('python') || lower.includes('py_')) return 'jupyter';
-    }
-
     if (language?.name === 'Java Notebook') return 'jupyter-java';
     if (language?.name === 'C++ Notebook') return 'jupyter-cpp';
     if (language?.name === 'JavaScript Notebook') return 'jupyter-js';
 
-    // If workspace files are available, check workspace context
-    if (Array.isArray(workspaceFiles) && workspaceFiles.length > 0) {
-      const hasJava = workspaceFiles.some(
-        (f) => f.name?.endsWith('.java') || f.language?.id === 62 || f.language?.monacoLanguage === 'java'
-      );
-      if (hasJava) return 'jupyter-java';
-      const hasCpp = workspaceFiles.some(
-        (f) => f.name?.endsWith('.cpp') || f.language?.id === 54 || f.language?.monacoLanguage === 'cpp'
-      );
-      if (hasCpp) return 'jupyter-cpp';
-      const hasJs = workspaceFiles.some(
-        (f) => (f.name?.endsWith('.js') && !f.name?.endsWith('.ipynb')) || f.language?.id === 63
-      );
-      if (hasJs) return 'jupyter-js';
-    }
-
-    return 'jupyter';
+    return 'jupyter-java';
   }
 
   // 2. Check filename extension for regular files

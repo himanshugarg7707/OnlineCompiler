@@ -588,39 +588,40 @@ export function getFriendlyLanguageName(language, filename = '', workspaceFiles 
     language?.monacoLanguage === 'ipynb';
 
   if (isIpynb) {
+    const lower = (filename && typeof filename === 'string') ? filename.toLowerCase() : '';
+
+    // Check workspace context
+    const hasJava = Array.isArray(workspaceFiles) && workspaceFiles.some(
+      (f) => f.name?.endsWith('.java') || f.name?.includes('Main.java') || f.language?.id === 62 || f.language?.monacoLanguage === 'java'
+    );
+    const hasCpp = Array.isArray(workspaceFiles) && workspaceFiles.some(
+      (f) => f.name?.endsWith('.cpp') || f.name?.endsWith('.cc') || f.language?.id === 54 || f.language?.monacoLanguage === 'cpp'
+    );
+    const hasJs = Array.isArray(workspaceFiles) && workspaceFiles.some(
+      (f) => (f.name?.endsWith('.js') && !f.name?.endsWith('.ipynb')) || f.language?.id === 63 || f.language?.monacoLanguage === 'javascript'
+    );
+
+    // 1. Explicit filename takes top precedence
+    if (lower.includes('java')) return 'Java Notebook';
+    if (lower.includes('cpp') || lower.includes('c++')) return 'C++ Notebook';
+    if (lower.includes('js') || lower.includes('javascript')) return 'JavaScript Notebook';
+    if (lower.includes('python') || lower.includes('py_')) return 'Python Notebook';
+
+    // 2. In a Java workspace (Java section), notebook is ALWAYS Java Notebook!
+    if (hasJava) return 'Java Notebook';
+    if (hasCpp) return 'C++ Notebook';
+    if (hasJs) return 'JavaScript Notebook';
+
+    // 3. Explicit language tag on file object
     const nb = language?.notebookLanguage || language?.kernel;
     if (nb === 'java') return 'Java Notebook';
     if (nb === 'cpp' || nb === 'c++') return 'C++ Notebook';
     if (nb === 'javascript' || nb === 'js') return 'JavaScript Notebook';
     if (nb === 'python') return 'Python Notebook';
 
-    if (filename && typeof filename === 'string') {
-      const lower = filename.toLowerCase();
-      if (lower.includes('java')) return 'Java Notebook';
-      if (lower.includes('cpp') || lower.includes('c++')) return 'C++ Notebook';
-      if (lower.includes('js') || lower.includes('javascript')) return 'JavaScript Notebook';
-      if (lower.includes('python') || lower.includes('py_')) return 'Python Notebook';
-    }
-
     if (language?.name === 'Java Notebook') return 'Java Notebook';
     if (language?.name === 'C++ Notebook') return 'C++ Notebook';
     if (language?.name === 'JavaScript Notebook') return 'JavaScript Notebook';
-
-    // If workspace files are available, check workspace language context
-    if (Array.isArray(workspaceFiles) && workspaceFiles.length > 0) {
-      const hasJava = workspaceFiles.some(
-        (f) => f.name?.endsWith('.java') || f.language?.id === 62 || f.language?.monacoLanguage === 'java'
-      );
-      if (hasJava) return 'Java Notebook';
-      const hasCpp = workspaceFiles.some(
-        (f) => f.name?.endsWith('.cpp') || f.language?.id === 54 || f.language?.monacoLanguage === 'cpp'
-      );
-      if (hasCpp) return 'C++ Notebook';
-      const hasJs = workspaceFiles.some(
-        (f) => (f.name?.endsWith('.js') && !f.name?.endsWith('.ipynb')) || f.language?.id === 63
-      );
-      if (hasJs) return 'JavaScript Notebook';
-    }
 
     if (language?.name && language.name.includes('Notebook')) {
       return language.name;
