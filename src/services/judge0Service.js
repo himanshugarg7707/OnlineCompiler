@@ -358,7 +358,7 @@ export async function executeCode(code, languageId, stdin = '', allFiles = []) {
   }
 
   const result = await cloudExecuteWithFallback(processedCode, languageId, stdin);
-  if (result && (result.success || result.error)) {
+  if (result && result.success && !result.error) {
     clientExecutionCache.set(cacheKey, result);
   }
   return result;
@@ -367,7 +367,7 @@ export async function executeCode(code, languageId, stdin = '', allFiles = []) {
 /**
  * Preprocesses Java code to ensure 100% reliable execution in the sandbox:
  * 1. Automatically wraps bare statements without class/method into standard Main
- * 2. Renames class containing main() to 'public class Main' so javac matches Main.java
+ * 2. Renames class containing main() to 'class Main' so javac matches Main.java
  * 3. Demotes other public classes to package-private to avoid single-public-class errors
  * 4. Updates constructor names to match Main
  * 5. Strips package headers
@@ -378,9 +378,25 @@ export function prepareJavaForExecution(code) {
   // 1. Strip package declaration (sandbox has flat directory structure)
   let clean = code.replace(/^\s*package\s+[\w.]+;\s*$/gm, '// package stripped');
 
+  // If code already contains class Main with main method, return clean as-is
+  if (/\b(?:public\s+|final\s+|abstract\s+)*class\s+Main\b/.test(clean) && /\b(?:public\s+)?static\s+void\s+main\b/.test(clean)) {
+    return clean;
+  }
+
   // 2. Bare statements check (e.g. System.out.println("hello"))
   if (!/\b(?:class|record|enum|interface)\s+([A-Za-z0-9_$]+)/.test(clean)) {
-    return `import java.util.*;\nimport java.io.*;\n\npublic class Main {\n    public static void main(String[] args) throws Throwable {\n${clean}\n    }\n}`;
+    const lines = clean.split('\n');
+    const imports = [];
+    const body = [];
+    for (const l of lines) {
+      if (/^\s*import\s+[\w.*]+;\s*$/.test(l)) {
+        imports.push(l.trim());
+      } else {
+        body.push(l);
+      }
+    }
+    const impSet = new Set(['import java.util.*;', 'import java.io.*;', ...imports]);
+    return `${Array.from(impSet).join('\n')}\n\nclass Main {\n    public static void main(String[] args) throws Throwable {\n${body.join('\n')}\n    }\n}`;
   }
 
   // 3. Find all top-level classes/records/enums
@@ -407,11 +423,6 @@ export function prepareJavaForExecution(code) {
 
   // 6. Demote any public class / record / enum / interface to package-private
   // This automatically removes the "file class" restriction where the class name must match filename.
-  // In cloud compiler environments (such as Godbolt / Wandbox), source files are compiled as <source> or example.java.
-  // When a class is declared `public class Main`, javac demands it must be in a file named Main.java,
-  // throwing: "<source>:error: class Main is public, should be declared in a file named Main.java".
-  // Removing `public` allows all classes (including Main) to compile together without filename conflicts,
-  // while `public static void main(String[] args)` remains public and fully executable by the JVM!
   clean = clean.replace(
     /\bpublic\s+(final\s+|abstract\s+)?(class|record|enum|interface)\s+([A-Za-z0-9_$]+)/g,
     (m, mod, type, name) => `${mod || ''}${type} ${name}`
@@ -429,11 +440,11 @@ export function prepareJavaForExecution(code) {
       );
     }
   } else {
-    // No Main class exists. Create class Main bridge.
+    // No Main class exists. Create class Main bridge AT THE TOP so Main is the first class!
     if (classWithMain) {
-      clean += `\n\nclass Main {\n    public static void main(String[] args) throws Throwable {\n        ${classWithMain}.main(args);\n    }\n}\n`;
+      clean = `class Main {\n    public static void main(String[] args) throws Throwable {\n        ${classWithMain}.main(args);\n    }\n}\n\n` + clean;
     } else {
-      clean += `\n\nclass Main {\n    public static void main(String[] args) throws Throwable {\n        System.out.println("Java code compiled successfully (no main method found).");\n    }\n}\n`;
+      clean = `class Main {\n    public static void main(String[] args) throws Throwable {\n        System.out.println("Java code compiled successfully.");\n    }\n}\n\n` + clean;
     }
   }
 
@@ -464,7 +475,7 @@ async function judge0CeExecute(code, languageId, stdin = '') {
   if (!judge0LangId) return null;
 
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 6500);
+  const timeoutId = setTimeout(() => controller.abort(), 12000);
 
   try {
     const startTime = performance.now();
@@ -693,7 +704,10 @@ async function cloudExecuteWithFallback(code, languageId, stdin) {
 async function godboltExecute(code, compilerInfo, languageId, stdin) {
   const startTime = performance.now();
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 6000);
+  const timeoutId = setTimeout(() => controller.abort(), 12000);
+
+  // Godbolt compiles example.java, so 'public class Main' throws error that class Main is public and must be in Main.java
+  const sourceCode = languageId === 62 ? code.replace(/\bpublic\s+class\s+Main\b/g, 'class Main') : code;
 
   try {
     const response = await fetch(`https://godbolt.org/api/compiler/${compilerInfo.id}/compile`, {
@@ -703,11 +717,11 @@ async function godboltExecute(code, compilerInfo, languageId, stdin) {
         'Accept': 'application/json',
       },
       body: JSON.stringify({
-        source: code,
+        source: sourceCode,
         options: {
           userArguments: '',
           executeParameters: {
-            args: '',
+            args: [],
             stdin: stdin || '',
           },
           filters: {
@@ -797,7 +811,7 @@ async function godboltExecute(code, compilerInfo, languageId, stdin) {
 async function wandboxExecute(code, compiler, languageId, stdin) {
   const startTime = performance.now();
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 6000);
+  const timeoutId = setTimeout(() => controller.abort(), 12000);
 
   try {
     const response = await fetch('https://wandbox.org/api/compile.json', {

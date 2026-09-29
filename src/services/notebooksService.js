@@ -66,6 +66,11 @@ if __name__ == "__main__":
 `,
       },
       {
+        name: 'python.ipynb',
+        language: { id: 710, name: 'Python Notebook', monacoLanguage: 'ipynb', extension: 'ipynb', notebookLanguage: 'python', kernel: 'python', icon: '🪐' },
+        content: createDefaultNotebookJson('python'),
+      },
+      {
         name: 'Notes.md',
         language: { id: 99, name: 'Markdown', monacoLanguage: 'markdown', extension: 'md' },
         content: `# 🐍 Python & Data Science / AI — Subject Notebook
@@ -193,6 +198,11 @@ public class Main {
 `,
       },
       {
+        name: 'java.ipynb',
+        language: { id: 710, name: 'Java Notebook', monacoLanguage: 'ipynb', extension: 'ipynb', notebookLanguage: 'java', kernel: 'java', icon: '☕' },
+        content: createDefaultNotebookJson('java'),
+      },
+      {
         name: 'Notes.md',
         language: { id: 99, name: 'Markdown', monacoLanguage: 'markdown', extension: 'md' },
         content: `# ☕ Java & Object-Oriented Programming — Subject Notebook
@@ -280,6 +290,11 @@ int main() {
     return 0;
 }
 `,
+      },
+      {
+        name: 'cpp.ipynb',
+        language: { id: 710, name: 'C++ Notebook', monacoLanguage: 'ipynb', extension: 'ipynb', notebookLanguage: 'cpp', kernel: 'cpp', icon: '⚡' },
+        content: createDefaultNotebookJson('cpp'),
       },
       {
         name: 'Notes.md',
@@ -423,6 +438,11 @@ console.log("Web App Script initialized successfully!");
 `,
       },
       {
+        name: 'javascript.ipynb',
+        language: { id: 710, name: 'JavaScript Notebook', monacoLanguage: 'ipynb', extension: 'ipynb', notebookLanguage: 'javascript', kernel: 'javascript', icon: '🟨' },
+        content: createDefaultNotebookJson('javascript'),
+      },
+      {
         name: 'Notes.md',
         language: { id: 99, name: 'Markdown', monacoLanguage: 'markdown', extension: 'md' },
         content: `# 🌐 Web Development — Subject Notebook
@@ -549,6 +569,11 @@ public class Solution {
     }
 }
 `,
+      },
+      {
+        name: 'java.ipynb',
+        language: { id: 710, name: 'Java Notebook', monacoLanguage: 'ipynb', extension: 'ipynb', notebookLanguage: 'java', kernel: 'java', icon: '☕' },
+        content: createDefaultNotebookJson('java'),
       },
       {
         name: 'Notes.md',

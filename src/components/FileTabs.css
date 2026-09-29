@@ -2,19 +2,20 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  height: 38px;
-  min-height: 38px;
-  background: var(--bg-tertiary);
-  border-bottom: 1px solid var(--border-primary);
-  padding: 0 var(--sp-2);
+  height: 36px;
+  min-height: 36px;
+  background: var(--surface-container-low, #131b2e);
+  border-bottom: 1px solid var(--border-primary, #424754);
+  padding: 0;
   user-select: none;
   overflow: hidden;
+  font-family: 'JetBrains Mono', monospace;
 }
 
 .file-tabs-scroll {
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: 0;
   overflow-x: auto;
   scrollbar-width: none;
   height: 100%;
@@ -28,33 +29,35 @@
 .file-tab {
   display: flex;
   align-items: center;
-  gap: var(--sp-2);
-  padding: 0 var(--sp-3);
-  height: 32px;
-  background: var(--bg-secondary);
-  border: 1px solid transparent;
+  gap: 6px;
+  padding: 0 12px;
+  height: 36px;
+  background: transparent;
+  border-right: 1px solid var(--border-primary, #424754);
+  border-top: 2px solid transparent;
   border-bottom: none;
-  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
-  color: var(--text-muted);
-  font-size: var(--fs-xs);
+  border-left: none;
+  border-radius: 0;
+  color: var(--text-secondary, #c2c6d6);
+  font-size: 12px;
+  font-family: 'JetBrains Mono', monospace;
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition: all 0.12s ease;
   white-space: nowrap;
   position: relative;
-  max-width: 200px;
+  max-width: 220px;
 }
 
 .file-tab:hover {
-  background: rgba(255, 255, 255, 0.05);
-  color: var(--text-primary);
+  background: var(--surface-container, #171f33);
+  color: var(--text-primary, #dae2fd);
 }
 
 .file-tab.active {
-  background: var(--bg-primary);
-  color: var(--text-primary);
-  border-color: var(--border-primary);
-  border-bottom-color: var(--bg-primary);
-  font-weight: 500;
+  background: var(--surface-obsidian, #0b1326);
+  color: var(--text-primary, #dae2fd);
+  border-top: 2px solid var(--accent-purple, #adc6ff);
+  font-weight: 600;
 }
 
 /* Drag and Drop Tab Visual Feedback */

@@ -7,6 +7,7 @@ import {
   deleteNotebookMeta,
 } from '../services/notebooksService';
 import { getSavedWorkspaces } from '../services/workspaceService';
+import { createDefaultNotebookJson } from '../services/languageDetector';
 import {
   BookOpen,
   Plus,
@@ -105,6 +106,45 @@ export default function NotebookSetupPage() {
     }
 
     const selectedLang = LANGUAGE_OPTIONS[customLangIndex];
+    const isNotebookSupported = ['java', 'python', 'cpp', 'javascript'].includes(selectedLang.monaco);
+
+    const customFiles = [
+      {
+        name: `Main.${selectedLang.ext}`,
+        language: {
+          id: selectedLang.id,
+          name: selectedLang.name,
+          monacoLanguage: selectedLang.monaco,
+          extension: selectedLang.ext,
+        },
+        content: selectedLang.sample,
+      },
+    ];
+
+    if (isNotebookSupported) {
+      const nbKey = selectedLang.monaco === 'javascript' ? 'javascript' : selectedLang.monaco;
+      const nbIcon = nbKey === 'java' ? '☕' : nbKey === 'python' ? '🪐' : nbKey === 'cpp' ? '⚡' : '🟨';
+      customFiles.push({
+        name: `${nbKey}.ipynb`,
+        language: {
+          id: 710,
+          name: `${selectedLang.name} Notebook`,
+          monacoLanguage: 'ipynb',
+          extension: 'ipynb',
+          notebookLanguage: nbKey,
+          kernel: nbKey,
+          icon: nbIcon,
+        },
+        content: createDefaultNotebookJson(nbKey),
+      });
+    }
+
+    customFiles.push({
+      name: 'Notes.md',
+      language: { id: 99, name: 'Markdown', monacoLanguage: 'markdown', extension: 'md' },
+      content: `# ${customIcon} ${customTitle.trim()} — Subject Notebook\n\n**Course Code**: ${customCode || 'N/A'}\n**Semester / Term**: ${customDescription || 'Current Term'}\n\n## 📌 Syllabus & Learning Goals\n- [ ] Week 1: Introduction & Fundamentals\n- [ ] Week 2: Core Concepts & Practice Problems\n- [ ] Week 3: Assignment & Lab Work\n- [ ] Week 4: Review & Exam Preparation\n\n---\n\n## 📝 Formulas, Definitions & Notes\n- Document key lecture points, interview questions, and code snippets here.\n`,
+    });
+
     const customSubject = {
       id: `custom_${Date.now()}`,
       name: customTitle.trim(),
@@ -112,23 +152,7 @@ export default function NotebookSetupPage() {
       icon: customIcon,
       badgeColor: '#00d4ff',
       languageName: selectedLang.name,
-      files: [
-        {
-          name: `Main.${selectedLang.ext}`,
-          language: {
-            id: selectedLang.id,
-            name: selectedLang.name,
-            monacoLanguage: selectedLang.monaco,
-            extension: selectedLang.ext,
-          },
-          content: selectedLang.sample,
-        },
-        {
-          name: 'Notes.md',
-          language: { id: 99, name: 'Markdown', monacoLanguage: 'markdown', extension: 'md' },
-          content: `# ${customIcon} ${customTitle.trim()} — Subject Notebook\n\n**Course Code**: ${customCode || 'N/A'}\n**Semester / Term**: ${customDescription || 'Current Term'}\n\n## 📌 Syllabus & Learning Goals\n- [ ] Week 1: Introduction & Fundamentals\n- [ ] Week 2: Core Concepts & Practice Problems\n- [ ] Week 3: Assignment & Lab Work\n- [ ] Week 4: Review & Exam Preparation\n\n---\n\n## 📝 Formulas, Definitions & Notes\n- Document key lecture points, interview questions, and code snippets here.\n`,
-        },
-      ],
+      files: customFiles,
     };
 
     const ws = launchSubjectWorkspace(customSubject, customTitle.trim());

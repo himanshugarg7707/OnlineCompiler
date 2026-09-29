@@ -180,5 +180,89 @@
   transform: translateY(-1px);
 }
 
+/* ─── Antigravity IDE Status Bar ───────────────────────────────────────── */
+.antigravity-status-bar {
+  background-color: var(--surface-container-high, #222a3d) !important;
+  color: var(--on-surface-variant, #c2c6d6) !important;
+  font-family: 'JetBrains Mono', monospace !important;
+  font-size: 11px !important;
+  height: 26px !important;
+  min-height: 26px !important;
+  border-top: 1px solid var(--border-primary, #424754) !important;
+  padding: 0 14px;
+}
+
+.antigravity-status-bar .git-branch {
+  color: var(--text-primary, #dae2fd);
+  font-weight: 500;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.antigravity-status-bar .problems-indicator {
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--text-primary, #dae2fd);
+  font-weight: 500;
+  padding: 0 4px;
+  border-radius: 3px;
+}
+
+.antigravity-status-bar .problems-indicator:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.antigravity-status-bar .error-icon {
+  color: var(--accent-red, #ffb4ab);
+  font-size: 13px;
+}
+
+.antigravity-status-bar .warning-icon {
+  color: #f59e0b;
+  font-size: 13px;
+}
+
+.antigravity-status-bar .prettier-active {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--text-secondary, #c2c6d6);
+}
+
+.prettier-indicator-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #4edea3;
+  display: inline-block;
+  box-shadow: 0 0 6px rgba(78, 222, 163, 0.5);
+}
+
+.terminal-btn-bar {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: var(--text-secondary, #c2c6d6);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 7px;
+  border-radius: 3px;
+  font-family: inherit;
+  font-size: 10.5px;
+  transition: all 0.15s ease;
+}
+
+.terminal-btn-bar:hover {
+  background: var(--surface-container, #171f33);
+  color: var(--accent-purple, #adc6ff);
+  border-color: var(--accent-purple, #adc6ff);
+}
+
+
 
 

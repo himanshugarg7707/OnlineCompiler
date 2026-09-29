@@ -1,25 +1,25 @@
 import { useMemo } from 'react';
 import { useApp } from '../context/AppContext';
-import { Terminal, Plus, ChevronUp, ChevronDown, Palette, Activity } from 'lucide-react';
+import { Activity } from 'lucide-react';
 import { analyzeComplexity } from '../services/complexityAnalyzer';
 import { getFriendlyLanguageName } from '../services/languageDetector';
 import LanguageIcon from './LanguageIcon';
 import './StatusBar.css';
 
-const THEME_NAMES = {
-  custom: 'Custom (3-Color)',
-  dark: 'Full Code Dark',
-  'baby-pink': 'Baby Pink (Light)',
-  'baby-pink-dark': 'Baby Pink (Dark)',
-  cyberpunk: 'Cyberpunk Neon',
-  monokai: 'Monokai Pro',
-  light: 'Clean Light',
-  nord: 'Nord Frost',
-};
-
 export default function StatusBar() {
-  const { state, dispatch, handleToggleTerminal } = useApp();
-  const { detectedLanguage, cursorPosition, executionTime, executionMemory, terminalHidden, code, files, activeFileId } = state;
+  const { state, dispatch } = useApp();
+  const {
+    detectedLanguage,
+    cursorPosition,
+    executionTime,
+    executionMemory,
+    code,
+    files,
+    activeFileId,
+    fileErrors = {},
+    stderr,
+  } = state;
+
   const activeFile = files?.find((f) => f.id === activeFileId);
   const displayName = getFriendlyLanguageName(detectedLanguage, activeFile?.name, files);
   const isNotebook = Boolean(
@@ -28,48 +28,58 @@ export default function StatusBar() {
     detectedLanguage?.id === 710
   );
 
+  const errorCount = useMemo(() => {
+    let count = 0;
+    if (stderr) count += 1;
+    if (fileErrors && activeFileId && Array.isArray(fileErrors[activeFileId])) {
+      count += fileErrors[activeFileId].length;
+    }
+    return count;
+  }, [stderr, fileErrors, activeFileId]);
+
   const complexity = useMemo(() => {
     return analyzeComplexity(code, detectedLanguage);
   }, [code, detectedLanguage]);
 
   return (
-    <footer className="status-bar">
+    <footer className="status-bar antigravity-status-bar">
+      {/* Left: Git branch & Problems */}
       <div className="status-left">
-        <span className="status-item language">
-          <LanguageIcon language={detectedLanguage} filename={activeFile?.name} workspaceFiles={files} size={13} />
-          <span>{displayName}</span>
-        </span>
-        <span className="status-item">
-          Ln {cursorPosition.line}, Col {cursorPosition.column}
-        </span>
-        <span className="status-item">UTF-8</span>
+        <div className="status-item git-branch" title="Git Branch: main">
+          <span className="material-symbols-outlined text-xs">call_split</span>
+          <span>main*</span>
+        </div>
+
+        <div
+          className="status-item problems-indicator"
+          onClick={() => {
+            dispatch({ type: 'SET_TERMINAL_HIDDEN', payload: false });
+            dispatch({ type: 'SET_TERMINAL_TAB', payload: 'output' });
+          }}
+          title={`${errorCount} Errors, 0 Warnings`}
+        >
+          <span className="material-symbols-outlined text-xs error-icon">error</span>
+          <span>{errorCount}</span>
+          <span className="material-symbols-outlined text-xs warning-icon">warning</span>
+          <span>0</span>
+        </div>
 
         {complexity.confidence !== 'none' && (
           <button
             className="status-item status-complexity-btn"
-            onClick={() => dispatch({ type: 'SET_TERMINAL_TAB', payload: 'complexity' })}
-            title="Click to open full Big-O Complexity & Optimization tab"
+            onClick={() => {
+              dispatch({ type: 'SET_TERMINAL_HIDDEN', payload: false });
+              dispatch({ type: 'SET_TERMINAL_TAB', payload: 'complexity' });
+            }}
+            title="Big-O Complexity Analysis & Optimization"
           >
-            <Activity size={12} className="icon-cyan" />
+            <Activity size={11} className="icon-cyan" />
             <span>⏱ {complexity.time} · 💾 {complexity.space}</span>
           </button>
         )}
-
-        <button
-          className="status-item status-theme-btn"
-          onClick={() => {
-            if (typeof window !== 'undefined') {
-              window.location.hash = '#/settings?tab=themes';
-            }
-            dispatch({ type: 'NAVIGATE_PAGE', payload: 'settings' });
-          }}
-          title="Change Theme & Custom 3-Color Engine"
-        >
-          <Palette size={12} />
-          <span>{THEME_NAMES[state.config?.theme] || 'Theme'}</span>
-        </button>
       </div>
 
+      {/* Right: Encodings, Ln/Col, Language, Prettier, Terminal Toggle */}
       <div className="status-right">
         {executionTime && (
           <span className="status-item time">⏱ {executionTime}s</span>
@@ -80,26 +90,45 @@ export default function StatusBar() {
           </span>
         )}
 
-        {/* Prominent Footer Terminal Button (Only for regular code files, hidden in notebooks) */}
-        {isNotebook ? (
-          <span className="status-item notebook-indicator" title="Notebook mode: Cells execute inline">
-            🪐 Notebook (Inline Output)
-          </span>
-        ) : (
+        <span className="status-item">UTF-8</span>
+
+        <span className="status-item">
+          Ln {cursorPosition.line}, Col {cursorPosition.column}
+        </span>
+
+        <span
+          className="status-item language"
+          onClick={() => {
+            window.location.hash = '#/settings?tab=general';
+            dispatch({ type: 'NAVIGATE_PAGE', payload: 'settings' });
+          }}
+          title="Detected Language"
+        >
+          <LanguageIcon language={detectedLanguage} filename={activeFile?.name} workspaceFiles={files} size={13} />
+          <span>{displayName}</span>
+        </span>
+
+        <span className="status-item prettier-active" title="Code Formatter Active">
+          <span className="prettier-indicator-dot" />
+          <span>Prettier Active</span>
+        </span>
+
+        {/* Terminal Toggle Button (hidden in notebook mode since output is inline) */}
+        {!isNotebook && (
           <button
-            className="status-terminal-btn terminal-active-badge"
+            className="status-item terminal-btn-bar"
             onClick={() => {
-              dispatch({ type: 'SET_TERMINAL_HIDDEN', payload: false });
-              dispatch({ type: 'SET_TERMINAL_TAB', payload: 'output' });
+              dispatch({ type: 'SET_TERMINAL_HIDDEN', payload: !state.terminalHidden });
+              if (state.terminalHidden) {
+                dispatch({ type: 'SET_TERMINAL_TAB', payload: 'terminal' });
+              }
             }}
-            title="Terminal & Output Panel Active (Ctrl+`)"
+            title="Toggle Bottom Terminal & Output Panel (Ctrl+`)"
           >
-            <Terminal size={12} />
+            <span className="material-symbols-outlined text-xs">terminal</span>
             <span>Terminal</span>
           </button>
         )}
-
-        <span className="status-item brand">Full Code</span>
       </div>
     </footer>
   );

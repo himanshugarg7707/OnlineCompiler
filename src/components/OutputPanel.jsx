@@ -2,7 +2,22 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { useApp } from '../context/AppContext';
-import { Terminal, Keyboard, BrainCircuit, Sparkles, Database, TerminalSquare, Globe, Minus, ChevronDown, FileCode, Play, CheckCircle2, Activity } from 'lucide-react';
+import {
+  Terminal,
+  Keyboard,
+  BrainCircuit,
+  Sparkles,
+  Database,
+  TerminalSquare,
+  Globe,
+  Minus,
+  ChevronDown,
+  FileCode,
+  Play,
+  CheckCircle2,
+  Activity,
+  AlertCircle,
+} from 'lucide-react';
 import DatabasePanel from './DatabasePanel';
 import WebPreviewPanel from './WebPreviewPanel';
 import ComplexityTab from './ComplexityTab';
@@ -12,10 +27,11 @@ import { isLocalEnvironment } from '../services/judge0Service';
 import './OutputPanel.css';
 
 const TABS = [
+  { id: 'terminal', label: 'Terminal', icon: TerminalSquare },
   { id: 'output', label: 'Output', icon: Terminal },
+  { id: 'problems', label: 'Problems', icon: AlertCircle },
   { id: 'complexity', label: 'Complexity', icon: Activity },
   { id: 'web', label: 'Web Preview', icon: Globe },
-  { id: 'terminal', label: 'Terminal', icon: TerminalSquare },
   { id: 'database', label: 'Database Explorer', icon: Database },
   { id: 'input', label: 'Input', icon: Keyboard },
   { id: 'explanation', label: 'AI Explanation', icon: BrainCircuit },
@@ -695,7 +711,7 @@ function TerminalTab() {
             return (
               <div key={idx} className="terminal-line cmd">
                 <span className="terminal-prompt">
-                  {entry.user ? `${entry.user}@FullCode:` : ''}{entry.cwd || '~'} $
+                  {entry.user ? `${entry.user}@antigravity:` : 'antigravity@core:'}{entry.cwd || '~'} $
                 </span>
                 {entry.text}
               </div>
@@ -730,7 +746,7 @@ function TerminalTab() {
 
       <div className="terminal-input-line">
         <span className="terminal-input-cwd">
-          {terminalMode === 'local' && isLocalAvailable ? `${localUser}@FullCode:${displayPromptCwd}` : displayPromptCwd}
+          {terminalMode === 'local' && isLocalAvailable ? `${localUser}@antigravity:${displayPromptCwd}` : `antigravity@core:${displayPromptCwd}`}
         </span>
         <span className="terminal-input-prompt">$</span>
         <input
@@ -861,7 +877,12 @@ export default function OutputPanel() {
               >
                 <Icon size={14} />
                 <span>{tab.label}</span>
-                {hasNotification && <span className="tab-dot" />}
+                {tab.id === 'problems' && (
+                  <span className={`tab-problems-count ${hasError ? 'error-active' : ''}`}>
+                    {hasError ? '1' : '0'}
+                  </span>
+                )}
+                {hasNotification && tab.id !== 'problems' && <span className="tab-dot" />}
               </button>
             );
           })}
@@ -951,6 +972,26 @@ export default function OutputPanel() {
 
       {/* Tab Content */}
       <div className="output-content">
+        {/* Problems Tab */}
+        {activeTab === 'problems' && (
+          <div className="problems-tab-container animate-fade-in">
+            {hasError ? (
+              <div className="problem-alert-box">
+                <div className="problem-alert-header">
+                  <span className="material-symbols-outlined text-xs text-error">error</span>
+                  <span className="problem-alert-type">{compileOutput ? 'Compilation Error' : 'Runtime Error'}</span>
+                </div>
+                <pre className="problem-alert-details">{compileOutput || stderr}</pre>
+              </div>
+            ) : (
+              <div className="no-problems-state">
+                <span className="material-symbols-outlined text-base text-tertiary">check_circle</span>
+                <span>No problems have been detected in the current workspace.</span>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Output Tab */}
         {activeTab === 'output' && (
           <div className="output-view">

@@ -802,11 +802,13 @@ export function prepareJavaCellCode(cellCode) {
 
   return `${importsStr}
 
-${classesStr ? classesStr + '\n\n' : ''}class Main {
+class Main {
 ${methodsStr ? methodsStr + '\n\n' : ''}    public static void main(String[] args) throws Throwable {
 ${indentedStatements}
     }
-}`;
+}
+
+${classesStr ? classesStr + '\n\n' : ''}`;
 }
 
 /**
@@ -896,11 +898,13 @@ ${activeStatementsCode.split('\n').map((l) => '        ' + l).join('\n')}`;
 
   return `${importsStr}
 
-${classesStr ? classesStr + '\n\n' : ''}class Main {
+class Main {
 ${methodsStr ? methodsStr + '\n\n' : ''}    public static void main(String[] args) throws Throwable {
 ${mainBody}
     }
-}`;
+}
+
+${classesStr ? classesStr + '\n\n' : ''}`;
 }
 
 /**

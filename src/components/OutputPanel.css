@@ -964,5 +964,65 @@
   margin-left: 6px;
 }
 
+/* ─── Antigravity IDE Bottom Panel & Problems Tab Styling ──────────────── */
+.tab-problems-count {
+  font-size: 10px;
+  padding: 1px 5px;
+  border-radius: 9999px;
+  background: var(--surface-container-high, #222a3d);
+  color: var(--text-secondary, #c2c6d6);
+  font-weight: 600;
+  line-height: 1;
+  margin-left: 3px;
+}
+
+.tab-problems-count.error-active {
+  background: #93000a;
+  color: #ffdad6;
+}
+
+.problems-tab-container {
+  padding: 14px;
+  height: 100%;
+  overflow-y: auto;
+  box-sizing: border-box;
+}
+
+.problem-alert-box {
+  background: rgba(147, 0, 10, 0.15);
+  border: 1px solid rgba(255, 180, 171, 0.3);
+  border-radius: 6px;
+  padding: 12px;
+}
+
+.problem-alert-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--accent-red, #ffb4ab);
+  font-weight: 600;
+  font-size: 12px;
+  margin-bottom: 8px;
+}
+
+.problem-alert-details {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11.5px;
+  color: #ffdad6;
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.no-problems-state {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 16px;
+  color: var(--text-secondary, #c2c6d6);
+  font-size: 12px;
+}
+
 
 

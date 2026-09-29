@@ -132,8 +132,10 @@ export default function FileExplorer() {
 
   const { files, folders, activeFileId, fileErrors = {} } = state;
 
-  // Search query
+  // Search query & active tab
+  const [activeSidebarTab, setActiveSidebarTab] = useState('explorer'); // 'explorer' | 'search' | 'extensions'
   const [searchQuery, setSearchQuery] = useState('');
+  const searchInputRef = useRef(null);
 
   // Folder collapse state: { [folderPath]: boolean }
   const [collapsedFolders, setCollapsedFolders] = useState({});
@@ -768,78 +770,172 @@ export default function FileExplorer() {
   };
 
   return (
-    <aside className="file-explorer file-explorer-sidebar">
-      {/* Explorer Header */}
-      <div className="explorer-header">
-        <div className="explorer-title-group">
-          <FolderTree size={16} className="explorer-icon" />
-          <span>Explorer</span>
+    <aside className="file-explorer file-explorer-sidebar antigravity-sidebar">
+      {/* Top Workspace & Project Root header */}
+      <div className="sidebar-workspace-header">
+        <span className="sidebar-workspace-label">WORKSPACE</span>
+        <span className="sidebar-workspace-sub">PROJECT ROOT</span>
+      </div>
+
+      {/* Side Navigation Tabs (Explorer, Search, Extensions) */}
+      <div className="sidebar-nav-tabs">
+        <div
+          className={`sidebar-nav-tab ${activeSidebarTab === 'explorer' ? 'active' : ''}`}
+          onClick={() => setActiveSidebarTab('explorer')}
+          title="File Tree Explorer"
+        >
+          <span className="material-symbols-outlined text-sm">folder</span>
+          <span className="sidebar-tab-title">Explorer</span>
         </div>
-
-        <div className="explorer-header-actions">
-          <button
-            className="explorer-action-btn"
-            onClick={() => startAddFile('')}
-            title="New File (Enter file name)"
-          >
-            <FilePlus size={14} />
-          </button>
-
-          <button
-            className="explorer-action-btn"
-            onClick={handleOpenLocalFolderPrompt}
-            title="Open Local Project Folder (⇧⌘O / Directory Picker)"
-          >
-            <FolderOpen size={14} />
-          </button>
-
-          <button
-            className="explorer-action-btn"
-            onClick={() => startAddFolder('')}
-            title="New Folder (📁+)"
-          >
-            <FolderPlus size={14} />
-          </button>
-
-          <button
-            className="explorer-action-btn"
-            onClick={() => {
-              if (typeof window !== 'undefined') {
-                window.location.hash = '#/settings?tab=import';
-              }
-              dispatch({ type: 'NAVIGATE_PAGE', payload: 'settings' });
-            }}
-            title="Import Folder or Files (Settings > Import)"
-          >
-            <FolderInput size={14} />
-          </button>
-
-          <button
-            className="explorer-action-btn"
-            onClick={() => dispatch({ type: 'TOGGLE_EXPLORER' })}
-            title="Close Explorer"
-          >
-            <X size={14} />
-          </button>
+        <div
+          className={`sidebar-nav-tab ${activeSidebarTab === 'search' ? 'active' : ''}`}
+          onClick={() => {
+            setActiveSidebarTab('search');
+            setTimeout(() => searchInputRef.current?.focus(), 50);
+          }}
+          title="Search Workspace Files"
+        >
+          <span className="material-symbols-outlined text-sm">search</span>
+          <span className="sidebar-tab-title">Search</span>
+        </div>
+        <div
+          className={`sidebar-nav-tab ${activeSidebarTab === 'extensions' ? 'active' : ''}`}
+          onClick={() => setActiveSidebarTab('extensions')}
+          title="Features & Extensions Hub"
+        >
+          <span className="material-symbols-outlined text-sm">extension</span>
+          <span className="sidebar-tab-title">Extensions</span>
         </div>
       </div>
 
-      {/* Search Input */}
-      <div className="explorer-search">
-        <Search size={12} className="search-icon" />
-        <input
-          type="text"
-          placeholder="Search workspace files..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="explorer-search-input"
-        />
-        {searchQuery && (
-          <button className="btn-clear-search" onClick={() => setSearchQuery('')}>
-            <X size={11} />
-          </button>
-        )}
-      </div>
+      {/* Extensions Hub Panel View */}
+      {activeSidebarTab === 'extensions' ? (
+        <div className="sidebar-extensions-panel animate-fade-in">
+          <div className="extensions-group-title">INSTALLED EXTENSIONS & LABS</div>
+          <div className="extension-card" onClick={() => dispatch({ type: 'NAVIGATE_PAGE', payload: 'practice' })}>
+            <div className="extension-icon-box practice-box">
+              <span className="material-symbols-outlined text-sm">code</span>
+            </div>
+            <div className="extension-info">
+              <div className="extension-name">DSA Practice Lab</div>
+              <div className="extension-desc">70+ curated coding questions, test cases & hints</div>
+            </div>
+          </div>
+
+          <div className="extension-card" onClick={() => dispatch({ type: 'NAVIGATE_PAGE', payload: 'exam' })}>
+            <div className="extension-icon-box exam-box">
+              <span className="material-symbols-outlined text-sm">assignment</span>
+            </div>
+            <div className="extension-info">
+              <div className="extension-name">Proctored Exam & Tests</div>
+              <div className="extension-desc">Exam mode with PDF questions & auto grading</div>
+            </div>
+          </div>
+
+          <div className="extension-card" onClick={() => dispatch({ type: 'NAVIGATE_PAGE', payload: 'notebook-setup' })}>
+            <div className="extension-icon-box notebook-box">
+              <span className="material-symbols-outlined text-sm">school</span>
+            </div>
+            <div className="extension-info">
+              <div className="extension-name">Subject Course Notebooks</div>
+              <div className="extension-desc">Interactive Jupyter notebooks for Java, Python & C++</div>
+            </div>
+          </div>
+
+          <div className="extension-card" onClick={() => dispatch({ type: 'NAVIGATE_PAGE', payload: 'templates' })}>
+            <div className="extension-icon-box template-box">
+              <span className="material-symbols-outlined text-sm">view_quilt</span>
+            </div>
+            <div className="extension-info">
+              <div className="extension-name">Algorithm Templates</div>
+              <div className="extension-desc">Boilerplates, DSA algorithms & snippets</div>
+            </div>
+          </div>
+
+          <div className="extension-card" onClick={() => dispatch({ type: 'TOGGLE_COLLAB_MODAL' })}>
+            <div className="extension-icon-box live-box">
+              <span className="material-symbols-outlined text-sm">wifi_tethering</span>
+            </div>
+            <div className="extension-info">
+              <div className="extension-name">Live Room Collaboration</div>
+              <div className="extension-desc">Real-time peer pair programming & shared edits</div>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <>
+          {/* Explorer Header */}
+          <div className="explorer-header">
+            <div className="explorer-title-group">
+              <span className="material-symbols-outlined text-xs">folder_open</span>
+              <span>antigravity-core</span>
+            </div>
+
+            <div className="explorer-header-actions">
+              <button
+                className="explorer-action-btn"
+                onClick={() => startAddFile('')}
+                title="New File"
+              >
+                <FilePlus size={14} />
+              </button>
+
+              <button
+                className="explorer-action-btn"
+                onClick={handleOpenLocalFolderPrompt}
+                title="Open Local Project Folder"
+              >
+                <FolderOpen size={14} />
+              </button>
+
+              <button
+                className="explorer-action-btn"
+                onClick={() => startAddFolder('')}
+                title="New Folder"
+              >
+                <FolderPlus size={14} />
+              </button>
+
+              <button
+                className="explorer-action-btn"
+                onClick={() => {
+                  if (typeof window !== 'undefined') {
+                    window.location.hash = '#/settings?tab=import';
+                  }
+                  dispatch({ type: 'NAVIGATE_PAGE', payload: 'settings' });
+                }}
+                title="Import Folder"
+              >
+                <FolderInput size={14} />
+              </button>
+
+              <button
+                className="explorer-action-btn"
+                onClick={() => dispatch({ type: 'TOGGLE_EXPLORER' })}
+                title="Close Explorer"
+              >
+                <X size={14} />
+              </button>
+            </div>
+          </div>
+
+          {/* Search Input (visible if Search tab active or always available as search filter) */}
+          <div className="explorer-search">
+            <Search size={12} className="search-icon" />
+            <input
+              ref={searchInputRef}
+              type="text"
+              placeholder="Search workspace files..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="explorer-search-input"
+            />
+            {searchQuery && (
+              <button className="btn-clear-search" onClick={() => setSearchQuery('')}>
+                <X size={11} />
+              </button>
+            )}
+          </div>
 
       {/* Recursive Files & Folders Tree */}
       <div
@@ -989,6 +1085,20 @@ export default function FileExplorer() {
             <span>Click to create a file</span>
           </div>
         )}
+      </div>
+        </>
+      )}
+
+      {/* Footer Nav inside Sidebar */}
+      <div className="sidebar-footer">
+        <div
+          className="sidebar-footer-btn"
+          onClick={() => dispatch({ type: 'NAVIGATE_PAGE', payload: 'settings' })}
+          title="Open Settings (Themes, Audio, Shortcuts & Workspaces)"
+        >
+          <span className="material-symbols-outlined text-sm">settings</span>
+          <span className="sidebar-footer-text">Settings</span>
+        </div>
       </div>
 
       {/* Password Security Unlock Modal */}

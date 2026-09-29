@@ -2,54 +2,58 @@
 
 /* ─── Design Tokens ────────────────────────────────────────────────────── */
 :root, [data-theme="dark"] {
-  /* Base palette */
-  --bg-primary: #0d1117;
-  --bg-secondary: #161b22;
-  --bg-tertiary: #1c2333;
-  --bg-elevated: #21283b;
-  --bg-glass: rgba(22, 27, 34, 0.75);
+  /* Antigravity IDE Design Tokens */
+  --surface-obsidian: #0b1326;
+  --electric-blue: #adc6ff;
+  --glow-diffusion: rgba(77, 142, 255, 0.15);
+
+  --bg-primary: #0b1326;
+  --bg-secondary: #131b2e;
+  --bg-tertiary: #171f33;
+  --bg-elevated: #222a3d;
+  --bg-glass: rgba(19, 27, 46, 0.85);
 
   /* Borders */
-  --border-primary: rgba(48, 54, 61, 0.8);
-  --border-accent: rgba(0, 212, 255, 0.25);
-  --border-glow: rgba(0, 212, 255, 0.5);
+  --border-primary: #424754;
+  --border-accent: rgba(173, 198, 255, 0.35);
+  --border-glow: rgba(77, 142, 255, 0.45);
 
   /* Text */
-  --text-primary: #e6edf3;
-  --text-secondary: #8b949e;
-  --text-muted: #636d76;
-  --text-accent: #00d4ff;
+  --text-primary: #dae2fd;
+  --text-secondary: #c2c6d6;
+  --text-muted: #8c909f;
+  --text-accent: #adc6ff;
 
   /* Accent Colors */
-  --accent-cyan: #00d4ff;
-  --accent-purple: #b480ff;
-  --accent-green: #3fb950;
+  --accent-cyan: #4cd7f6;
+  --accent-purple: #adc6ff;
+  --accent-green: #4edea3;
   --accent-orange: #f0883e;
-  --accent-red: #f85149;
+  --accent-red: #ffb4ab;
   --accent-pink: #f778ba;
-  --accent-yellow: #d29922;
+  --accent-yellow: #acedff;
 
   /* Gradients */
-  --gradient-primary: linear-gradient(135deg, #00d4ff 0%, #b480ff 100%);
-  --gradient-secondary: linear-gradient(135deg, #b480ff 0%, #f778ba 100%);
-  --gradient-success: linear-gradient(135deg, #3fb950 0%, #00d4ff 100%);
-  --gradient-error: linear-gradient(135deg, #f85149 0%, #f0883e 100%);
-  --gradient-bg: linear-gradient(180deg, #0d1117 0%, #161b22 100%);
+  --gradient-primary: linear-gradient(135deg, #adc6ff 0%, #4cd7f6 100%);
+  --gradient-secondary: linear-gradient(135deg, #4d8eff 0%, #4edea3 100%);
+  --gradient-success: linear-gradient(135deg, #4edea3 0%, #4cd7f6 100%);
+  --gradient-error: linear-gradient(135deg, #ffb4ab 0%, #f0883e 100%);
+  --gradient-bg: linear-gradient(180deg, #0b1326 0%, #131b2e 100%);
 
   /* Shadows */
-  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);
-  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
-  --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.5);
-  --shadow-glow-cyan: 0 0 20px rgba(0, 212, 255, 0.2), 0 0 40px rgba(0, 212, 255, 0.1);
-  --shadow-glow-purple: 0 0 20px rgba(180, 128, 255, 0.2), 0 0 40px rgba(180, 128, 255, 0.1);
-  --shadow-glow-green: 0 0 20px rgba(63, 185, 80, 0.2);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 4px 14px rgba(0, 0, 0, 0.5);
+  --shadow-lg: 0 8px 32px rgba(6, 14, 32, 0.7);
+  --shadow-glow-cyan: 0 0 20px rgba(76, 215, 246, 0.25);
+  --shadow-glow-purple: 0 0 20px rgba(173, 198, 255, 0.25);
+  --shadow-glow-green: 0 0 20px rgba(78, 222, 163, 0.25);
 
   /* Theme Adaptive Run Button */
-  --btn-run-bg: linear-gradient(135deg, #10b981 0%, #06b6d4 100%);
+  --btn-run-bg: linear-gradient(135deg, #4d8eff 0%, #03b5d3 100%);
   --btn-run-color: #ffffff;
-  --btn-run-glow: 0 0 20px rgba(16, 185, 129, 0.4);
-  --btn-run-hover-shadow: 0 0 28px rgba(16, 185, 129, 0.6), 0 0 10px rgba(6, 182, 212, 0.5);
-  --btn-run-border: 1px solid rgba(16, 185, 129, 0.6);
+  --btn-run-glow: 0 0 20px rgba(77, 142, 255, 0.4);
+  --btn-run-hover-shadow: 0 0 28px rgba(77, 142, 255, 0.6), 0 0 10px rgba(3, 181, 211, 0.5);
+  --btn-run-border: 1px solid rgba(173, 198, 255, 0.5);
 
   /* Spacing */
   --sp-1: 4px;
@@ -83,10 +87,29 @@
   --transition-slow: 400ms cubic-bezier(0.4, 0, 0.2, 1);
 
   /* Layout */
-  --header-height: 42px;
-  --header-min-height: 28px;
+  --header-height: 44px;
+  --header-min-height: 30px;
   --statusbar-height: 26px;
   --sidebar-width: 380px;
+}
+
+/* Material Symbols Outlined font class */
+.material-symbols-outlined {
+  font-family: 'Material Symbols Outlined', sans-serif;
+  font-weight: normal;
+  font-style: normal;
+  font-size: 16px;
+  line-height: 1;
+  letter-spacing: normal;
+  text-transform: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
+  word-wrap: normal;
+  direction: ltr;
+  font-feature-settings: 'liga';
+  -webkit-font-smoothing: antialiased;
 }
 
 /* ─── Baby Pink Theme (Sakura Blossom) ────────────────────────────────── */
