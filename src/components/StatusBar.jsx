@@ -21,7 +21,7 @@ export default function StatusBar() {
   const { state, dispatch, handleToggleTerminal } = useApp();
   const { detectedLanguage, cursorPosition, executionTime, executionMemory, terminalHidden, code, files, activeFileId } = state;
   const activeFile = files?.find((f) => f.id === activeFileId);
-  const displayName = getFriendlyLanguageName(detectedLanguage, activeFile?.name);
+  const displayName = getFriendlyLanguageName(detectedLanguage, activeFile?.name, files);
   const isNotebook = Boolean(
     activeFile?.name?.endsWith('.ipynb') ||
     detectedLanguage?.monacoLanguage === 'ipynb' ||
@@ -36,7 +36,7 @@ export default function StatusBar() {
     <footer className="status-bar">
       <div className="status-left">
         <span className="status-item language">
-          <LanguageIcon language={detectedLanguage} filename={activeFile?.name} size={13} />
+          <LanguageIcon language={detectedLanguage} filename={activeFile?.name} workspaceFiles={files} size={13} />
           <span>{displayName}</span>
         </span>
         <span className="status-item">

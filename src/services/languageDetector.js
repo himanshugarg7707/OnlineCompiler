@@ -581,7 +581,7 @@ export function detectLanguage(code) {
 /**
  * Resolve friendly display name for files and notebook kernels
  */
-export function getFriendlyLanguageName(language, filename = '') {
+export function getFriendlyLanguageName(language, filename = '', workspaceFiles = []) {
   const isIpynb =
     (filename && typeof filename === 'string' && filename.toLowerCase().endsWith('.ipynb')) ||
     Number(language?.id) === 710 ||
@@ -602,10 +602,30 @@ export function getFriendlyLanguageName(language, filename = '') {
       if (lower.includes('python') || lower.includes('py_')) return 'Python Notebook';
     }
 
+    if (language?.name === 'Java Notebook') return 'Java Notebook';
+    if (language?.name === 'C++ Notebook') return 'C++ Notebook';
+    if (language?.name === 'JavaScript Notebook') return 'JavaScript Notebook';
+
+    // If workspace files are available, check workspace language context
+    if (Array.isArray(workspaceFiles) && workspaceFiles.length > 0) {
+      const hasJava = workspaceFiles.some(
+        (f) => f.name?.endsWith('.java') || f.language?.id === 62 || f.language?.monacoLanguage === 'java'
+      );
+      if (hasJava) return 'Java Notebook';
+      const hasCpp = workspaceFiles.some(
+        (f) => f.name?.endsWith('.cpp') || f.language?.id === 54 || f.language?.monacoLanguage === 'cpp'
+      );
+      if (hasCpp) return 'C++ Notebook';
+      const hasJs = workspaceFiles.some(
+        (f) => (f.name?.endsWith('.js') && !f.name?.endsWith('.ipynb')) || f.language?.id === 63
+      );
+      if (hasJs) return 'JavaScript Notebook';
+    }
+
     if (language?.name && language.name.includes('Notebook')) {
       return language.name;
     }
-    return 'Python Notebook';
+    return 'Java Notebook';
   }
   return language?.name || 'Code';
 }

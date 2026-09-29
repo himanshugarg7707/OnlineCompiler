@@ -370,7 +370,7 @@ export function AnacondaIcon({ size = 16, className = '', style = {} }) {
 /**
  * Resolves canonical language key from file name or language object
  */
-export function resolveLanguageKey(language, filename = '') {
+export function resolveLanguageKey(language, filename = '', workspaceFiles = []) {
   // 1. Check if notebook (.ipynb) and resolve specific kernel language
   const isIpynb =
     (filename && typeof filename === 'string' && filename.toLowerCase().endsWith('.ipynb')) ||
@@ -389,7 +389,29 @@ export function resolveLanguageKey(language, filename = '') {
       if (lower.includes('java')) return 'jupyter-java';
       if (lower.includes('cpp') || lower.includes('c++')) return 'jupyter-cpp';
       if (lower.includes('js') || lower.includes('javascript')) return 'jupyter-js';
+      if (lower.includes('python') || lower.includes('py_')) return 'jupyter';
     }
+
+    if (language?.name === 'Java Notebook') return 'jupyter-java';
+    if (language?.name === 'C++ Notebook') return 'jupyter-cpp';
+    if (language?.name === 'JavaScript Notebook') return 'jupyter-js';
+
+    // If workspace files are available, check workspace context
+    if (Array.isArray(workspaceFiles) && workspaceFiles.length > 0) {
+      const hasJava = workspaceFiles.some(
+        (f) => f.name?.endsWith('.java') || f.language?.id === 62 || f.language?.monacoLanguage === 'java'
+      );
+      if (hasJava) return 'jupyter-java';
+      const hasCpp = workspaceFiles.some(
+        (f) => f.name?.endsWith('.cpp') || f.language?.id === 54 || f.language?.monacoLanguage === 'cpp'
+      );
+      if (hasCpp) return 'jupyter-cpp';
+      const hasJs = workspaceFiles.some(
+        (f) => (f.name?.endsWith('.js') && !f.name?.endsWith('.ipynb')) || f.language?.id === 63
+      );
+      if (hasJs) return 'jupyter-js';
+    }
+
     return 'jupyter';
   }
 
@@ -453,8 +475,8 @@ export function resolveLanguageKey(language, filename = '') {
  * Universal Language Icon Component
  * Renders pixel-perfect official brand SVG logos with seamless fallbacks.
  */
-export default function LanguageIcon({ language, filename = '', size = 16, className = '', style = {} }) {
-  const key = resolveLanguageKey(language, filename);
+export default function LanguageIcon({ language, filename = '', workspaceFiles = [], size = 16, className = '', style = {} }) {
+  const key = resolveLanguageKey(language, filename, workspaceFiles);
 
   switch (key) {
     case 'jupyter':

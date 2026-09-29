@@ -7,12 +7,12 @@ export default function LanguageSelector() {
   const { state } = useApp();
   const { detectedLanguage, files, activeFileId } = state;
   const activeFile = files?.find((f) => f.id === activeFileId);
-  const displayName = getFriendlyLanguageName(detectedLanguage, activeFile?.name);
+  const displayName = getFriendlyLanguageName(detectedLanguage, activeFile?.name, files);
 
   return (
     <div className="active-language-badge" title={`Current Language: ${displayName}`}>
       <span className="lang-icon">
-        <LanguageIcon language={detectedLanguage} filename={activeFile?.name} size={16} />
+        <LanguageIcon language={detectedLanguage} filename={activeFile?.name} workspaceFiles={files} size={16} />
       </span>
       <span className="lang-name">{displayName}</span>
     </div>

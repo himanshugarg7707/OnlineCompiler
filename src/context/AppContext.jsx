@@ -378,7 +378,8 @@ function reducer(state, action) {
       let fileContent = inputContent !== undefined ? inputContent : getStarterTemplate(fileLang?.id || 71);
 
       // If notebook (.ipynb), generate differentiated template matching language context
-      if ((fileLang?.id === 710 || uniqueName.endsWith('.ipynb')) && inputContent === undefined) {
+      const isIpynbFile = fileLang?.id === 710 || uniqueName.endsWith('.ipynb');
+      if (isIpynbFile) {
         let nbLang = 'python';
         const lowerName = uniqueName.toLowerCase();
         if (lowerName.includes('java')) {
@@ -413,7 +414,16 @@ function reducer(state, action) {
           }
         }
 
-        fileContent = createDefaultNotebookJson(nbLang);
+        const isDefaultPythonBoilerplate =
+          !inputContent ||
+          inputContent.includes('Jupyter Notebook (Python 3)') ||
+          inputContent.includes('Pyodide WebAssembly') ||
+          (inputContent.includes('import numpy as np') && inputContent.includes('DataFrame'));
+
+        if (inputContent === undefined || (isDefaultPythonBoilerplate && nbLang !== 'python')) {
+          fileContent = createDefaultNotebookJson(nbLang);
+        }
+
         fileLang = {
           id: 710,
           name: nbLang === 'java' ? 'Java Notebook' : nbLang === 'cpp' ? 'C++ Notebook' : nbLang === 'javascript' ? 'JavaScript Notebook' : 'Python Notebook',
@@ -421,7 +431,7 @@ function reducer(state, action) {
           kernel: nbLang,
           monacoLanguage: 'ipynb',
           extension: 'ipynb',
-          icon: '🪐',
+          icon: nbLang === 'java' ? '☕' : nbLang === 'cpp' ? '⚡' : nbLang === 'javascript' ? '🟨' : '🪐',
         };
       }
 
@@ -485,6 +495,27 @@ function reducer(state, action) {
         targetFile.language?.id === 710
       );
 
+      let activeLang = targetFile.language;
+      if (isTargetNotebook) {
+        const wsHasJava = state.files.some(
+          (f) => f.name?.endsWith('.java') || f.language?.id === 62 || f.language?.monacoLanguage === 'java'
+        );
+        const lowerName = (targetFile.name || '').toLowerCase();
+        const nbLang = targetFile.language?.notebookLanguage || targetFile.language?.kernel;
+
+        if ((!nbLang || nbLang === 'python') && !lowerName.includes('python') && !lowerName.includes('py_') && wsHasJava) {
+          activeLang = {
+            ...targetFile.language,
+            id: 710,
+            name: 'Java Notebook',
+            notebookLanguage: 'java',
+            kernel: 'java',
+            monacoLanguage: 'ipynb',
+            icon: '☕',
+          };
+        }
+      }
+
       saveStateToStorage(state.files, fileId, state.stdin, state.folders, updatedOpenIds);
 
       return {
@@ -492,7 +523,7 @@ function reducer(state, action) {
         activeFileId: fileId,
         openFileIds: updatedOpenIds,
         code: targetFile.content,
-        detectedLanguage: targetFile.language,
+        detectedLanguage: activeLang,
         terminalHidden: isTargetNotebook ? state.terminalHidden : false,
         errorLine: null,
       };

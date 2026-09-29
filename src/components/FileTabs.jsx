@@ -228,7 +228,7 @@ export default function FileTabs() {
               title={`${file.name} (${file.language.name}) — Double-click or right-click for options`}
             >
               <span className="file-tab-icon">
-                <LanguageIcon language={file.language} filename={file.name} size={14} />
+                <LanguageIcon language={file.language} filename={file.name} workspaceFiles={openFiles} size={14} />
               </span>
 
               {isEditing ? (

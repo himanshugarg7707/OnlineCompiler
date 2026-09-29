@@ -676,7 +676,7 @@ export default function FileExplorer() {
                   title={`${file.name} — ${file.language?.name || 'File'} (Double-click or right-click for options)`}
                 >
                   <span className="file-icon">
-                    <LanguageIcon language={file.language} filename={file.name} size={15} />
+                    <LanguageIcon language={file.language} filename={file.name} workspaceFiles={state?.files} size={15} />
                   </span>
 
                   {isEditingFile ? (
@@ -872,7 +872,7 @@ export default function FileExplorer() {
               title={`${file.name} — ${file.language?.name || 'File'} (Double-click or right-click for options)`}
             >
               <span className="file-icon">
-                <LanguageIcon language={file.language} filename={file.name} size={15} />
+                <LanguageIcon language={file.language} filename={file.name} workspaceFiles={state?.files} size={15} />
               </span>
 
               {isEditing ? (
