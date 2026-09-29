@@ -59,6 +59,16 @@ import './SettingsModal.css';
 
 const THEMES = [
   {
+    id: 'antigravity-google',
+    name: 'Antigravity (Google Official)',
+    icon: '🪐',
+    description: 'Google Antigravity deep obsidian with Material 3 & Google Blue accents',
+    bgPreview: '#0b1326',
+    accentPreview: '#adc6ff',
+    secondaryPreview: '#4cd7f6',
+    badge: 'Official',
+  },
+  {
     id: 'custom',
     name: 'Custom 3-Color Palette',
     icon: '🎨',

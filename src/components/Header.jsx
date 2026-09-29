@@ -40,9 +40,20 @@ export default function Header() {
     handleFormatCode,
     handleSaveActiveFile,
     handleDownloadWorkspace,
+    handleUpdateConfig,
     showToast,
   } = useApp();
-  const { executionStatus, explorerOpen, activeUser, files, activeFileId } = state;
+  const { executionStatus, explorerOpen, activeUser, files, activeFileId, config } = state;
+  const isGoogleTheme = config?.theme === 'antigravity-google';
+
+  const handleToggleGoogleTheme = () => {
+    if (handleUpdateConfig) {
+      handleUpdateConfig({ theme: 'antigravity-google' });
+    } else {
+      dispatch({ type: 'UPDATE_CONFIG', payload: { theme: 'antigravity-google' } });
+    }
+    showToast('🪐 Activated Antigravity Google Official Theme!');
+  };
 
   const [activeMenu, setActiveMenu] = useState(null);
   const menuBarRef = useRef(null);
@@ -547,53 +558,220 @@ export default function Header() {
             )}
           </div>
 
-          {/* Help Menu */}
+          {/* More Menu */}
           <div className="menu-item-wrap">
             <button
-              className={`menu-bar-btn ${activeMenu === 'Help' ? 'active' : ''}`}
-              onClick={() => handleMenuClick('Help')}
-              onMouseEnter={() => handleMenuHover('Help')}
+              className={`menu-bar-btn ${activeMenu === 'More' ? 'active' : ''}`}
+              onClick={() => handleMenuClick('More')}
+              onMouseEnter={() => handleMenuHover('More')}
             >
-              Help
+              More
             </button>
-            {activeMenu === 'Help' && (
-              <div className="menu-dropdown animate-fade-in">
+            {activeMenu === 'More' && (
+              <div className="menu-dropdown more-menu-dropdown animate-fade-in">
+                {/* Official Theme Quick Banner */}
+                <div className="more-theme-banner" onClick={() => closeMenuAndRun(handleToggleGoogleTheme)}>
+                  <div className="more-theme-banner-left">
+                    <div className="more-theme-icon-wrap">
+                      <span className="material-symbols-outlined more-theme-icon" style={{ fontVariationSettings: "'FILL' 1" }}>
+                        public
+                      </span>
+                    </div>
+                    <div>
+                      <div className="more-theme-banner-title">
+                        <span>Antigravity (Google Official)</span>
+                        {isGoogleTheme && <span className="more-active-tag">Active</span>}
+                      </div>
+                      <div className="more-theme-banner-sub">Google DeepMind dark obsidian & Material 3 palette</div>
+                    </div>
+                  </div>
+                  <button className={`btn-more-theme-toggle ${isGoogleTheme ? 'active' : ''}`}>
+                    {isGoogleTheme ? 'Selected' : 'Activate'}
+                  </button>
+                </div>
+
+                <div className="dropdown-divider" />
+
+                {/* Section: Intelligent AI & Analysis */}
+                <div className="more-section-label">INTELLIGENT TOOLS & AI</div>
                 <button
-                  className="dropdown-entry"
-                  onClick={() => closeMenuAndRun(() => dispatch({ type: 'NAVIGATE_PAGE', payload: 'practice' }))}
+                  className="dropdown-entry more-entry"
+                  onClick={() => closeMenuAndRun(() => {
+                    dispatch({ type: 'SET_TERMINAL_HIDDEN', payload: false });
+                    dispatch({ type: 'SET_TERMINAL_TAB', payload: 'explanation' });
+                  })}
                 >
-                  <span>DSA Practice Lab (70+ questions)</span>
+                  <div className="more-entry-left">
+                    <span className="material-symbols-outlined entry-icon text-cyan">auto_awesome</span>
+                    <div>
+                      <div className="more-entry-title">Antigravity AI Copilot</div>
+                      <div className="more-entry-desc">Code explanation, bug detection & logic suggestions</div>
+                    </div>
+                  </div>
+                  <kbd>Ctrl+Shift+E</kbd>
                 </button>
                 <button
-                  className="dropdown-entry"
-                  onClick={() => closeMenuAndRun(() => dispatch({ type: 'NAVIGATE_PAGE', payload: 'exam' }))}
+                  className="dropdown-entry more-entry"
+                  onClick={() => closeMenuAndRun(() => {
+                    dispatch({ type: 'SET_TERMINAL_HIDDEN', payload: false });
+                    dispatch({ type: 'SET_TERMINAL_TAB', payload: 'complexity' });
+                  })}
                 >
-                  <span>Proctored Exam & Tests</span>
+                  <div className="more-entry-left">
+                    <span className="material-symbols-outlined entry-icon text-green">speed</span>
+                    <div>
+                      <div className="more-entry-title">Complexity Analyzer</div>
+                      <div className="more-entry-desc">Static Big-O asymptotic runtime & memory scaling</div>
+                    </div>
+                  </div>
                 </button>
+
+                <div className="dropdown-divider" />
+
+                {/* Section: Academic & DSA Hub */}
+                <div className="more-section-label">ACADEMIC & LEARNING SUITE</div>
                 <button
-                  className="dropdown-entry"
-                  onClick={() => closeMenuAndRun(() => dispatch({ type: 'NAVIGATE_PAGE', payload: 'templates' }))}
-                >
-                  <span>Code Templates & Algorithms</span>
-                </button>
-                <button
-                  className="dropdown-entry"
+                  className="dropdown-entry more-entry"
                   onClick={() => closeMenuAndRun(() => dispatch({ type: 'NAVIGATE_PAGE', payload: 'notebook-setup' }))}
                 >
-                  <span>Subject Course Notebooks</span>
+                  <div className="more-entry-left">
+                    <span className="material-symbols-outlined entry-icon text-blue">menu_book</span>
+                    <div>
+                      <div className="more-entry-title">Subject Course Notebooks</div>
+                      <div className="more-entry-desc">Interactive OpenJDK Java, Python & C++ syllabus workspaces</div>
+                    </div>
+                  </div>
+                  <span className="more-entry-badge">Course</span>
                 </button>
-                <div className="dropdown-divider" />
                 <button
-                  className="dropdown-entry"
+                  className="dropdown-entry more-entry"
+                  onClick={() => closeMenuAndRun(() => dispatch({ type: 'NAVIGATE_PAGE', payload: 'practice' }))}
+                >
+                  <div className="more-entry-left">
+                    <span className="material-symbols-outlined entry-icon text-yellow">code_blocks</span>
+                    <div>
+                      <div className="more-entry-title">DSA Practice Lab</div>
+                      <div className="more-entry-desc">70+ curated coding challenges with automated test runners</div>
+                    </div>
+                  </div>
+                </button>
+                <button
+                  className="dropdown-entry more-entry"
+                  onClick={() => closeMenuAndRun(() => dispatch({ type: 'NAVIGATE_PAGE', payload: 'exam' }))}
+                >
+                  <div className="more-entry-left">
+                    <span className="material-symbols-outlined entry-icon text-purple">timer</span>
+                    <div>
+                      <div className="more-entry-title">Proctored Exam & Tests</div>
+                      <div className="more-entry-desc">Live timed examination suite with automated grading</div>
+                    </div>
+                  </div>
+                </button>
+                <button
+                  className="dropdown-entry more-entry"
+                  onClick={() => closeMenuAndRun(() => dispatch({ type: 'NAVIGATE_PAGE', payload: 'templates' }))}
+                >
+                  <div className="more-entry-left">
+                    <span className="material-symbols-outlined entry-icon text-pink">data_object</span>
+                    <div>
+                      <div className="more-entry-title">Code Templates & Snippets</div>
+                      <div className="more-entry-desc">Pre-built algorithms, data structures & boilerplate</div>
+                    </div>
+                  </div>
+                </button>
+
+                <div className="dropdown-divider" />
+
+                {/* Section: Panels & Preview */}
+                <div className="more-section-label">DEVTOOLS & PANELS</div>
+                <button
+                  className="dropdown-entry more-entry"
+                  onClick={() => closeMenuAndRun(() => {
+                    dispatch({ type: 'SET_TERMINAL_HIDDEN', payload: false });
+                    dispatch({ type: 'SET_TERMINAL_TAB', payload: 'web' });
+                  })}
+                >
+                  <div className="more-entry-left">
+                    <span className="material-symbols-outlined entry-icon text-cyan">language</span>
+                    <div>
+                      <div className="more-entry-title">Web Preview & DevTools</div>
+                      <div className="more-entry-desc">Live browser engine DOM & console inspect</div>
+                    </div>
+                  </div>
+                </button>
+                <button
+                  className="dropdown-entry more-entry"
+                  onClick={() => closeMenuAndRun(() => {
+                    dispatch({ type: 'SET_TERMINAL_HIDDEN', payload: false });
+                    dispatch({ type: 'SET_TERMINAL_TAB', payload: 'database' });
+                  })}
+                >
+                  <div className="more-entry-left">
+                    <span className="material-symbols-outlined entry-icon text-purple">database</span>
+                    <div>
+                      <div className="more-entry-title">Database & SQL Explorer</div>
+                      <div className="more-entry-desc">In-browser SQLite relational database with visual tables</div>
+                    </div>
+                  </div>
+                </button>
+                <button
+                  className="dropdown-entry more-entry"
                   onClick={() => closeMenuAndRun(() => dispatch({ type: 'TOGGLE_COLLAB_MODAL' }))}
                 >
-                  <span>Live Room Collaboration</span>
+                  <div className="more-entry-left">
+                    <span className="material-symbols-outlined entry-icon text-green">groups</span>
+                    <div>
+                      <div className="more-entry-title">Live Room Collaboration</div>
+                      <div className="more-entry-desc">Peer-to-peer real-time multi-user coding session</div>
+                    </div>
+                  </div>
+                </button>
+
+                <div className="dropdown-divider" />
+
+                {/* Section: Preferences & Help */}
+                <div className="more-section-label">PREFERENCES & SYSTEM</div>
+                <button
+                  className="dropdown-entry more-entry"
+                  onClick={() => closeMenuAndRun(() => {
+                    window.location.hash = '#/settings?tab=themes';
+                    dispatch({ type: 'NAVIGATE_PAGE', payload: 'settings' });
+                  })}
+                >
+                  <div className="more-entry-left">
+                    <span className="material-symbols-outlined entry-icon text-blue">palette</span>
+                    <div>
+                      <div className="more-entry-title">Theme Selector & Customizer...</div>
+                      <div className="more-entry-desc">Choose from built-in themes or custom 3-color palette</div>
+                    </div>
+                  </div>
                 </button>
                 <button
-                  className="dropdown-entry"
+                  className="dropdown-entry more-entry"
+                  onClick={() => closeMenuAndRun(() => dispatch({ type: 'NAVIGATE_PAGE', payload: 'settings' }))}
+                >
+                  <div className="more-entry-left">
+                    <span className="material-symbols-outlined entry-icon">settings</span>
+                    <div>
+                      <div className="more-entry-title">Settings & Configuration</div>
+                      <div className="more-entry-desc">Editor font, line wrap, keybindings & compiler host</div>
+                    </div>
+                  </div>
+                  <kbd>Ctrl+,</kbd>
+                </button>
+                <button
+                  className="dropdown-entry more-entry"
                   onClick={() => closeMenuAndRun(() => dispatch({ type: 'SET_WELCOME_MODAL', payload: true }))}
                 >
-                  <span>About Antigravity IDE</span>
+                  <div className="more-entry-left">
+                    <span className="material-symbols-outlined entry-icon text-cyan" style={{ fontVariationSettings: "'FILL' 1" }}>
+                      bolt
+                    </span>
+                    <div>
+                      <div className="more-entry-title">About Google Antigravity IDE</div>
+                      <div className="more-entry-desc">Version 2.4.0 Core • Antigravity Engine Architecture</div>
+                    </div>
+                  </div>
                 </button>
               </div>
             )}

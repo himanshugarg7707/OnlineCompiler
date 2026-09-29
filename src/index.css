@@ -1,7 +1,7 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
 
 /* ─── Design Tokens ────────────────────────────────────────────────────── */
-:root, [data-theme="dark"] {
+:root, [data-theme="dark"], [data-theme="antigravity-google"] {
   /* Antigravity IDE Design Tokens */
   --surface-obsidian: #0b1326;
   --electric-blue: #adc6ff;

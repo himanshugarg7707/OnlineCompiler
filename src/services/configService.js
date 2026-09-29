@@ -4,12 +4,12 @@
 const CONFIG_KEY = 'codeforge_config';
 
 const DEFAULT_CONFIG = {
-  // Theme settings ('dark' | 'baby-pink' | 'cyberpunk' | 'monokai' | 'light' | 'nord' | 'custom')
-  theme: 'dark',
+  // Theme settings ('antigravity-google' | 'dark' | 'baby-pink' | 'baby-pink-dark' | 'cyberpunk' | 'monokai' | 'light' | 'nord' | 'custom')
+  theme: 'antigravity-google',
   customPalette: {
-    bg: '#0f172a',
-    primary: '#00d4ff',
-    secondary: '#b480ff',
+    bg: '#0b1326',
+    primary: '#adc6ff',
+    secondary: '#4cd7f6',
   },
 
   // API Keys (Optional)
@@ -45,7 +45,14 @@ export function getConfig() {
   try {
     const stored = localStorage.getItem(CONFIG_KEY);
     if (stored) {
-      return { ...DEFAULT_CONFIG, ...JSON.parse(stored) };
+      const parsed = JSON.parse(stored);
+      // Seamlessly upgrade legacy pink theme to official Google Antigravity theme
+      if (parsed.theme === 'baby-pink' && !localStorage.getItem('antigravity_theme_migrated_v1')) {
+        localStorage.setItem('antigravity_theme_migrated_v1', 'true');
+        parsed.theme = 'antigravity-google';
+        localStorage.setItem(CONFIG_KEY, JSON.stringify({ ...DEFAULT_CONFIG, ...parsed }));
+      }
+      return { ...DEFAULT_CONFIG, ...parsed };
     }
   } catch (e) {
     console.warn('Failed to load config:', e);

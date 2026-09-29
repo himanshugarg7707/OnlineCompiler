@@ -553,11 +553,11 @@
 }
 
 .explorer-file-item.active {
-  background: rgba(0, 212, 255, 0.12);
-  color: var(--text-primary);
+  background: rgba(173, 198, 255, 0.12);
+  color: var(--text-primary, #dae2fd);
   font-weight: 600;
-  box-shadow: inset 3px 0 0 var(--accent-cyan);
-  border-color: rgba(0, 212, 255, 0.2);
+  box-shadow: inset 3px 0 0 var(--accent-purple, #adc6ff);
+  border-color: rgba(173, 198, 255, 0.25);
 }
 
 [data-theme="baby-pink"] .explorer-file-item.active {
