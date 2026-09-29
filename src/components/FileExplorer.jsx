@@ -28,6 +28,14 @@ import PasswordPromptModal from './PasswordPromptModal';
 import LanguageIcon from './LanguageIcon';
 import { createDefaultNotebookJson, setupFileDragDataTransfer, getLanguageFromFilename } from '../services/languageDetector';
 import { processFileList } from '../services/importService';
+import {
+  getWorkspaceGitStatus,
+  getStagedFileIds,
+  saveStagedFileIds,
+  getGitBaselines,
+  saveGitBaselines,
+} from '../services/gitService';
+import { recordSnapshot } from '../services/historyService';
 import FileOptionsMenu from './FileOptionsMenu';
 import './FileExplorer.css';
 
@@ -133,9 +141,83 @@ export default function FileExplorer() {
   const { files, folders, activeFileId, fileErrors = {} } = state;
 
   // Search query & active tab
-  const [activeSidebarTab, setActiveSidebarTab] = useState('explorer'); // 'explorer' | 'search' | 'extensions'
+  const [activeSidebarTab, setActiveSidebarTab] = useState('explorer'); // 'explorer' | 'search' | 'source-control' | 'extensions'
   const [searchQuery, setSearchQuery] = useState('');
   const searchInputRef = useRef(null);
+
+  // Source Control Git states
+  const [stagedFileIds, setStagedFileIds] = useState(() => getStagedFileIds());
+  const [commitMessage, setCommitMessage] = useState('');
+  const [stagedExpanded, setStagedExpanded] = useState(true);
+  const [unstagedExpanded, setUnstagedExpanded] = useState(true);
+
+  const gitStatus = useMemo(() => {
+    return getWorkspaceGitStatus(files, stagedFileIds);
+  }, [files, stagedFileIds]);
+
+  const handleStageFile = useCallback((fileId) => {
+    setStagedFileIds((prev) => {
+      const next = Array.from(new Set([...prev, fileId]));
+      saveStagedFileIds(next);
+      return next;
+    });
+  }, []);
+
+  const handleUnstageFile = useCallback((fileId) => {
+    setStagedFileIds((prev) => {
+      const next = prev.filter((id) => id !== fileId);
+      saveStagedFileIds(next);
+      return next;
+    });
+  }, []);
+
+  const handleStageAll = useCallback(() => {
+    const allChangedIds = [...gitStatus.staged, ...gitStatus.unstaged].map((item) => item.file.id);
+    if (allChangedIds.length === 0) {
+      showToast('No changes to stage');
+      return;
+    }
+    setStagedFileIds(allChangedIds);
+    saveStagedFileIds(allChangedIds);
+    showToast(`Staged ${allChangedIds.length} changes`);
+  }, [gitStatus, showToast]);
+
+  const handleRefreshGit = useCallback(() => {
+    showToast('Git status refreshed 🔄');
+  }, [showToast]);
+
+  const handleOpenFileDiff = useCallback((item) => {
+    dispatch({
+      type: 'OPEN_GIT_DIFF',
+      payload: {
+        file: item.file,
+        baselineContent: item.baselineContent,
+      },
+    });
+  }, [dispatch]);
+
+  const handleCommit = useCallback(() => {
+    const filesToCommit = gitStatus.staged.length > 0 ? gitStatus.staged : gitStatus.unstaged;
+    if (filesToCommit.length === 0) {
+      showToast('No changes to commit (working tree clean)');
+      return;
+    }
+    const msg = commitMessage.trim() || 'Update files';
+    const baselines = getGitBaselines();
+    filesToCommit.forEach((item) => {
+      baselines[item.file.id] = item.file.content ?? '';
+      recordSnapshot(item.file.name, item.file.content ?? '', item.file.language?.name || 'Code', `Git Commit: ${msg}`);
+    });
+    saveGitBaselines(baselines);
+    setStagedFileIds([]);
+    saveStagedFileIds([]);
+    setCommitMessage('');
+    showToast(`Committed to main: "${msg}" ✨`);
+  }, [gitStatus, commitMessage, showToast]);
+
+  const handleGitMore = useCallback(() => {
+    showToast('Branch: main • Clean working tree');
+  }, [showToast]);
 
   // Folder collapse state: { [folderPath]: boolean }
   const [collapsedFolders, setCollapsedFolders] = useState({});
@@ -799,6 +881,19 @@ export default function FileExplorer() {
           <span className="sidebar-tab-title">Search</span>
         </div>
         <div
+          className={`sidebar-nav-tab ${activeSidebarTab === 'source-control' ? 'active' : ''}`}
+          onClick={() => setActiveSidebarTab('source-control')}
+          title="Source Control (Git Diff & Commits)"
+        >
+          <span className="material-symbols-outlined text-sm" style={{ fontVariationSettings: "'FILL' 1" }}>
+            view_in_ar_new
+          </span>
+          <span className="sidebar-tab-title">Source Control</span>
+          {gitStatus.totalCount > 0 && (
+            <span className="sidebar-tab-badge">{gitStatus.totalCount}</span>
+          )}
+        </div>
+        <div
           className={`sidebar-nav-tab ${activeSidebarTab === 'extensions' ? 'active' : ''}`}
           onClick={() => setActiveSidebarTab('extensions')}
           title="Features & Extensions Hub"
@@ -862,13 +957,199 @@ export default function FileExplorer() {
             </div>
           </div>
         </div>
+      ) : activeSidebarTab === 'source-control' ? (
+        <div className="sidebar-source-control-panel animate-fade-in flex flex-col flex-1 h-full overflow-hidden">
+          {/* Header bar */}
+          <div className="flex items-center justify-between px-space-md py-space-sm border-b border-outline-variant shrink-0">
+            <div className="flex items-center space-x-space-xs">
+              <span className="font-headline-sm text-headline-sm text-on-surface">SOURCE CONTROL</span>
+              <span className="bg-primary-container/20 text-primary px-1.5 py-0.5 rounded-full text-label-sm font-semibold">
+                {gitStatus.totalCount}
+              </span>
+            </div>
+            <div className="flex items-center space-x-1 text-on-surface-variant">
+              <button
+                type="button"
+                onClick={handleRefreshGit}
+                className="p-1 hover:text-on-surface rounded transition-colors"
+                title="Refresh"
+              >
+                <span className="material-symbols-outlined text-[16px]">refresh</span>
+              </button>
+              <button
+                type="button"
+                onClick={handleStageAll}
+                className="p-1 hover:text-on-surface rounded transition-colors"
+                title="Stage All"
+              >
+                <span className="material-symbols-outlined text-[16px]">done_all</span>
+              </button>
+              <button
+                type="button"
+                onClick={handleGitMore}
+                className="p-1 hover:text-on-surface rounded transition-colors"
+                title="More Actions"
+              >
+                <span className="material-symbols-outlined text-[16px]">more_horiz</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Commit Input Area */}
+          <div className="p-space-md border-b border-outline-variant flex flex-col space-y-space-sm bg-surface-dim shrink-0">
+            <textarea
+              value={commitMessage}
+              onChange={(e) => setCommitMessage(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                  e.preventDefault();
+                  handleCommit();
+                }
+              }}
+              className="w-full bg-surface-container-low text-on-surface border border-outline-variant rounded p-space-sm text-body-sm focus:ring-1 focus:ring-primary focus:border-primary resize-none outline-none font-body-sm"
+              placeholder="Message (Ctrl+Enter to commit)"
+              rows={3}
+            />
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-1 text-on-surface-variant text-label-sm">
+                <span className="material-symbols-outlined text-[14px]">save_as</span>
+                <span>main{gitStatus.totalCount > 0 ? '*' : ''}</span>
+              </div>
+              <button
+                type="button"
+                onClick={handleCommit}
+                className="bg-primary-container text-on-primary-container font-headline-sm text-body-sm px-space-md py-1 rounded hover:bg-primary transition-colors flex items-center space-x-1 cursor-pointer"
+              >
+                <span className="material-symbols-outlined text-[16px]">check</span>
+                <span>Commit</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Changes List Tree */}
+          <div className="flex-1 overflow-y-auto p-space-xs space-y-1">
+            {/* Staged Changes Section */}
+            <div className="px-space-xs py-1">
+              <div
+                className="flex items-center justify-between text-label-md text-on-surface-variant uppercase tracking-wider px-space-xs py-1 cursor-pointer select-none hover:text-on-surface"
+                onClick={() => setStagedExpanded(!stagedExpanded)}
+              >
+                <div className="flex items-center space-x-1">
+                  <span className="material-symbols-outlined text-[14px]">
+                    {stagedExpanded ? 'expand_more' : 'chevron_right'}
+                  </span>
+                  <span>Staged Changes</span>
+                </div>
+                <span>{gitStatus.staged.length}</span>
+              </div>
+
+              {stagedExpanded && (
+                <div className="mt-1 space-y-0.5">
+                  {gitStatus.staged.length === 0 ? (
+                    <div className="text-xs text-on-surface-variant/50 italic px-space-sm py-1">
+                      No staged changes
+                    </div>
+                  ) : (
+                    gitStatus.staged.map((item) => (
+                      <div
+                        key={`staged-${item.file.id}`}
+                        onClick={() => handleOpenFileDiff(item)}
+                        className="flex items-center justify-between px-space-sm py-1.5 rounded hover:bg-surface-container-high group cursor-pointer text-body-sm bg-surface-container-high/60 border-l-2 border-primary"
+                        title="Click to view Git Diff"
+                      >
+                        <div className="flex items-center space-x-space-sm truncate">
+                          <span className="material-symbols-outlined text-[16px] text-tertiary">description</span>
+                          <span className="text-on-surface truncate">{item.file.name}</span>
+                        </div>
+                        <div className="flex items-center space-x-1 shrink-0">
+                          <span className="text-tertiary font-bold text-label-sm px-1 rounded bg-tertiary/10">M</span>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleUnstageFile(item.file.id);
+                            }}
+                            className="opacity-0 group-hover:opacity-100 p-0.5 hover:text-primary text-on-surface-variant"
+                            title="Unstage changes"
+                          >
+                            <span className="material-symbols-outlined text-[14px]">remove</span>
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Changes (Unstaged) Section */}
+            <div className="px-space-xs py-1 mt-2">
+              <div
+                className="flex items-center justify-between text-label-md text-on-surface-variant uppercase tracking-wider px-space-xs py-1 cursor-pointer select-none hover:text-on-surface"
+                onClick={() => setUnstagedExpanded(!unstagedExpanded)}
+              >
+                <div className="flex items-center space-x-1">
+                  <span className="material-symbols-outlined text-[14px]">
+                    {unstagedExpanded ? 'expand_more' : 'chevron_right'}
+                  </span>
+                  <span>Changes</span>
+                </div>
+                <span>{gitStatus.unstaged.length}</span>
+              </div>
+
+              {unstagedExpanded && (
+                <div className="mt-1 space-y-0.5">
+                  {gitStatus.unstaged.length === 0 ? (
+                    <div className="text-xs text-on-surface-variant/50 italic px-space-sm py-1">
+                      Working tree clean
+                    </div>
+                  ) : (
+                    gitStatus.unstaged.map((item) => (
+                      <div
+                        key={`unstaged-${item.file.id}`}
+                        onClick={() => handleOpenFileDiff(item)}
+                        className="flex items-center justify-between px-space-sm py-1.5 rounded hover:bg-surface-container-high group cursor-pointer text-body-sm"
+                        title="Click to view Git Diff"
+                      >
+                        <div className="flex items-center space-x-space-sm truncate">
+                          <span className="material-symbols-outlined text-[16px] text-on-surface-variant">
+                            {item.file.name.endsWith('.css') ? 'css' : item.file.name.endsWith('.py') ? 'code' : 'description'}
+                          </span>
+                          <span className="text-on-surface-variant truncate">{item.file.name}</span>
+                        </div>
+                        <div className="flex items-center space-x-1 shrink-0">
+                          {item.status === 'M' ? (
+                            <span className="text-amber-400 font-bold text-label-sm px-1 rounded bg-amber-400/10">M</span>
+                          ) : (
+                            <span className="text-emerald-400 font-bold text-label-sm px-1 rounded bg-emerald-400/10">U</span>
+                          )}
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleStageFile(item.file.id);
+                            }}
+                            className="opacity-0 group-hover:opacity-100 p-0.5 hover:text-primary text-on-surface-variant"
+                            title="Stage changes"
+                          >
+                            <span className="material-symbols-outlined text-[14px]">add</span>
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
       ) : (
         <>
           {/* Explorer Header */}
           <div className="explorer-header">
             <div className="explorer-title-group">
               <span className="material-symbols-outlined text-xs">folder_open</span>
-              <span>antigravity-core</span>
+              <span>fullcode-project</span>
             </div>
 
             <div className="explorer-header-actions">

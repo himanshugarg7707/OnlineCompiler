@@ -43,11 +43,16 @@ export default function StatusBar() {
 
   return (
     <footer className="status-bar antigravity-status-bar">
-      {/* Left: Git branch & Problems */}
+      {/* Left: Git branch, Sync & Problems */}
       <div className="status-left">
         <div className="status-item git-branch" title="Git Branch: main">
-          <span className="material-symbols-outlined text-xs">call_split</span>
-          <span>main*</span>
+          <span className="material-symbols-outlined text-xs">save_as</span>
+          <span>main</span>
+        </div>
+
+        <div className="status-item git-sync" title="Git Sync Status">
+          <span className="material-symbols-outlined text-xs">sync</span>
+          <span>0↓ 2↑</span>
         </div>
 
         <div
@@ -111,6 +116,11 @@ export default function StatusBar() {
         <span className="status-item prettier-active" title="Code Formatter Active">
           <span className="prettier-indicator-dot" />
           <span>Prettier Active</span>
+        </span>
+
+        <span className="status-item git-idle-item" title="Git Status: Idle">
+          <span className="material-symbols-outlined text-[13px] animate-spin text-tertiary">progress_activity</span>
+          <span>Git: Idle</span>
         </span>
 
         {/* Terminal Toggle Button (hidden in notebook mode since output is inline) */}

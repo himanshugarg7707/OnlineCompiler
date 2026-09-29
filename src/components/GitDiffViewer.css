@@ -1,0 +1,78 @@
+/* Git Diff Viewer Styles */
+
+.git-diff-viewer {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+  background: var(--surface, #0b1326);
+  color: var(--on-surface, #dae2fd);
+  overflow: hidden;
+  user-select: text;
+}
+
+.diff-header-bar {
+  border-bottom: 1px solid var(--border-primary, #424754);
+  background: var(--surface-container-low, #131b2e);
+  color: var(--text-primary, #dae2fd);
+  font-family: 'JetBrains Mono', monospace, -apple-system;
+}
+
+.diff-split-container {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+  background: var(--surface, #0b1326);
+}
+
+.diff-panel {
+  flex: 1;
+  display: flex;
+  overflow: auto;
+  min-width: 0;
+}
+
+.diff-panel.original-panel {
+  background: rgba(11, 19, 38, 0.6);
+  border-right: 1px solid var(--border-primary, #424754);
+}
+
+.diff-panel.modified-panel {
+  background: var(--surface, #0b1326);
+}
+
+.diff-gutter {
+  background: var(--surface-dim, #0b1326);
+  color: rgba(194, 198, 214, 0.4);
+  line-height: 20px;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.diff-code-column {
+  line-height: 20px;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.diff-code-line {
+  min-height: 20px;
+  padding: 0 4px;
+  border-radius: 2px;
+}
+
+.diff-line-deleted {
+  background: rgba(147, 0, 10, 0.3) !important;
+  color: #ffb4ab !important;
+}
+
+.diff-line-added {
+  background: rgba(0, 165, 114, 0.3) !important;
+  color: #4edea3 !important;
+}
+
+.diff-line-empty {
+  opacity: 0.2;
+}
+
+.diff-marker {
+  user-select: none;
+}

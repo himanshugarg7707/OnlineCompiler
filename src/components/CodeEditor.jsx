@@ -7,6 +7,7 @@ import ComplexityPanel from './ComplexityPanel';
 import { AlertCircle } from 'lucide-react';
 import FileTabs from './FileTabs';
 import JupyterNotebookEditor from './JupyterNotebookEditor';
+import GitDiffViewer from './GitDiffViewer';
 import './CodeEditor.css';
 
 let snippetsRegistered = false;
@@ -66,7 +67,7 @@ function defineCustomMonacoTheme(monaco, palette) {
 }
 
 export default function CodeEditor() {
-  const { state, handleCodeChange, handleSaveActiveFile, handleCreateSequentialFile, setFileErrors, dispatch } = useApp();
+  const { state, handleCodeChange, handleSaveActiveFile, handleCreateSequentialFile, setFileErrors, handleSelectFile, dispatch } = useApp();
   const { code, detectedLanguage, errorLine, config } = state;
   const activeFile = state.files?.find((f) => f.id === state.activeFileId) || state.files?.[0];
   const isNotebook = Boolean(
@@ -427,17 +428,29 @@ export default function CodeEditor() {
 
   // Sync theme when config.theme or customPalette changes
   useEffect(() => {
-    const monaco = monacoRef.current || window.monaco;
-    if (monaco) {
-      registerCustomThemes(monaco);
-      if (config?.theme === 'custom' && config?.customPalette) {
-        defineCustomMonacoTheme(monaco, config.customPalette);
-        monaco.editor.setTheme('fullcode-custom');
-      } else {
-        const themeName = MONACO_THEMES[config?.theme] || 'fullcode-dark';
-        monaco.editor.setTheme(themeName);
+    const applyTheme = (targetTheme = config?.theme) => {
+      const monaco = monacoRef.current || window.monaco;
+      if (monaco) {
+        registerCustomThemes(monaco);
+        if (targetTheme === 'custom' && config?.customPalette) {
+          defineCustomMonacoTheme(monaco, config.customPalette);
+          monaco.editor.setTheme('fullcode-custom');
+        } else {
+          const themeName = MONACO_THEMES[targetTheme] || 'fullcode-antigravity-google';
+          monaco.editor.setTheme(themeName);
+        }
       }
-    }
+    };
+
+    applyTheme();
+
+    const handleThemeEvent = (e) => {
+      if (e.detail?.theme) {
+        applyTheme(e.detail.theme);
+      }
+    };
+    window.addEventListener('fullcode-theme-changed', handleThemeEvent);
+    return () => window.removeEventListener('fullcode-theme-changed', handleThemeEvent);
   }, [config?.theme, config?.customPalette, registerCustomThemes]);
 
   // Update language when detection changes
@@ -624,9 +637,19 @@ export default function CodeEditor() {
       {/* File Tabs Navigation Bar */}
       <FileTabs />
 
-      {/* Monaco Code Editor or Interactive Jupyter Notebook */}
+      {/* Monaco Code Editor, Interactive Jupyter Notebook, or Git Diff Viewer */}
       <div className="editor-wrapper">
-        {isNotebook ? (
+        {state.activeDiffFile ? (
+          <GitDiffViewer
+            file={state.activeDiffFile.file}
+            baselineContent={state.activeDiffFile.baselineContent}
+            onClose={() => dispatch({ type: 'CLOSE_GIT_DIFF' })}
+            onOpenInEditor={(f) => {
+              dispatch({ type: 'CLOSE_GIT_DIFF' });
+              if (f?.id) handleSelectFile?.(f.id);
+            }}
+          />
+        ) : isNotebook ? (
           <JupyterNotebookEditor
             key={activeFile?.id}
             file={activeFile}

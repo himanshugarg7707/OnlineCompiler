@@ -960,4 +960,29 @@
   color: var(--text-primary, #dae2fd);
 }
 
+/* Sidebar Nav Tab Badge */
+.sidebar-tab-badge {
+  margin-left: auto;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 9999px;
+  background: rgba(77, 142, 255, 0.2);
+  color: #adc6ff;
+  line-height: 14px;
+}
+
+/* Source Control Panel */
+.sidebar-source-control-panel {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  height: 100%;
+  overflow: hidden;
+  background: var(--surface-container, #171f33);
+  color: var(--on-surface, #dae2fd);
+  font-family: 'JetBrains Mono', monospace, -apple-system;
+}
+
+
 

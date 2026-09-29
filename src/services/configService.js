@@ -46,9 +46,9 @@ export function getConfig() {
     const stored = localStorage.getItem(CONFIG_KEY);
     if (stored) {
       const parsed = JSON.parse(stored);
-      // Seamlessly upgrade legacy pink theme to official Google Antigravity theme
-      if (parsed.theme === 'baby-pink' && !localStorage.getItem('antigravity_theme_migrated_v1')) {
-        localStorage.setItem('antigravity_theme_migrated_v1', 'true');
+      // Upgrade legacy or baby-pink themes to official Google Antigravity theme
+      if ((parsed.theme === 'baby-pink' || !parsed.theme) && !localStorage.getItem('fullcode_antigravity_official_v4')) {
+        localStorage.setItem('fullcode_antigravity_official_v4', 'true');
         parsed.theme = 'antigravity-google';
         localStorage.setItem(CONFIG_KEY, JSON.stringify({ ...DEFAULT_CONFIG, ...parsed }));
       }

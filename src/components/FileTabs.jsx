@@ -206,7 +206,7 @@ export default function FileTabs() {
     <div className="file-tabs-bar">
       <div className="file-tabs-scroll">
         {openFiles.map((file) => {
-          const isActive = file.id === activeFileId;
+          const isActive = file.id === activeFileId && !state.activeDiffFile;
           const isEditing = editingId === file.id;
           const isFileLocked = isItemProtected(file.name) && !isItemUnlocked(file.name);
           const isDragging = draggedTabId === file.id;
@@ -288,6 +288,36 @@ export default function FileTabs() {
             </div>
           );
         })}
+
+        {state.activeDiffFile && (
+          <div
+            className="file-tab active diff-tab"
+            style={{ borderBottom: '2px solid #adc6ff', background: 'rgba(173, 198, 255, 0.12)' }}
+          >
+            <span className="file-tab-icon">
+              <span className="material-symbols-outlined text-[15px] text-tertiary">vertical_split</span>
+            </span>
+            <span className="file-tab-name font-semibold" style={{ color: '#dae2fd' }}>
+              Diff: {state.activeDiffFile.file?.name?.split('/').pop() || 'file'}
+            </span>
+            <span style={{ fontSize: '9px', padding: '1px 4px', borderRadius: '3px', background: 'rgba(78, 222, 163, 0.2)', color: '#4edea3', fontWeight: 'bold', marginLeft: '4px' }}>
+              Git
+            </span>
+            <div className="tab-actions">
+              <button
+                type="button"
+                className="tab-close-btn"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  dispatch({ type: 'CLOSE_GIT_DIFF' });
+                }}
+                title="Close Diff"
+              >
+                <X size={12} />
+              </button>
+            </div>
+          </div>
+        )}
 
         {isAdding && (
           <div className="file-tab adding">

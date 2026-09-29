@@ -22,6 +22,7 @@ import {
   saveUserWorkspace,
   loadUserWorkspace,
 } from '../services/authService';
+import { ensureGitBaselines } from '../services/gitService';
 import {
   applyCustomPalette,
   clearCustomPaletteOverrides,
@@ -49,6 +50,45 @@ const STORAGE_ACTIVE_KEY = 'fullcode_active_file_id_v3';
 const STORAGE_STDIN_KEY = 'fullcode_stdin_v3';
 const STORAGE_FOLDERS_KEY = 'fullcode_folders_v3';
 const STORAGE_OPEN_TABS_KEY = 'fullcode_open_tabs_v3';
+const STORAGE_LAST_PAGE_KEY = 'fullcode_last_active_page_v2';
+
+function getInitialPage() {
+  try {
+    if (typeof window !== 'undefined') {
+      const hash = window.location.hash || '';
+      // If user had settings in hash, clear it on refresh so they don't get trapped in settings
+      if (hash.includes('settings')) {
+        window.history.replaceState(null, '', window.location.pathname + window.location.search);
+      } else if (hash.includes('notebooks') || hash.includes('setup')) {
+        return 'notebook-setup';
+      } else if (hash.includes('exam') || hash.includes('test')) {
+        return 'exam';
+      } else if (hash.includes('templates')) {
+        return 'templates';
+      } else if (hash.includes('practice')) {
+        return 'practice';
+      }
+    }
+
+    // Check last used page from memory
+    const savedLastPage = localStorage.getItem(STORAGE_LAST_PAGE_KEY);
+    const validPages = ['editor', 'notebook-setup', 'exam', 'templates', 'practice'];
+    if (savedLastPage && validPages.includes(savedLastPage) && savedLastPage !== 'settings') {
+      return savedLastPage;
+    }
+
+    // For users who don't have that memory (new user / clean state):
+    // Show the new workspace option page ('notebook-setup' with subjects & starter projects)
+    const hasSavedFiles = Boolean(localStorage.getItem(STORAGE_FILES_KEY));
+    if (!hasSavedFiles) {
+      return 'notebook-setup';
+    }
+
+    return 'editor';
+  } catch {
+    return 'editor';
+  }
+}
 
 function normalizeLoadedFiles(files) {
   if (!Array.isArray(files)) return files;
@@ -244,6 +284,7 @@ const shouldShowWelcomeOnArrival = (() => {
 })();
 
 // Note: Allow users to navigate to notebooks or settings freely without forced redirects
+ensureGitBaselines(initialFiles);
 
 const initialState = {
   activeUser: initialUser,
@@ -255,6 +296,7 @@ const initialState = {
   folders: initialFolders,
   openFileIds: initialOpenTabs,
   activeFileId: initialActiveId,
+  activeDiffFile: null, // { file, baselineContent }
   code: initialActiveFile ? initialActiveFile.content : getStarterTemplate(71),
   detectedLanguage: initialActiveFile ? initialActiveFile.language : defaultLang,
   output: '',
@@ -309,17 +351,7 @@ const initialState = {
   })(),
   terminalHidden: false,
   activeTerminalTab: 'output',
-  currentPage: typeof window !== 'undefined' && window.location.hash.includes('settings')
-    ? 'settings'
-    : typeof window !== 'undefined' && (window.location.hash.includes('notebooks') || window.location.hash.includes('setup'))
-      ? 'notebook-setup'
-      : typeof window !== 'undefined' && (window.location.hash.includes('exam') || window.location.hash.includes('test'))
-        ? 'exam'
-        : typeof window !== 'undefined' && window.location.hash.includes('templates')
-          ? 'templates'
-          : typeof window !== 'undefined' && window.location.hash.includes('practice')
-            ? 'practice'
-            : 'editor',
+  currentPage: getInitialPage(),
   fileErrors: {},
 };
 
@@ -601,6 +633,7 @@ function reducer(state, action) {
         ...state,
         files: updatedFiles,
         activeFileId: fileId,
+        activeDiffFile: null,
         openFileIds: updatedOpenIds,
         code: targetFile.content,
         detectedLanguage: activeLang,
@@ -1092,7 +1125,13 @@ function reducer(state, action) {
         aiExplanation: '',
       };
     case 'NAVIGATE_PAGE': {
-      return { ...state, currentPage: action.payload };
+      const page = action.payload;
+      try {
+        if (page && page !== 'settings') {
+          localStorage.setItem(STORAGE_LAST_PAGE_KEY, page);
+        }
+      } catch {}
+      return { ...state, currentPage: page };
     }
     case 'SET_FILE_ERRORS': {
       return {
@@ -1101,6 +1140,18 @@ function reducer(state, action) {
           ...state.fileErrors,
           [action.payload.fileId]: action.payload.errors,
         },
+      };
+    }
+    case 'OPEN_GIT_DIFF': {
+      return {
+        ...state,
+        activeDiffFile: action.payload,
+      };
+    }
+    case 'CLOSE_GIT_DIFF': {
+      return {
+        ...state,
+        activeDiffFile: null,
       };
     }
     default:
@@ -1113,13 +1164,22 @@ export function AppProvider({ children }) {
 
   // Synchronize CSS data-theme and custom 3-color palette
   useEffect(() => {
-    const theme = state.config?.theme || 'dark';
+    const theme = state.config?.theme || 'antigravity-google';
     document.documentElement.setAttribute('data-theme', theme);
+    document.body.setAttribute('data-theme', theme);
+    if (theme === 'baby-pink' || theme === 'light') {
+      document.documentElement.classList.remove('dark');
+      document.body.classList.remove('dark');
+    } else {
+      document.documentElement.classList.add('dark');
+      document.body.classList.add('dark');
+    }
     if (theme === 'custom' && state.config?.customPalette) {
       applyCustomPalette(state.config.customPalette);
     } else {
       clearCustomPaletteOverrides();
     }
+    window.dispatchEvent(new CustomEvent('fullcode-theme-changed', { detail: { theme } }));
   }, [state.config?.theme, state.config?.customPalette]);
 
   // Synchronize URL hash with multi-page router state
@@ -1140,18 +1200,6 @@ export function AppProvider({ children }) {
     };
     window.addEventListener('hashchange', onHashChange);
     return () => window.removeEventListener('hashchange', onHashChange);
-  }, []);
-
-  // Remove existing legacy/starter jupyter notebook files on mount as requested
-  useEffect(() => {
-    const jupyterFiles = state.files.filter(
-      (f) => f.name?.endsWith('.ipynb') || f.language?.id === 710 || f.language?.monacoLanguage === 'ipynb'
-    );
-    if (jupyterFiles.length > 0) {
-      jupyterFiles.forEach((jf) => {
-        dispatch({ type: 'CLOSE_FILE', payload: jf.id });
-      });
-    }
   }, []);
 
   // Listen for individual Jupyter notebook cell outputs to synchronize with Terminal / OutputPanel

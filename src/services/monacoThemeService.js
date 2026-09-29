@@ -2,7 +2,8 @@
 // Ensures 100% consistent color themes, syntax highlighting, and suggestions model across CodeEditor and Notebooks
 
 export const MONACO_THEMES = {
-  'dark': 'fullcode-dark',
+  'antigravity-google': 'fullcode-antigravity-google',
+  'dark': 'fullcode-antigravity-google',
   'baby-pink': 'fullcode-baby-pink',
   'baby-pink-dark': 'fullcode-baby-pink-dark',
   'cyberpunk': 'fullcode-cyberpunk',
@@ -59,6 +60,42 @@ export function defineCustomMonacoTheme(monaco, palette) {
 
 export function registerCustomThemes(monaco, config) {
   if (!monaco) return;
+
+  // 0. Antigravity (Google Official Theme)
+  monaco.editor.defineTheme('fullcode-antigravity-google', {
+    base: 'vs-dark',
+    inherit: true,
+    rules: [
+      { token: 'comment', foreground: '8c909f', fontStyle: 'italic' },
+      { token: 'keyword', foreground: 'adc6ff', fontStyle: 'bold' },
+      { token: 'string', foreground: '4edea3' },
+      { token: 'number', foreground: '4cd7f6' },
+      { token: 'type', foreground: 'adc6ff' },
+      { token: 'function', foreground: '4cd7f6' },
+      { token: 'variable', foreground: 'dae2fd' },
+      { token: 'operator', foreground: 'adc6ff' },
+      { token: 'delimiter', foreground: 'c2c6d6' },
+    ],
+    colors: {
+      'editor.background': '#0b1326',
+      'editor.foreground': '#dae2fd',
+      'editor.lineHighlightBackground': '#131b2e80',
+      'editor.selectionBackground': '#4d8eff40',
+      'editorCursor.foreground': '#adc6ff',
+      'editorLineNumber.foreground': '#5c6375',
+      'editorLineNumber.activeForeground': '#dae2fd',
+      'editor.selectionHighlightBackground': '#4d8eff25',
+      'editorBracketMatch.background': '#4d8eff30',
+      'editorBracketMatch.border': '#adc6ff',
+      'editorIndentGuide.background': '#1f283d',
+      'editorIndentGuide.activeBackground': '#3a4663',
+      'scrollbarSlider.background': '#adc6ff20',
+      'scrollbarSlider.hoverBackground': '#adc6ff40',
+      'scrollbarSlider.activeBackground': '#adc6ff60',
+      'minimap.background': '#0b1326',
+      'editorGutter.background': '#0b1326',
+    },
+  });
 
   // 1. Full Code Dark (Default)
   monaco.editor.defineTheme('fullcode-dark', {
