@@ -371,16 +371,31 @@ export function AnacondaIcon({ size = 16, className = '', style = {} }) {
  * Resolves canonical language key from file name or language object
  */
 export function resolveLanguageKey(language, filename = '') {
-  // 1. Check filename extension first (most accurate for workspace files)
-  if (filename && typeof filename === 'string') {
-    const ext = filename.split('.').pop()?.toLowerCase();
-    if (ext === 'ipynb') {
+  // 1. Check if notebook (.ipynb) and resolve specific kernel language
+  const isIpynb =
+    (filename && typeof filename === 'string' && filename.toLowerCase().endsWith('.ipynb')) ||
+    Number(language?.id) === 710 ||
+    language?.monacoLanguage === 'ipynb';
+
+  if (isIpynb) {
+    const nb = language?.notebookLanguage || language?.kernel;
+    if (nb === 'java') return 'jupyter-java';
+    if (nb === 'cpp' || nb === 'c++') return 'jupyter-cpp';
+    if (nb === 'javascript' || nb === 'js') return 'jupyter-js';
+    if (nb === 'python') return 'jupyter';
+
+    if (filename && typeof filename === 'string') {
       const lower = filename.toLowerCase();
       if (lower.includes('java')) return 'jupyter-java';
       if (lower.includes('cpp') || lower.includes('c++')) return 'jupyter-cpp';
       if (lower.includes('js') || lower.includes('javascript')) return 'jupyter-js';
-      return 'jupyter';
     }
+    return 'jupyter';
+  }
+
+  // 2. Check filename extension for regular files
+  if (filename && typeof filename === 'string') {
+    const ext = filename.split('.').pop()?.toLowerCase();
     if (ext === 'yml' || ext === 'yaml') return 'anaconda';
     if (ext === 'java') return 'java';
     if (ext === 'py' || ext === 'python') return 'python';

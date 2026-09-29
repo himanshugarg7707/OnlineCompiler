@@ -123,12 +123,34 @@ function getCellSource(cell) {
 /**
  * Parses an .ipynb JSON string safely into cells and metadata
  */
-function parseNotebook(rawJson, fileName = '') {
+function parseNotebook(rawJson, fileName = '', wsFiles = [], fileLanguage = null) {
   const fLower = (fileName || '').toLowerCase();
   const getFallback = () => {
+    // 1. Check fileLanguage
+    const nbLang = fileLanguage?.notebookLanguage || fileLanguage?.kernel;
+    if (nbLang === 'java') return JSON.parse(createDefaultNotebookJson('java'));
+    if (nbLang === 'cpp') return JSON.parse(createDefaultNotebookJson('cpp'));
+    if (nbLang === 'javascript' || nbLang === 'js') return JSON.parse(createDefaultNotebookJson('javascript'));
+    if (nbLang === 'python') return JSON.parse(createDefaultNotebookJson('python'));
+
+    // 2. Check filename
     if (fLower.includes('java')) return JSON.parse(createDefaultNotebookJson('java'));
     if (fLower.includes('cpp') || fLower.includes('c++')) return JSON.parse(createDefaultNotebookJson('cpp'));
     if (fLower.includes('js') || fLower.includes('javascript')) return JSON.parse(createDefaultNotebookJson('javascript'));
+    if (fLower.includes('python') || fLower.includes('py_')) return JSON.parse(createDefaultNotebookJson('python'));
+
+    // 3. Check workspace files
+    if (Array.isArray(wsFiles) && wsFiles.length > 0) {
+      if (wsFiles.some((f) => f.name?.endsWith('.java') || f.name?.includes('Main.java'))) {
+        return JSON.parse(createDefaultNotebookJson('java'));
+      }
+      if (wsFiles.some((f) => f.name?.endsWith('.cpp') || f.name?.endsWith('.cc'))) {
+        return JSON.parse(createDefaultNotebookJson('cpp'));
+      }
+      if (wsFiles.some((f) => f.name?.endsWith('.js') && !f.name?.endsWith('.ipynb'))) {
+        return JSON.parse(createDefaultNotebookJson('javascript'));
+      }
+    }
     return JSON.parse(createDefaultNotebookJson('python'));
   };
 
@@ -138,19 +160,57 @@ function parseNotebook(rawJson, fileName = '') {
     }
     const data = JSON.parse(rawJson);
     if (data && Array.isArray(data.cells)) {
-      // Auto-correct metadata if filename says Java or cells contain Java
-      const isJava =
-        fLower.includes('java') ||
-        data.cells.some((c) => {
-          const src = getCellSource(c);
-          return /System\.(out|err|in)\.|public\s+(class|interface|enum|record)\b|public\s+static\s+void\s+main|Scanner\s+\w+\s*=|import\s+java\./.test(
-            src
-          );
-        });
+      const allCellCode = data.cells
+        .filter((c) => c.cell_type === 'code')
+        .map(getCellSource)
+        .join('\n');
 
-      if (isJava) {
+      const wsHasJava =
+        Array.isArray(wsFiles) &&
+        wsFiles.some((f) => f.name?.endsWith('.java') || f.name?.includes('Main.java'));
+      const wsHasCpp =
+        Array.isArray(wsFiles) &&
+        wsFiles.some((f) => f.name?.endsWith('.cpp') || f.name?.endsWith('.cc'));
+      const wsHasJs =
+        Array.isArray(wsFiles) &&
+        wsFiles.some((f) => f.name?.endsWith('.js') && !f.name?.endsWith('.ipynb'));
+
+      const isJavaDetected =
+        fileLanguage?.notebookLanguage === 'java' ||
+        fileLanguage?.kernel === 'java' ||
+        fLower.includes('java') ||
+        /System\.(out|err|in)\.|public\s+(class|interface|enum|record)\b|public\s+static\s+void\s+main|Scanner\s+\w+\s*=|import\s+java\./.test(
+          allCellCode
+        ) ||
+        (wsHasJava &&
+          !allCellCode.includes('import numpy') &&
+          !allCellCode.includes('def ') &&
+          !allCellCode.includes('import pandas'));
+
+      const isCppDetected =
+        !isJavaDetected &&
+        (fileLanguage?.notebookLanguage === 'cpp' ||
+          fileLanguage?.kernel === 'cpp' ||
+          fLower.includes('cpp') ||
+          fLower.includes('c++') ||
+          /#include\s*<iostream>|std::cout|using\s+namespace\s+std/.test(allCellCode) ||
+          (wsHasCpp &&
+            !allCellCode.includes('import numpy') &&
+            !allCellCode.includes('def ')));
+
+      const isJsDetected =
+        !isJavaDetected &&
+        !isCppDetected &&
+        (fileLanguage?.notebookLanguage === 'javascript' ||
+          fileLanguage?.kernel === 'javascript' ||
+          fLower.includes('js') ||
+          (wsHasJs &&
+            !allCellCode.includes('import numpy') &&
+            !allCellCode.includes('def ')));
+
+      if (isJavaDetected) {
         const kLang = data.metadata?.kernelspec?.language;
-        if (!kLang || kLang.toLowerCase() === 'python' || kLang.toLowerCase() === 'python3') {
+        if (!kLang || kLang.toLowerCase() !== 'java') {
           data.metadata = {
             ...data.metadata,
             language_info: { name: 'java', version: '17' },
@@ -158,6 +218,32 @@ function parseNotebook(rawJson, fileName = '') {
               display_name: 'Java (OpenJDK / JShell Engine)',
               language: 'java',
               name: 'java',
+            },
+          };
+        }
+      } else if (isCppDetected) {
+        const kLang = data.metadata?.kernelspec?.language;
+        if (!kLang || kLang.toLowerCase() !== 'cpp') {
+          data.metadata = {
+            ...data.metadata,
+            language_info: { name: 'cpp', version: '20' },
+            kernelspec: {
+              display_name: 'C++ (GCC / Clang C++20)',
+              language: 'cpp',
+              name: 'cpp',
+            },
+          };
+        }
+      } else if (isJsDetected) {
+        const kLang = data.metadata?.kernelspec?.language;
+        if (!kLang || kLang.toLowerCase() !== 'javascript') {
+          data.metadata = {
+            ...data.metadata,
+            language_info: { name: 'javascript', version: 'ES2022' },
+            kernelspec: {
+              display_name: 'JavaScript (Browser V8)',
+              language: 'javascript',
+              name: 'javascript',
             },
           };
         }
@@ -172,7 +258,10 @@ function parseNotebook(rawJson, fileName = '') {
 }
 
 export default function JupyterNotebookEditor({ file, onContentChange }) {
-  const [notebook, setNotebook] = useState(() => parseNotebook(file?.content, file?.name));
+  const { state: appState, dispatch, handleRenameFile, handleAddFile, showToast } = useApp();
+  const [notebook, setNotebook] = useState(() =>
+    parseNotebook(file?.content, file?.name, appState?.files, file?.language)
+  );
   const [activeCellIndex, setActiveCellIndex] = useState(0);
   const [editingMarkdownIndex, setEditingMarkdownIndex] = useState(null);
   const [runningCellIndex, setRunningCellIndex] = useState(null);
@@ -189,7 +278,6 @@ export default function JupyterNotebookEditor({ file, onContentChange }) {
   });
   const isInternalUpdateRef = useRef(false);
 
-  const { state: appState, handleRenameFile, handleAddFile, showToast } = useApp();
   const config = appState?.config;
   const activeMonacoTheme = getMonacoThemeName(config?.theme);
 
@@ -210,27 +298,11 @@ export default function JupyterNotebookEditor({ file, onContentChange }) {
 
   // Derive active notebook language with strict priority
   const notebookLanguage = (function () {
-    // 1. Explicit metadata kernelspec / language_info takes top priority
-    const metaLang =
-      notebook?.metadata?.kernelspec?.language ||
-      notebook?.metadata?.language_info?.name;
-    if (metaLang) {
-      const l = String(metaLang).toLowerCase();
-      if (l.includes('java')) return 'java';
-      if (l.includes('python') || l === 'py' || l === 'python3') return 'python';
-      if (l.includes('cpp') || l.includes('c++')) return 'cpp';
-      if (l.includes('javascript') || l === 'js') return 'javascript';
-      if (l === 'c') return 'c';
-    }
+    // 1. Explicit file.language notebookLanguage or kernel tag
+    if (file?.language?.notebookLanguage) return file.language.notebookLanguage;
+    if (file?.language?.kernel) return file.language.kernel;
 
-    // 2. Explicit filename
-    const fName = (file?.name || '').toLowerCase();
-    if (fName.includes('java')) return 'java';
-    if (fName.includes('cpp') || fName.includes('c++')) return 'cpp';
-    if (fName.includes('javascript') || fName.includes('js')) return 'javascript';
-    if (fName.includes('python') || fName.includes('py_')) return 'python';
-
-    // 3. Scan cell code patterns
+    // 2. Scan cell code patterns first (actual content is king!)
     const allCellCode = (notebook?.cells || [])
       .filter((c) => c.cell_type === 'code')
       .map(getCellSource)
@@ -245,6 +317,46 @@ export default function JupyterNotebookEditor({ file, onContentChange }) {
     }
     if (/#include\s*<iostream>|std::cout|using\s+namespace\s+std/.test(allCellCode)) {
       return 'cpp';
+    }
+
+    // 3. Explicit filename
+    const fName = (file?.name || '').toLowerCase();
+    if (fName.includes('java')) return 'java';
+    if (fName.includes('cpp') || fName.includes('c++')) return 'cpp';
+    if (fName.includes('javascript') || fName.includes('js')) return 'javascript';
+    if (fName.includes('python') || fName.includes('py_')) return 'python';
+
+    // 4. Explicit metadata kernelspec / language_info
+    const metaLang =
+      notebook?.metadata?.kernelspec?.language ||
+      notebook?.metadata?.language_info?.name;
+    if (metaLang) {
+      const l = String(metaLang).toLowerCase();
+      if (l.includes('java')) return 'java';
+      if (l.includes('cpp') || l.includes('c++')) return 'cpp';
+      if (l.includes('javascript') || l === 'js') return 'javascript';
+      if (l.includes('python') || l === 'py' || l === 'python3') {
+        // If workspace is Java and file has no python code, prefer workspace language
+        const wsHasJava = (appState?.files || []).some(
+          (f) => f.name?.endsWith('.java') || f.name?.includes('Main.java')
+        );
+        if (wsHasJava && !allCellCode.includes('import numpy') && !allCellCode.includes('def ')) {
+          return 'java';
+        }
+        return 'python';
+      }
+    }
+
+    // 5. Inherit from workspace files
+    if (Array.isArray(appState?.files)) {
+      const wsHasJava = appState.files.some(
+        (f) => f.name?.endsWith('.java') || f.name?.includes('Main.java')
+      );
+      if (wsHasJava) return 'java';
+      const wsHasCpp = appState.files.some((f) => f.name?.endsWith('.cpp'));
+      if (wsHasCpp) return 'cpp';
+      const wsHasJs = appState.files.some((f) => f.name?.endsWith('.js') && !f.name?.endsWith('.ipynb'));
+      if (wsHasJs) return 'javascript';
     }
 
     return 'python';
@@ -341,6 +453,24 @@ export default function JupyterNotebookEditor({ file, onContentChange }) {
       handleRenameFile(file.id, newName);
     }
 
+    if (dispatch && file?.id) {
+      dispatch({
+        type: 'UPDATE_FILE_LANGUAGE',
+        payload: {
+          fileId: file.id,
+          language: {
+            id: 710,
+            name: `${targetConfig.name} Notebook`,
+            notebookLanguage: newLangKey,
+            kernel: newLangKey,
+            monacoLanguage: 'ipynb',
+            extension: 'ipynb',
+            icon: targetConfig.id === 'java' ? '☕' : targetConfig.id === 'cpp' ? '⚡' : targetConfig.id === 'javascript' ? '🟨' : '🐍',
+          },
+        },
+      });
+    }
+
     showToast?.(`Switched to ${targetConfig.name} (${targetConfig.engine}) 🪐`);
   };
 
@@ -350,8 +480,8 @@ export default function JupyterNotebookEditor({ file, onContentChange }) {
       isInternalUpdateRef.current = false;
       return;
     }
-    setNotebook(parseNotebook(file?.content, file?.name));
-  }, [file?.id, file?.content, file?.name]);
+    setNotebook(parseNotebook(file?.content, file?.name, appState?.files, file?.language));
+  }, [file?.id, file?.content, file?.name, file?.language, appState?.files]);
 
   // Propagate changes back to parent file content
   const updateNotebook = useCallback(

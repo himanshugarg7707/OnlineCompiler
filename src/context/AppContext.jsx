@@ -332,6 +332,22 @@ function reducer(state, action) {
       };
     }
 
+    case 'UPDATE_FILE_LANGUAGE': {
+      const { fileId, language } = action.payload;
+      const updatedFiles = state.files.map((file) => {
+        if (file.id === fileId) {
+          return { ...file, language };
+        }
+        return file;
+      });
+      saveStateToStorage(updatedFiles, state.activeFileId, state.stdin, state.folders, state.openFileIds);
+      return {
+        ...state,
+        files: updatedFiles,
+        detectedLanguage: state.activeFileId === fileId ? language : state.detectedLanguage,
+      };
+    }
+
     case 'ADD_FILE': {
       const { name: inputName, content: inputContent, folder, openTab } = typeof action.payload === 'string'
         ? { name: action.payload, content: undefined, folder: undefined, openTab: true }
@@ -358,11 +374,11 @@ function reducer(state, action) {
       }
 
       const langFromExt = getLanguageFromFilename(uniqueName);
-      const fileLang = langFromExt || state.detectedLanguage;
-      let fileContent = inputContent !== undefined ? inputContent : getStarterTemplate(fileLang.id);
+      let fileLang = langFromExt || state.detectedLanguage;
+      let fileContent = inputContent !== undefined ? inputContent : getStarterTemplate(fileLang?.id || 71);
 
       // If notebook (.ipynb), generate differentiated template matching language context
-      if (fileLang?.id === 710 && inputContent === undefined) {
+      if ((fileLang?.id === 710 || uniqueName.endsWith('.ipynb')) && inputContent === undefined) {
         let nbLang = 'python';
         const lowerName = uniqueName.toLowerCase();
         if (lowerName.includes('java')) {
@@ -371,14 +387,42 @@ function reducer(state, action) {
           nbLang = 'cpp';
         } else if (lowerName.includes('js') || lowerName.includes('javascript')) {
           nbLang = 'javascript';
-        } else if (state.detectedLanguage?.monacoLanguage === 'java' || state.detectedLanguage?.id === 62) {
-          nbLang = 'java';
-        } else if (state.detectedLanguage?.monacoLanguage === 'cpp' || state.detectedLanguage?.id === 54) {
-          nbLang = 'cpp';
-        } else if (state.detectedLanguage?.monacoLanguage === 'javascript' || state.detectedLanguage?.id === 63) {
-          nbLang = 'javascript';
+        } else if (lowerName.includes('py') || lowerName.includes('python')) {
+          nbLang = 'python';
+        } else {
+          // Detect from workspace files
+          const wsFiles = state.files || [];
+          const hasJava = wsFiles.some(
+            (f) => f.name?.endsWith('.java') || f.language?.id === 62 || f.language?.monacoLanguage === 'java'
+          );
+          const hasCpp = wsFiles.some(
+            (f) => f.name?.endsWith('.cpp') || f.name?.endsWith('.cc') || f.language?.id === 54
+          );
+          const hasJs = wsFiles.some(
+            (f) => f.name?.endsWith('.js') || f.name?.endsWith('.ts') || f.language?.id === 63
+          );
+
+          if (hasJava || state.detectedLanguage?.id === 62 || state.detectedLanguage?.monacoLanguage === 'java') {
+            nbLang = 'java';
+          } else if (hasCpp || state.detectedLanguage?.id === 54 || state.detectedLanguage?.monacoLanguage === 'cpp') {
+            nbLang = 'cpp';
+          } else if (hasJs || state.detectedLanguage?.id === 63 || state.detectedLanguage?.monacoLanguage === 'javascript') {
+            nbLang = 'javascript';
+          } else {
+            nbLang = 'python';
+          }
         }
+
         fileContent = createDefaultNotebookJson(nbLang);
+        fileLang = {
+          id: 710,
+          name: nbLang === 'java' ? 'Java Notebook' : nbLang === 'cpp' ? 'C++ Notebook' : nbLang === 'javascript' ? 'JavaScript Notebook' : 'Python Notebook',
+          notebookLanguage: nbLang,
+          kernel: nbLang,
+          monacoLanguage: 'ipynb',
+          extension: 'ipynb',
+          icon: '🪐',
+        };
       }
 
       // If Java file, sync the class name to match sanitized filename (only for newly generated starter templates)

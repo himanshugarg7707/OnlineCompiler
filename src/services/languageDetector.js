@@ -582,16 +582,29 @@ export function detectLanguage(code) {
  * Resolve friendly display name for files and notebook kernels
  */
 export function getFriendlyLanguageName(language, filename = '') {
-  if (filename && typeof filename === 'string') {
-    const lower = filename.toLowerCase();
-    if (lower.endsWith('.ipynb')) {
+  const isIpynb =
+    (filename && typeof filename === 'string' && filename.toLowerCase().endsWith('.ipynb')) ||
+    Number(language?.id) === 710 ||
+    language?.monacoLanguage === 'ipynb';
+
+  if (isIpynb) {
+    const nb = language?.notebookLanguage || language?.kernel;
+    if (nb === 'java') return 'Java Notebook';
+    if (nb === 'cpp' || nb === 'c++') return 'C++ Notebook';
+    if (nb === 'javascript' || nb === 'js') return 'JavaScript Notebook';
+    if (nb === 'python') return 'Python Notebook';
+
+    if (filename && typeof filename === 'string') {
+      const lower = filename.toLowerCase();
       if (lower.includes('java')) return 'Java Notebook';
       if (lower.includes('cpp') || lower.includes('c++')) return 'C++ Notebook';
       if (lower.includes('js') || lower.includes('javascript')) return 'JavaScript Notebook';
-      return 'Python Notebook';
+      if (lower.includes('python') || lower.includes('py_')) return 'Python Notebook';
     }
-  }
-  if (language && Number(language.id) === 710) {
+
+    if (language?.name && language.name.includes('Notebook')) {
+      return language.name;
+    }
     return 'Python Notebook';
   }
   return language?.name || 'Code';
@@ -1192,7 +1205,15 @@ export function createDefaultNotebookJson(targetLang = 'python') {
 /**
  * Get the starter template for a language
  */
-export function getStarterTemplate(languageId) {
+export function getStarterTemplate(languageId, filename = '', notebookLang = '') {
+  let nbTarget = notebookLang;
+  if (!nbTarget && filename && typeof filename === 'string') {
+    const fLower = filename.toLowerCase();
+    if (fLower.includes('java')) nbTarget = 'java';
+    else if (fLower.includes('cpp') || fLower.includes('c++')) nbTarget = 'cpp';
+    else if (fLower.includes('js') || fLower.includes('javascript')) nbTarget = 'javascript';
+  }
+
   const templates = {
     71: `# Start here
 `,
@@ -1299,7 +1320,7 @@ Write your notes, explanations, ideas, or documentation here...
 - Note 1: 
 - Note 2: 
 `,
-    710: createDefaultNotebookJson(),
+    710: createDefaultNotebookJson(nbTarget || 'python'),
     711: `name: myenv
 channels:
   - defaults
