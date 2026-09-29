@@ -307,12 +307,12 @@ export function getMonacoEditorOptions(config, isCell = false) {
     matchBrackets: 'always',
     formatOnType: true,
     formatOnPaste: true,
-    // Autocomplete & suggestions model: safe for fast typing
+    // Autocomplete & suggestions model: Enter applies suggestions
     fixedOverflowWidgets: true,
     suggestOnTriggerCharacters: true,
-    acceptSuggestionOnEnter: 'off',
-    tabCompletion: 'onlySnippets',
-    acceptSuggestionOnCommitCharacter: false,
+    acceptSuggestionOnEnter: 'on',
+    tabCompletion: 'off',
+    acceptSuggestionOnCommitCharacter: true,
     quickSuggestions: {
       other: true,
       comments: false,

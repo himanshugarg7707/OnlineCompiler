@@ -56,7 +56,13 @@ function loadSavedFiles() {
     if (raw) {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed) && parsed.length > 0) {
-        return parsed;
+        // Remove existing legacy/starter jupyter notebook files as requested
+        const cleanFiles = parsed.filter(
+          (f) => !f.name?.endsWith('.ipynb') && f.language?.id !== 710 && f.language?.monacoLanguage !== 'ipynb'
+        );
+        if (cleanFiles.length > 0) {
+          return cleanFiles;
+        }
       }
     }
   } catch (e) {
@@ -170,14 +176,7 @@ const shouldShowWelcomeOnArrival = (() => {
   }
 })();
 
-// Prevent stale notebook-setup hash from landing unauthenticated user on Java
-if (typeof window !== 'undefined' && !initialUser) {
-  if (window.location.hash.includes('notebooks') || window.location.hash.includes('setup')) {
-    try {
-      window.location.hash = '#/';
-    } catch {}
-  }
-}
+// Note: Allow users to navigate to notebooks or settings freely without forced redirects
 
 const initialState = {
   activeUser: initialUser,
@@ -245,7 +244,7 @@ const initialState = {
   activeTerminalTab: 'output',
   currentPage: typeof window !== 'undefined' && window.location.hash.includes('settings')
     ? 'settings'
-    : typeof window !== 'undefined' && initialUser && (window.location.hash.includes('notebooks') || window.location.hash.includes('setup'))
+    : typeof window !== 'undefined' && (window.location.hash.includes('notebooks') || window.location.hash.includes('setup'))
       ? 'notebook-setup'
       : typeof window !== 'undefined' && (window.location.hash.includes('exam') || window.location.hash.includes('test'))
         ? 'exam'
@@ -383,7 +382,7 @@ function reducer(state, action) {
       }
 
       // If Java file, sync the class name to match sanitized filename (only for newly generated starter templates)
-      if (fileLang?.id === 62 && !initialContent) {
+      if (fileLang?.id === 62 && inputContent === undefined) {
         fileContent = syncJavaClassWithFilename(fileContent, uniqueName);
       }
 
@@ -938,22 +937,6 @@ function reducer(state, action) {
         aiExplanation: '',
       };
     case 'NAVIGATE_PAGE': {
-      if (typeof window !== 'undefined') {
-        const targetHash = action.payload === 'settings'
-          ? '#/settings'
-          : action.payload === 'notebook-setup'
-            ? '#/notebooks'
-            : (action.payload === 'exam' || action.payload === 'exam-test')
-              ? '#/exam'
-              : action.payload === 'templates'
-                ? '#/templates'
-                : action.payload === 'practice'
-                  ? '#/practice'
-                  : '#/';
-        if (window.location.hash !== targetHash) {
-          window.location.hash = targetHash;
-        }
-      }
       return { ...state, currentPage: action.payload };
     }
     case 'SET_FILE_ERRORS': {
@@ -1002,6 +985,18 @@ export function AppProvider({ children }) {
     };
     window.addEventListener('hashchange', onHashChange);
     return () => window.removeEventListener('hashchange', onHashChange);
+  }, []);
+
+  // Remove existing legacy/starter jupyter notebook files on mount as requested
+  useEffect(() => {
+    const jupyterFiles = state.files.filter(
+      (f) => f.name?.endsWith('.ipynb') || f.language?.id === 710 || f.language?.monacoLanguage === 'ipynb'
+    );
+    if (jupyterFiles.length > 0) {
+      jupyterFiles.forEach((jf) => {
+        dispatch({ type: 'CLOSE_FILE', payload: jf.id });
+      });
+    }
   }, []);
 
   // Listen for individual Jupyter notebook cell outputs to synchronize with Terminal / OutputPanel
@@ -1344,12 +1339,25 @@ export function AppProvider({ children }) {
   }, [state.activeUser, state.files, state.folders, state.activeFileId, state.openFileIds, state.stdin, state.config, showToast]);
 
   const handleRunCode = useCallback(async () => {
+    const activeFile = state.files.find((f) => f.id === state.activeFileId) || state.files[0];
+    const isNotebook = Boolean(
+      activeFile?.name?.endsWith('.ipynb') ||
+      state.detectedLanguage?.id === 710 ||
+      state.detectedLanguage?.monacoLanguage === 'ipynb' ||
+      activeFile?.language?.id === 710
+    );
+
+    // If active file is a Jupyter Notebook, trigger cell execution in notebook UI ONLY.
+    // Do NOT open terminal, do NOT set status to running in terminal, do NOT execute raw file in Judge0.
+    if (isNotebook) {
+      window.dispatchEvent(new CustomEvent('jupyter-run-active-cell'));
+      return;
+    }
+
     dispatch({ type: 'SET_EXECUTION_STATUS', payload: 'running' });
     dispatch({ type: 'SET_TERMINAL_HIDDEN', payload: false });
 
     try {
-      const activeFile = state.files.find((f) => f.id === state.activeFileId) || state.files[0];
-
       const hasSelection = Boolean(state.selectedCode && state.selectedCode.trim());
       const codeToRun = hasSelection ? state.selectedCode.trim() : (activeFile?.content || '');
 
@@ -1384,19 +1392,6 @@ export function AppProvider({ children }) {
 
         dispatch({ type: 'SET_STDIN', payload: effectiveStdin });
         showToast('Auto-generated input for code execution 💡');
-      }
-
-      // If active file is a Jupyter Notebook, trigger cell in notebook UI AND execute notebook for terminal output
-      if (activeFile?.name?.endsWith('.ipynb') || state.detectedLanguage?.id === 710) {
-        window.dispatchEvent(new CustomEvent('jupyter-run-active-cell'));
-
-        const result = await executeCode(
-          activeFile.content,
-          710,
-          effectiveStdin
-        );
-        dispatch({ type: 'SET_EXECUTION_RESULT', payload: result });
-        return;
       }
 
       const result = await executeCode(
@@ -1931,7 +1926,29 @@ export function AppProvider({ children }) {
         showToast(`Error unpacking ZIP: ${err.message}`);
       }
     },
-    navigateToPage: (page) => dispatch({ type: 'NAVIGATE_PAGE', payload: page }),
+    navigateToPage: (page) => {
+      if (typeof window !== 'undefined') {
+        const hashMap = {
+          'settings': '#/settings',
+          'notebook-setup': '#/notebooks',
+          'exam': '#/exam',
+          'exam-test': '#/exam',
+          'templates': '#/templates',
+          'practice': '#/practice',
+          'editor': '#/',
+        };
+        const targetHash = hashMap[page] || '#/';
+        const currentHash = window.location.hash || '';
+        const isAlreadyOnPage =
+          (page === 'editor' && (!currentHash || currentHash === '#/' || currentHash === '#')) ||
+          (page !== 'editor' && currentHash.startsWith(targetHash));
+
+        if (!isAlreadyOnPage) {
+          window.location.hash = targetHash;
+        }
+      }
+      dispatch({ type: 'NAVIGATE_PAGE', payload: page });
+    },
     setFileErrors: (fileId, errors) => dispatch({ type: 'SET_FILE_ERRORS', payload: { fileId, errors } }),
     showToast,
   };

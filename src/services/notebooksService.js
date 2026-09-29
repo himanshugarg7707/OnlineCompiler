@@ -193,11 +193,6 @@ public class Main {
 `,
       },
       {
-        name: 'java_notebook.ipynb',
-        language: { id: 710, name: 'Jupyter Notebook', monacoLanguage: 'ipynb', extension: 'ipynb', icon: '🪐' },
-        content: createDefaultNotebookJson('java'),
-      },
-      {
         name: 'Notes.md',
         language: { id: 99, name: 'Markdown', monacoLanguage: 'markdown', extension: 'md' },
         content: `# ☕ Java & Object-Oriented Programming — Subject Notebook

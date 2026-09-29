@@ -62,6 +62,112 @@ const LANGUAGE_NAMES = {
   82: 'SQL', 0: 'HTML', 1: 'CSS',
 };
 
+// Cache local server availability
+let localServerStatusCache = null;
+let lastStatusCheckTime = 0;
+
+/**
+ * Detect whether the app is running in a local machine environment (e.g. localhost, local network, native macOS app).
+ * If true, native host compilers are accessible via /api/execute.
+ * If false (e.g. deployed on Vercel, Netlify, Cloudflare), local pings are skipped entirely for 0ms overhead!
+ */
+export function isLocalEnvironment() {
+  if (typeof window === 'undefined') return false;
+  const host = window.location.hostname;
+  return Boolean(
+    host === 'localhost' ||
+    host === '127.0.0.1' ||
+    host === '0.0.0.0' ||
+    host.endsWith('.local') ||
+    window.webkit?.messageHandlers?.nativeHost
+  );
+}
+
+/**
+ * Check if the local backend server is running and local native compilers are available
+ */
+export async function checkLocalServerStatus(forceRefresh = false) {
+  // If running on Vercel or cloud web deployment, immediately return without wasting network roundtrips
+  if (!isLocalEnvironment()) {
+    return {
+      isLocalRunning: false,
+      available: false,
+      compilers: {},
+      platform: 'web',
+    };
+  }
+
+  const now = Date.now();
+  if (!forceRefresh && localServerStatusCache && now - lastStatusCheckTime < 15000) {
+    return localServerStatusCache;
+  }
+
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 1200);
+    const res = await fetch('/api/execute/status', { signal: controller.signal });
+    clearTimeout(timeoutId);
+    if (res.ok) {
+      const data = await res.json();
+      localServerStatusCache = {
+        isLocalRunning: true,
+        available: Boolean(data.available),
+        compilers: data.compilers || {},
+        platform: data.platform || 'darwin',
+      };
+      lastStatusCheckTime = now;
+      return localServerStatusCache;
+    }
+  } catch {
+    // Backend not responding or serverless
+  }
+
+  localServerStatusCache = {
+    isLocalRunning: false,
+    available: false,
+    compilers: {},
+    platform: 'web',
+  };
+  lastStatusCheckTime = now;
+  return localServerStatusCache;
+}
+
+/**
+ * Attempt ultra-fast local native execution via backend server
+ */
+async function tryLocalExecution(code, languageId, stdin = '', filename = '') {
+  // Only attempt if on local machine with native backend runner
+  if (!isLocalEnvironment()) return null;
+
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 8000);
+    const response = await fetch('/api/execute', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        code,
+        languageId,
+        stdin,
+        filename,
+        preferLocal: true,
+      }),
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+
+    if (response.ok) {
+      const result = await response.json();
+      if (result && !result.useClientRunner && typeof result.success === 'boolean') {
+        return result;
+      }
+    }
+  } catch {
+    // Fall back to in-browser / cloud execution
+  }
+  return null;
+}
+
 /**
  * Execute code with optimal execution engine
  */
@@ -77,6 +183,20 @@ export async function executeCode(code, languageId, stdin = '', allFiles = []) {
   if (clientExecutionCache.has(cacheKey)) {
     const cached = clientExecutionCache.get(cacheKey);
     return { ...cached, time: '0.001', cached: true };
+  }
+
+  // 0. Try Fast Local Native Backend Runner (Only on local machine with native compilers)
+  const isCloudForced = typeof localStorage !== 'undefined' && localStorage.getItem('fullcode_engine_mode') === 'cloud';
+  if (isLocalEnvironment() && !isCloudForced && languageId !== 0 && languageId !== 1 && languageId !== 710) {
+    try {
+      const localRes = await tryLocalExecution(code, languageId, stdin);
+      if (localRes && (localRes.isLocal || localRes.engine === 'local' || localRes.engine === 'sqlite')) {
+        clientExecutionCache.set(cacheKey, localRes);
+        return localRes;
+      }
+    } catch {
+      // Local backend unreachable or not supported; continue to in-browser / cloud execution
+    }
   }
 
   // 1. Python — Use in-browser WebAssembly with NumPy, Pandas, Matplotlib
@@ -180,35 +300,37 @@ export async function executeCode(code, languageId, stdin = '', allFiles = []) {
       activeDatabase = localStorage.getItem('fullcode_active_db') || undefined;
     }
 
-    // Try native backend SQLite first (full SQL support: DDL, DML, joins, aggregates like sum/count/avg)
-    try {
-      const response = await fetch('/api/execute', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code, languageId: 82, database: activeDatabase }),
-      });
-      if (response.ok) {
-        const result = await response.json();
-        if (result && typeof result.success === 'boolean') {
-          if (result.sqlData?.database && typeof localStorage !== 'undefined') {
-            localStorage.setItem('fullcode_active_db', result.sqlData.database);
+    // Try native backend SQLite first ONLY when running on local machine
+    if (isLocalEnvironment()) {
+      try {
+        const response = await fetch('/api/execute', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code, languageId: 82, database: activeDatabase }),
+        });
+        if (response.ok) {
+          const result = await response.json();
+          if (result && typeof result.success === 'boolean') {
+            if (result.sqlData?.database && typeof localStorage !== 'undefined') {
+              localStorage.setItem('fullcode_active_db', result.sqlData.database);
+            }
+            // Notify DatabasePanel to refresh database explorer and sync active database
+            if (typeof window !== 'undefined') {
+              window.dispatchEvent(
+                new CustomEvent('database-updated', {
+                  detail: {
+                    database: result.sqlData?.database,
+                    table: result.sqlData?.previewTable,
+                  },
+                })
+              );
+            }
+            return result;
           }
-          // Notify DatabasePanel to refresh database explorer and sync active database
-          if (typeof window !== 'undefined') {
-            window.dispatchEvent(
-              new CustomEvent('database-updated', {
-                detail: {
-                  database: result.sqlData?.database,
-                  table: result.sqlData?.previewTable,
-                },
-              })
-            );
-          }
-          return result;
         }
+      } catch (err) {
+        console.warn('Backend SQL API unreachable, using in-browser SQL runner:', err.message);
       }
-    } catch (err) {
-      console.warn('Backend SQL API unreachable, using in-browser SQL runner:', err.message);
     }
 
     // In-browser SQL runner fallback (offline / serverless)
@@ -283,37 +405,35 @@ export function prepareJavaForExecution(code) {
     }
   }
 
-  // 6. Demote any public class / record / enum / interface (except Main) to package-private
-  // This automatically removes the "file class" restriction where the class name must match filename
+  // 6. Demote any public class / record / enum / interface to package-private
+  // This automatically removes the "file class" restriction where the class name must match filename.
+  // In cloud compiler environments (such as Godbolt / Wandbox), source files are compiled as <source> or example.java.
+  // When a class is declared `public class Main`, javac demands it must be in a file named Main.java,
+  // throwing: "<source>:error: class Main is public, should be declared in a file named Main.java".
+  // Removing `public` allows all classes (including Main) to compile together without filename conflicts,
+  // while `public static void main(String[] args)` remains public and fully executable by the JVM!
   clean = clean.replace(
     /\bpublic\s+(final\s+|abstract\s+)?(class|record|enum|interface)\s+([A-Za-z0-9_$]+)/g,
-    (m, mod, type, name) => {
-      if (name === 'Main') return m;
-      return `${mod || ''}${type} ${name}`;
-    }
+    (m, mod, type, name) => `${mod || ''}${type} ${name}`
   );
 
   // 7. Check if Main class already exists
   const hasMainClass = classes.some((c) => c.name === 'Main');
 
   if (hasMainClass) {
-    // Ensure Main has public modifier
-    if (!/\bpublic\s+(?:final\s+|abstract\s+)?class\s+Main\b/.test(clean)) {
-      clean = clean.replace(/\bclass\s+Main\b/, 'public class Main');
-    }
     // If Main does NOT contain main method, but another class does, inject forwarder into Main
     if (classWithMain && classWithMain !== 'Main') {
       clean = clean.replace(
-        /(\bpublic\s+(?:final\s+|abstract\s+)?class\s+Main\b[^{]*\{)/,
+        /(\b(?:final\s+|abstract\s+)?class\s+Main\b[^{]*\{)/,
         `$1\n    public static void main(String[] args) throws Throwable {\n        ${classWithMain}.main(args);\n    }`
       );
     }
   } else {
-    // No Main class exists. Create public class Main bridge.
+    // No Main class exists. Create class Main bridge.
     if (classWithMain) {
-      clean += `\n\npublic class Main {\n    public static void main(String[] args) throws Throwable {\n        ${classWithMain}.main(args);\n    }\n}\n`;
+      clean += `\n\nclass Main {\n    public static void main(String[] args) throws Throwable {\n        ${classWithMain}.main(args);\n    }\n}\n`;
     } else {
-      clean += `\n\npublic class Main {\n    public static void main(String[] args) throws Throwable {\n        System.out.println("Java code compiled successfully (no main method found).");\n    }\n}\n`;
+      clean += `\n\nclass Main {\n    public static void main(String[] args) throws Throwable {\n        System.out.println("Java code compiled successfully (no main method found).");\n    }\n}\n`;
     }
   }
 
@@ -442,7 +562,86 @@ async function judge0CeExecute(code, languageId, stdin = '') {
 }
 
 /**
- * Cloud execution with Judge0 CE (fast primary) → Godbolt (secondary) → Wandbox (tertiary)
+ * Execute via Piston Engine (emkc.org/api/v2/piston)
+ * Fast containerized execution without keys
+ */
+async function pistonExecute(code, languageId, stdin = '') {
+  const PISTON_LANGUAGES = {
+    71: { language: 'python', version: '3.10.0' },
+    54: { language: 'c++', version: '10.2.0' },
+    50: { language: 'c', version: '10.2.0' },
+    62: { language: 'java', version: '15.0.2', filename: 'Main.java' },
+    51: { language: 'csharp.net', version: '6.12.0' },
+    60: { language: 'go', version: '1.16.2' },
+    73: { language: 'rust', version: '1.68.2' },
+    68: { language: 'php', version: '8.2.3' },
+    72: { language: 'ruby', version: '3.0.1' },
+    78: { language: 'kotlin', version: '1.8.20' },
+    83: { language: 'swift', version: '5.3.3' },
+    81: { language: 'scala', version: '3.2.2' },
+    74: { language: 'typescript', version: '5.0.3' },
+  };
+
+  const conf = PISTON_LANGUAGES[languageId];
+  if (!conf) return null;
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 6500);
+
+  try {
+    const startTime = performance.now();
+    const response = await fetch('https://emkc.org/api/v2/piston/execute', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        language: conf.language,
+        version: conf.version,
+        files: [{ name: conf.filename || 'main', content: code }],
+        stdin: stdin || '',
+      }),
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+
+    if (!response.ok) return null;
+
+    const data = await response.json();
+    const elapsed = ((performance.now() - startTime) / 1000).toFixed(3);
+
+    if (data && data.run) {
+      const exitCode = data.run.code ?? 0;
+      const stdout = data.run.stdout || '';
+      const stderr = data.run.stderr || '';
+
+      if (exitCode === 0) {
+        return {
+          success: true,
+          output: stdout || '(Program finished with no output)',
+          error: null,
+          time: elapsed,
+          memory: 0,
+          statusCode: 0,
+        };
+      } else {
+        return {
+          success: false,
+          output: stdout,
+          error: stderr || `Process exited with code ${exitCode}`,
+          time: elapsed,
+          memory: 0,
+          statusCode: exitCode,
+        };
+      }
+    }
+  } catch (e) {
+    clearTimeout(timeoutId);
+    console.warn('Piston execute error:', e.message);
+  }
+  return null;
+}
+
+/**
+ * Cloud execution with Judge0 CE (fast primary) → Piston (fast secondary) → Godbolt (tertiary) → Wandbox (quaternary)
  */
 async function cloudExecuteWithFallback(code, languageId, stdin) {
   // 1. Try Judge0 CE first (Fastest: ~1-1.5s roundtrip vs 5-8s)
@@ -450,10 +649,18 @@ async function cloudExecuteWithFallback(code, languageId, stdin) {
     const judge0Res = await judge0CeExecute(code, languageId, stdin);
     if (judge0Res) return judge0Res;
   } catch (err) {
-    console.warn('Judge0 CE failed:', err.message, '— trying Godbolt fallback');
+    console.warn('Judge0 CE failed:', err.message, '— trying Piston fallback');
   }
 
-  // 2. Try Godbolt secondary
+  // 2. Try Piston runner
+  try {
+    const pistonRes = await pistonExecute(code, languageId, stdin);
+    if (pistonRes) return pistonRes;
+  } catch (err) {
+    console.warn('Piston failed:', err.message, '— trying Godbolt fallback');
+  }
+
+  // 3. Try Godbolt Compiler Explorer
   const godboltCompiler = GODBOLT_COMPILERS[languageId];
   if (godboltCompiler) {
     try {
@@ -464,7 +671,7 @@ async function cloudExecuteWithFallback(code, languageId, stdin) {
     }
   }
 
-  // 3. Try Wandbox tertiary fallback
+  // 4. Try Wandbox fallback
   const wandboxCompiler = WANDBOX_COMPILERS[languageId];
   if (wandboxCompiler) {
     try {
@@ -485,35 +692,40 @@ async function cloudExecuteWithFallback(code, languageId, stdin) {
  */
 async function godboltExecute(code, compilerInfo, languageId, stdin) {
   const startTime = performance.now();
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 6000);
 
-  const response = await fetch(`https://godbolt.org/api/compiler/${compilerInfo.id}/compile`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Accept': 'application/json',
-    },
-    body: JSON.stringify({
-      source: code,
-      options: {
-        userArguments: '',
-        executeParameters: {
-          args: '',
-          stdin: stdin || '',
-        },
-        filters: {
-          execute: true,
-        },
-        skipAsm: true,
+  try {
+    const response = await fetch(`https://godbolt.org/api/compiler/${compilerInfo.id}/compile`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
       },
-    }),
-  });
+      body: JSON.stringify({
+        source: code,
+        options: {
+          userArguments: '',
+          executeParameters: {
+            args: '',
+            stdin: stdin || '',
+          },
+          filters: {
+            execute: true,
+          },
+          skipAsm: true,
+        },
+      }),
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
 
-  const elapsed = ((performance.now() - startTime) / 1000).toFixed(3);
+    const elapsed = ((performance.now() - startTime) / 1000).toFixed(3);
 
-  if (!response.ok) {
-    console.warn('Godbolt returned HTTP', response.status);
-    return null; // Signal to try next fallback
-  }
+    if (!response.ok) {
+      console.warn('Godbolt returned HTTP', response.status);
+      return null; // Signal to try next fallback
+    }
 
   const result = await response.json();
 
@@ -564,15 +776,19 @@ async function godboltExecute(code, compilerInfo, languageId, stdin) {
     };
   }
 
-  return {
-    success: true,
-    output: stdout || '(Program finished with no output)',
-    error: null,
-    time: elapsed,
-    memory: 0,
-    statusCode: 0,
-    compilerWarnings,
-  };
+    return {
+      success: true,
+      output: stdout || '(Program finished with no output)',
+      error: null,
+      time: elapsed,
+      memory: 0,
+      statusCode: 0,
+    };
+  } catch (err) {
+    clearTimeout(timeoutId);
+    console.warn('Godbolt execute error:', err.message);
+    return null;
+  }
 }
 
 /**
@@ -580,6 +796,8 @@ async function godboltExecute(code, compilerInfo, languageId, stdin) {
  */
 async function wandboxExecute(code, compiler, languageId, stdin) {
   const startTime = performance.now();
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 6000);
 
   try {
     const response = await fetch('https://wandbox.org/api/compile.json', {
@@ -591,7 +809,9 @@ async function wandboxExecute(code, compiler, languageId, stdin) {
         stdin: stdin || '',
         save: false,
       }),
+      signal: controller.signal,
     });
+    clearTimeout(timeoutId);
 
     const elapsed = ((performance.now() - startTime) / 1000).toFixed(3);
 

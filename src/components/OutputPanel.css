@@ -829,4 +829,140 @@
   }
 }
 
+/* ─── Engine Mode Selector Pill ───────────────────────────────────────── */
+.engine-mode-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-sm, 6px);
+  padding: 3px 9px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-fast, 0.15s ease);
+  color: var(--text-primary);
+  white-space: nowrap;
+  user-select: none;
+}
+
+.engine-mode-pill:hover {
+  transform: translateY(-1px);
+}
+
+.engine-mode-pill.engine-local {
+  border-color: rgba(0, 212, 255, 0.35);
+  background: rgba(0, 212, 255, 0.08);
+  color: var(--accent-cyan, #00d4ff);
+}
+
+.engine-mode-pill.engine-local:hover {
+  background: rgba(0, 212, 255, 0.15);
+  border-color: var(--accent-cyan, #00d4ff);
+}
+
+.engine-mode-pill.engine-cloud {
+  border-color: rgba(168, 85, 247, 0.35);
+  background: rgba(168, 85, 247, 0.08);
+  color: #c084fc;
+}
+
+.engine-mode-pill.engine-cloud:hover {
+  background: rgba(168, 85, 247, 0.15);
+  border-color: #c084fc;
+}
+
+.engine-last-badge {
+  background: rgba(255, 255, 255, 0.1);
+  padding: 1px 4px;
+  border-radius: 4px;
+  font-size: 9.5px;
+  font-family: var(--font-mono);
+  font-weight: 500;
+}
+
+/* ─── Terminal Controls Header Row ────────────────────────────────────── */
+.terminal-controls-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 12px;
+  background: var(--bg-tertiary);
+  border-bottom: 1px solid var(--border-primary);
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.terminal-mode-switcher {
+  display: inline-flex;
+  align-items: center;
+  background: var(--bg-primary);
+  padding: 2px;
+  border-radius: var(--radius-sm, 6px);
+  border: 1px solid var(--border-primary);
+  gap: 2px;
+}
+
+.terminal-mode-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.terminal-mode-btn:hover {
+  color: var(--text-primary);
+}
+
+.terminal-mode-btn.active {
+  background: var(--bg-elevated);
+  color: var(--accent-cyan);
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+.terminal-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.terminal-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-sm, 6px);
+  padding: 3px 8px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.terminal-action-btn:hover {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  border-color: var(--accent-cyan);
+}
+
+.terminal-time-tag {
+  color: var(--text-muted);
+  font-size: 10px;
+  font-family: var(--font-mono);
+  margin-left: 6px;
+}
+
+
 

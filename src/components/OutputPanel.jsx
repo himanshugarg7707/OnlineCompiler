@@ -8,6 +8,7 @@ import WebPreviewPanel from './WebPreviewPanel';
 import ComplexityTab from './ComplexityTab';
 import LanguageIcon from './LanguageIcon';
 import { getFriendlyLanguageName } from '../services/languageDetector';
+import { isLocalEnvironment } from '../services/judge0Service';
 import './OutputPanel.css';
 
 const TABS = [
@@ -382,7 +383,7 @@ function createTerminalEngine(getFiles, getFolders, addFile, addFolder, deleteFi
   };
 }
 
-// ─── Terminal Tab Component ──────────────────────────────────────────────
+// ─── Terminal Tab Component (Hybrid: Real Local Shell & Virtual Workspace) ─────
 function TerminalTab() {
   const {
     state,
@@ -392,11 +393,27 @@ function TerminalTab() {
     handleDeleteFolder,
     handleRenameFile,
     handleSelectFile,
+    showToast,
   } = useApp();
 
   const { files, folders } = state;
 
-  const [terminalHistory, setTerminalHistory] = useState([]);
+  const [terminalMode, setTerminalMode] = useState(() => {
+    return isLocalEnvironment() && localStorage.getItem('fullcode_terminal_mode') === 'local' ? 'local' : 'virtual';
+  });
+  const [isLocalAvailable, setIsLocalAvailable] = useState(false);
+  const [localCwd, setLocalCwd] = useState('');
+  const [localUser, setLocalUser] = useState('developer');
+  const [isExecutingCmd, setIsExecutingCmd] = useState(false);
+
+  const [terminalHistory, setTerminalHistory] = useState([
+    {
+      type: 'welcome',
+      text: isLocalEnvironment()
+        ? '🖥️  FullCode Terminal — Real Local macOS zsh & Polyglot Environment'
+        : '🖥️  FullCode Terminal — Web Workspace Shell & Command Runner',
+    },
+  ]);
   const [cmdInput, setCmdInput] = useState('');
   const [cmdHistoryIdx, setCmdHistoryIdx] = useState(-1);
   const [cmdHistoryList, setCmdHistoryList] = useState([]);
@@ -405,7 +422,46 @@ function TerminalTab() {
   const inputRef = useRef(null);
   const engineRef = useRef(null);
 
-  // Initialize engine
+  // Check local terminal backend availability on mount (only in local environments)
+  useEffect(() => {
+    if (!isLocalEnvironment()) {
+      setIsLocalAvailable(false);
+      setTerminalMode('virtual');
+      return;
+    }
+
+    fetch('/api/terminal/info')
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.isLocal) {
+          setIsLocalAvailable(true);
+          setLocalCwd(data.defaultCwd || '');
+          setLocalUser(data.username || 'developer');
+          if (localStorage.getItem('fullcode_terminal_mode') === 'local') {
+            setTerminalMode('local');
+          }
+        } else {
+          setIsLocalAvailable(false);
+          setTerminalMode('virtual');
+        }
+      })
+      .catch(() => {
+        setIsLocalAvailable(false);
+        setTerminalMode('virtual');
+      });
+  }, []);
+
+  // Listen for clear terminal custom event from native app menu
+  useEffect(() => {
+    const handleClearEvent = () => {
+      setTerminalHistory([]);
+      if (engineRef.current) engineRef.current.history.length = 0;
+    };
+    window.addEventListener('clear-terminal-history', handleClearEvent);
+    return () => window.removeEventListener('clear-terminal-history', handleClearEvent);
+  }, []);
+
+  // Initialize virtual engine fallback
   if (!engineRef.current) {
     engineRef.current = createTerminalEngine(
       () => files,
@@ -417,7 +473,6 @@ function TerminalTab() {
       handleRenameFile,
       handleSelectFile,
     );
-    setTerminalHistory([...engineRef.current.history]);
   }
 
   // Keep engine refs up to date with latest files/folders
@@ -433,10 +488,6 @@ function TerminalTab() {
         handleRenameFile,
         handleSelectFile,
       );
-      // Preserve existing history
-      const existingHistory = terminalHistory;
-      engineRef.current.history.length = 0;
-      existingHistory.forEach((h) => engineRef.current.history.push(h));
     }
   }, [files, folders, handleAddFile, handleAddFolder, handleCloseFile, handleDeleteFolder, handleRenameFile, handleSelectFile]);
 
@@ -448,20 +499,103 @@ function TerminalTab() {
   // Focus input
   useEffect(() => {
     inputRef.current?.focus();
-  }, []);
+  }, [terminalMode]);
 
-  const handleSubmit = useCallback(() => {
+  const switchMode = (mode) => {
+    setTerminalMode(mode);
+    localStorage.setItem('fullcode_terminal_mode', mode);
+    showToast(mode === 'local' ? '⚡️ Switched to Real macOS Shell (zsh)' : '🌐 Switched to Web Workspace Shell');
+  };
+
+  const handleOpenNativeTerminal = () => {
+    if (window.webkit?.messageHandlers?.nativeHost) {
+      window.webkit.messageHandlers.nativeHost.postMessage({ type: 'open_terminal' });
+    } else {
+      showToast('Open macOS Terminal is active inside the FullCode macOS App 🖥️');
+    }
+  };
+
+  const handleClear = () => {
+    setTerminalHistory([]);
+    if (engineRef.current) {
+      engineRef.current.history.length = 0;
+    }
+  };
+
+  const formatDisplayPath = (fullPath) => {
+    if (!fullPath) return '~';
+    const parts = fullPath.split('/').filter(Boolean);
+    if (parts.length <= 2) return fullPath;
+    return '~/' + parts.slice(-2).join('/');
+  };
+
+  const handleSubmit = useCallback(async () => {
     const trimmed = cmdInput.trim();
     if (!trimmed) return;
 
     setCmdHistoryList((prev) => [...prev, trimmed]);
     setCmdHistoryIdx(-1);
+    setCmdInput('');
 
+    // Clear command
+    if (trimmed === 'clear') {
+      handleClear();
+      return;
+    }
+
+    // 1. Real Local Terminal Mode
+    if (terminalMode === 'local' && isLocalAvailable) {
+      const activeDisplayCwd = formatDisplayPath(localCwd);
+      setTerminalHistory((prev) => [
+        ...prev,
+        { type: 'cmd', text: trimmed, cwd: activeDisplayCwd, user: localUser },
+      ]);
+
+      setIsExecutingCmd(true);
+      const startTime = performance.now();
+
+      try {
+        const response = await fetch('/api/terminal/exec', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ command: trimmed, cwd: localCwd }),
+        });
+
+        const data = await response.json();
+        if (data.cwd) {
+          setLocalCwd(data.cwd);
+        }
+
+        const elapsed = data.time || ((performance.now() - startTime) / 1000).toFixed(3);
+        const newItems = [];
+
+        if (data.stdout) {
+          newItems.push({ type: 'output', text: data.stdout, time: elapsed });
+        }
+        if (data.stderr) {
+          newItems.push({ type: 'error', text: data.stderr, time: elapsed });
+        }
+        if (!data.stdout && !data.stderr && data.exitCode !== 0) {
+          newItems.push({ type: 'error', text: `Process exited with code ${data.exitCode}`, time: elapsed });
+        }
+
+        setTerminalHistory((prev) => [...prev, ...newItems]);
+      } catch (err) {
+        setTerminalHistory((prev) => [
+          ...prev,
+          { type: 'error', text: `Failed to execute: ${err.message}` },
+        ]);
+      } finally {
+        setIsExecutingCmd(false);
+      }
+      return;
+    }
+
+    // 2. Virtual Workspace Terminal Mode
     const engine = engineRef.current;
     const newHistory = engine.executeCommand(trimmed);
     setTerminalHistory([...newHistory]);
-    setCmdInput('');
-  }, [cmdInput]);
+  }, [cmdInput, terminalMode, isLocalAvailable, localCwd, localUser]);
 
   const handleKeyDown = (e) => {
     if (e.key === 'Enter') {
@@ -490,20 +624,64 @@ function TerminalTab() {
       }
     } else if (e.key === 'l' && (e.ctrlKey || e.metaKey)) {
       e.preventDefault();
-      engineRef.current.history.length = 0;
-      setTerminalHistory([]);
+      handleClear();
     }
   };
 
-  const handleClear = () => {
-    engineRef.current.history.length = 0;
-    setTerminalHistory([]);
-  };
-
-  const displayCwd = engineRef.current?.getDisplayCwd() || '~';
+  const displayPromptCwd = terminalMode === 'local' && isLocalAvailable
+    ? formatDisplayPath(localCwd)
+    : (engineRef.current?.getDisplayCwd() || '~');
 
   return (
     <div className="terminal-section" onClick={() => inputRef.current?.focus()}>
+      {/* Terminal Mode Switcher & Tool Header */}
+      <div className="terminal-controls-header">
+        <div className="terminal-mode-switcher">
+          {isLocalAvailable ? (
+            <>
+              <button
+                className={`terminal-mode-btn ${terminalMode === 'local' ? 'active' : ''}`}
+                onClick={(e) => { e.stopPropagation(); switchMode('local'); }}
+                title="Real local macOS shell running native compilers & processes (zsh)"
+              >
+                <span>⚡️ Local zsh</span>
+              </button>
+              <button
+                className={`terminal-mode-btn ${terminalMode === 'virtual' ? 'active' : ''}`}
+                onClick={(e) => { e.stopPropagation(); switchMode('virtual'); }}
+                title="In-browser virtual workspace file manager (works everywhere)"
+              >
+                <span>🌐 Workspace Shell</span>
+              </button>
+            </>
+          ) : (
+            <span className="terminal-mode-label" style={{ fontSize: '11px', color: '#64748b', fontWeight: 600 }}>
+              🌐 Web Terminal
+            </span>
+          )}
+        </div>
+
+        <div className="terminal-header-actions">
+          {window.webkit?.messageHandlers?.nativeHost && (
+            <button
+              className="terminal-action-btn"
+              onClick={(e) => { e.stopPropagation(); handleOpenNativeTerminal(); }}
+              title="Launch external macOS Terminal.app at workspace directory (⌥⌘T)"
+            >
+              💻 <span>Open macOS Terminal</span>
+            </button>
+          )}
+
+          <button
+            className="terminal-action-btn"
+            onClick={(e) => { e.stopPropagation(); handleClear(); }}
+            title="Clear terminal history (Ctrl+L)"
+          >
+            🧹 <span>Clear</span>
+          </button>
+        </div>
+      </div>
+
       <div className="terminal-history">
         {terminalHistory.map((entry, idx) => {
           if (entry.type === 'welcome') {
@@ -516,7 +694,9 @@ function TerminalTab() {
           if (entry.type === 'cmd') {
             return (
               <div key={idx} className="terminal-line cmd">
-                <span className="terminal-prompt">{entry.cwd || '~'} $</span>
+                <span className="terminal-prompt">
+                  {entry.user ? `${entry.user}@FullCode:` : ''}{entry.cwd || '~'} $
+                </span>
                 {entry.text}
               </div>
             );
@@ -535,14 +715,23 @@ function TerminalTab() {
           return (
             <div key={idx} className={`terminal-line ${entry.type}`}>
               {entry.text}
+              {entry.time && <span className="terminal-time-tag">({entry.time}s)</span>}
             </div>
           );
         })}
+        {isExecutingCmd && (
+          <div className="terminal-line info">
+            <span className="spinner-min" style={{ display: 'inline-block', marginRight: '6px' }} />
+            <span>Executing command...</span>
+          </div>
+        )}
         <div ref={historyEndRef} />
       </div>
 
       <div className="terminal-input-line">
-        <span className="terminal-input-cwd">{displayCwd}</span>
+        <span className="terminal-input-cwd">
+          {terminalMode === 'local' && isLocalAvailable ? `${localUser}@FullCode:${displayPromptCwd}` : displayPromptCwd}
+        </span>
         <span className="terminal-input-prompt">$</span>
         <input
           ref={inputRef}
@@ -551,9 +740,10 @@ function TerminalTab() {
           value={cmdInput}
           onChange={(e) => setCmdInput(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="Type a command..."
+          placeholder={terminalMode === 'local' ? "Run any macOS command (e.g. python3, node, ls -la, git status)..." : "Type a command (help, ls, cat, touch)..."}
           spellCheck={false}
           autoComplete="off"
+          disabled={isExecutingCmd}
         />
         <button className="terminal-clear-btn" onClick={handleClear} title="Clear terminal (Ctrl+L)">
           clear
@@ -579,6 +769,25 @@ export default function OutputPanel() {
   const activeTab = state.activeTerminalTab || 'output';
   const setActiveTab = (tabId) => dispatch({ type: 'SET_TERMINAL_TAB', payload: tabId });
   const generateInputFn = handleGenerateInput || handleGenerateInputs;
+
+  const [engineMode, setEngineMode] = useState(() => {
+    return localStorage.getItem('fullcode_engine_mode') || 'local';
+  });
+
+  useEffect(() => {
+    const handleEngineChange = (e) => {
+      if (e.detail?.mode) setEngineMode(e.detail.mode);
+    };
+    window.addEventListener('engine-mode-changed', handleEngineChange);
+    return () => window.removeEventListener('engine-mode-changed', handleEngineChange);
+  }, []);
+
+  const toggleEngineMode = () => {
+    const next = engineMode === 'local' ? 'cloud' : 'local';
+    setEngineMode(next);
+    localStorage.setItem('fullcode_engine_mode', next);
+    window.dispatchEvent(new CustomEvent('engine-mode-changed', { detail: { mode: next } }));
+  };
 
   const handleAutoGenerateInputAndRun = async () => {
     setActiveTab('output');
@@ -683,6 +892,19 @@ export default function OutputPanel() {
             </div>
           </div>
 
+          {/* Engine Mode Switcher Pill */}
+          <button
+            className={`engine-mode-pill ${engineMode === 'local' ? 'engine-local' : 'engine-cloud'}`}
+            onClick={toggleEngineMode}
+            title={
+              engineMode === 'local'
+                ? '⚡️ Active: Local Native Mac Compilers (~0.02s). Click to switch to Cloud Sandbox.'
+                : '🌐 Active: Cloud / Web Sandbox. Click to switch to Local Native Mac Compilers.'
+            }
+          >
+            <span>{engineMode === 'local' ? '⚡️ Local Engine' : '🌐 Cloud Sandbox'}</span>
+          </button>
+
           {/* Status indicator & Controls */}
           <div className="execution-status">
             {isRunning && (
@@ -758,6 +980,20 @@ export default function OutputPanel() {
                 >
                   <BrainCircuit size={12} />
                   <span>Explain with AI</span>
+                </button>
+                <button
+                  className="btn-in-use-action"
+                  onClick={() => {
+                    if (window.webkit?.messageHandlers?.nativeHost) {
+                      window.webkit.messageHandlers.nativeHost.postMessage({ type: 'open_website' });
+                    } else {
+                      window.open('http://localhost:5173', '_blank');
+                    }
+                  }}
+                  title="Open Website Version in Safari / Chrome"
+                >
+                  <Globe size={12} />
+                  <span>Website</span>
                 </button>
               </div>
             </div>

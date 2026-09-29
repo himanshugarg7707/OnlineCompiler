@@ -125,7 +125,7 @@ export default function CookieConsentBanner({ onOpenSettings }) {
             <label className="cookie-toggle-row">
               <div className="cookie-toggle-info">
                 <strong>Version History Snapshots</strong>
-                <span>Keeps offline local snapshots of code revisions for one-click rollback</span>
+                <span>Keeps local browser snapshots of code revisions for one-click rollback</span>
               </div>
               <input
                 type="checkbox"

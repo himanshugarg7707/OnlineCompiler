@@ -19,10 +19,11 @@ import {
   ChevronUp,
   Maximize2,
   Minimize2,
-  Sparkles,
+  Globe,
 } from 'lucide-react';
 import LanguageIcon from './LanguageIcon';
 import LanguageSelector from './LanguageSelector';
+import { isLocalEnvironment } from '../services/judge0Service';
 import './Header.css';
 
 export default function Header() {
@@ -40,6 +41,41 @@ export default function Header() {
   const [showWorkspacesMenu, setShowWorkspacesMenu] = useState(false);
   const practiceDropdownRef = useRef(null);
   const workspacesDropdownRef = useRef(null);
+
+  const isNativeApp = typeof window !== 'undefined' && Boolean(window.webkit?.messageHandlers?.nativeHost);
+  const isLocalHost = isLocalEnvironment();
+
+  const [engineMode, setEngineMode] = useState(() => {
+    return isLocalHost && localStorage.getItem('fullcode_engine_mode') === 'local' ? 'local' : 'cloud';
+  });
+
+  useEffect(() => {
+    const handleEngineChange = (e) => {
+      if (e.detail?.mode) setEngineMode(e.detail.mode);
+    };
+    window.addEventListener('engine-mode-changed', handleEngineChange);
+    return () => window.removeEventListener('engine-mode-changed', handleEngineChange);
+  }, []);
+
+  const toggleEngineMode = () => {
+    const next = engineMode === 'local' ? 'cloud' : 'local';
+    setEngineMode(next);
+    localStorage.setItem('fullcode_engine_mode', next);
+    window.dispatchEvent(new CustomEvent('engine-mode-changed', { detail: { mode: next } }));
+    showToast(
+      next === 'local'
+        ? '⚡️ Engine: Local Native Mac Compilers (Ultra-Fast 0.02s)'
+        : '🌐 Engine: Cloud Sandbox (WebAssembly & Remote)'
+    );
+  };
+
+  const handleOpenWebsite = () => {
+    if (window.webkit?.messageHandlers?.nativeHost) {
+      window.webkit.messageHandlers.nativeHost.postMessage({ type: 'open_website' });
+    } else {
+      window.open(window.location.origin, '_blank');
+    }
+  };
 
   useEffect(() => {
     const handleClickOutside = (e) => {
@@ -328,54 +364,33 @@ export default function Header() {
           )}
         </button>
 
-        {/* ChatGPT Classic macOS Companion Sync Button */}
-        <button
-          className="btn-header-tool btn-chatgpt-sync"
-          onClick={() => {
-            try {
-              const activeFile = state.files.find((f) => f.id === state.activeFileId) || state.files[0];
-              const hasSelection = Boolean(state.selectedCode && state.selectedCode.trim());
-              const codeSnippet = hasSelection ? state.selectedCode.trim() : (activeFile?.content || state.code || '');
-              const errorSnippet = state.stderr || state.compileOutput || '';
 
-              // 1. Post to local ChatGPT Classic bridge
-              fetch('/api/chatgpt/sync', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  fileName: activeFile?.name || 'Main.java',
-                  content: activeFile?.content || state.code || '',
-                  language: state.detectedLanguage?.name || 'java',
-                  selectedCode: hasSelection ? state.selectedCode : null,
-                  selectionRange: state.selectionRange || null,
-                  selectionLine: state.selectionLine ?? null,
-                  errorSnippet,
-                  outputSnippet: state.stdout || '',
-                  files: state.files.map((f) => ({ name: f.name, content: f.content })),
-                }),
-              }).catch(() => {});
-
-              // 2. Also copy to macOS clipboard as instantaneous fallback
-              let payload = `[File: ${activeFile?.name || 'main'} (${state.detectedLanguage?.name || 'Code'})]\n\`\`\`${state.detectedLanguage?.monacoLanguage || ''}\n${codeSnippet}\n\`\`\``;
-              if (errorSnippet) {
-                payload += `\n\n[Compiler Output / Error]:\n${errorSnippet}`;
-              }
-
-              if (navigator.clipboard?.writeText) {
-                navigator.clipboard.writeText(payload);
-              }
-              showToast('ChatGPT Classic linked! (⌥␣ pill has your live code) 🤖');
-            } catch (err) {
-              console.warn('Sync error:', err);
+        {/* Engine Switcher Button - visible in macOS native app */}
+        {isNativeApp && (
+          <button
+            className={`btn-engine-header ${engineMode === 'local' ? 'engine-local' : 'engine-cloud'}`}
+            onClick={toggleEngineMode}
+            title={
+              engineMode === 'local'
+                ? '⚡️ Local Mac Compilers Active (~0.02s). Click to switch to Cloud Sandbox.'
+                : '🌐 Cloud Sandbox Active. Click to switch to Local Mac Compilers.'
             }
-          }}
-          title="Linked with ChatGPT Classic macOS App (⌥ + Space floating pill)"
-        >
-          <span className="chatgpt-live-dot" />
-          <Sparkles size={13} />
-          <span className="btn-chatgpt-label">ChatGPT Classic</span>
-          <kbd className="btn-shortcut-pill">⌥␣</kbd>
-        </button>
+          >
+            <span>{engineMode === 'local' ? '⚡️ Local' : '🌐 Cloud'}</span>
+          </button>
+        )}
+
+        {/* Website Mode - visible in macOS native app */}
+        {isNativeApp && (
+          <button
+            className="btn-header-tool btn-website-toggle"
+            onClick={handleOpenWebsite}
+            title="Open Website Version in Safari / Chrome (⌘B) — Standalone web experience"
+          >
+            <Globe size={14} />
+            <span className="btn-tool-label">Website</span>
+          </button>
+        )}
 
         {/* Full Page Code / Zen Mode Button */}
         <button

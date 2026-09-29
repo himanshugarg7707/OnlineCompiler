@@ -601,56 +601,97 @@ export function getFriendlyLanguageName(language, filename = '') {
  * Prepare Java cell code for execution
  * Separates imports, package-private helper classes, and statements to guarantee valid Java compilation
  */
-export function prepareJavaCellCode(cellCode) {
-  let text = (cellCode || '').trim();
-  if (!text) return text;
-
-  // 1. If already contains a complete runnable class with main method
-  if (/\bpublic\s+static\s+void\s+main\b/.test(text) || /\bstatic\s+void\s+main\b/.test(text)) {
-    // Demote public class to package-private class so filename matching is not required
-    text = text.replace(/\bpublic\s+(final\s+|abstract\s+)?class\s+([A-Za-z0-9_$]+)/g, (match, mod, name) => {
-      return name === 'Main' ? match : `${mod || ''}class ${name}`;
-    });
-    return text;
-  }
-
-  // 2. Separate all import lines so they NEVER get placed inside main()
-  const importSet = new Set([
-    'import java.util.*;',
-    'import java.io.*;',
-    'import java.math.*;',
-    'import java.util.stream.*;',
-  ]);
-  const lines = text.split('\n');
+/**
+ * Parse a Java snippet into imports, classes/interfaces/records, methods, and loose statements.
+ */
+export function parseJavaCellComponents(codeText) {
+  const importLines = [];
+  const lines = (codeText || '').split('\n');
   const nonImportLines = [];
 
   for (const line of lines) {
-    const trimmedLine = line.trim();
-    if (/^import\s+[^;]+;\s*$/.test(trimmedLine)) {
-      importSet.add(trimmedLine);
-    } else if (/^package\s+[^;]+;\s*$/.test(trimmedLine)) {
+    const trimmed = line.trim();
+    if (/^import\s+[^;]+;\s*$/.test(trimmed)) {
+      importLines.push(trimmed);
+    } else if (/^package\s+[^;]+;\s*$/.test(trimmed)) {
       // Discard package lines in interactive notebook cells
     } else {
       nonImportLines.push(line);
     }
   }
 
-  const remainingCode = nonImportLines.join('\n').trim();
-  if (!remainingCode) {
-    return `${Array.from(importSet).join('\n')}\n\npublic class Main {\n    public static void main(String[] args) throws Exception {}\n}`;
+  const rawBody = nonImportLines.join('\n').trim();
+  if (!rawBody) {
+    return { imports: importLines, classes: [], methods: [], statements: [] };
   }
 
-  // 3. Separate any top-level class/interface/record/enum declarations from statements
+  // 1. Extract class/interface/record/enum declarations with balanced braces
   const declRegex = /(?:^|\n)\s*(?:(?:public|protected|private|static|final|abstract)\s+)*(class|interface|record|enum)\s+([A-Za-z0-9_$]+)/g;
   let match;
-  const helperClasses = [];
-  const statementChunks = [];
+  const classes = [];
+  const remainingChunks = [];
   let lastIndex = 0;
 
-  while ((match = declRegex.exec(remainingCode)) !== null) {
+  while ((match = declRegex.exec(rawBody)) !== null) {
     const startIndex = match.index + (match[0].startsWith('\n') ? 1 : 0);
     if (startIndex > lastIndex) {
-      const chunk = remainingCode.substring(lastIndex, startIndex).trim();
+      const chunk = rawBody.substring(lastIndex, startIndex).trim();
+      if (chunk) remainingChunks.push(chunk);
+    }
+
+    const openBrace = rawBody.indexOf('{', startIndex);
+    if (openBrace !== -1) {
+      let braceCount = 1;
+      let i = openBrace + 1;
+      while (i < rawBody.length && braceCount > 0) {
+        if (rawBody[i] === '{') braceCount++;
+        else if (rawBody[i] === '}') braceCount--;
+        i++;
+      }
+      const classBody = rawBody.substring(startIndex, i).trim();
+      const sanitized = classBody.replace(/^\s*public\s+(class|record|enum|interface)\b/, '$1 ');
+      classes.push(sanitized);
+      lastIndex = i;
+    } else {
+      lastIndex = startIndex + match[0].length;
+    }
+  }
+
+  if (lastIndex < rawBody.length) {
+    const chunk = rawBody.substring(lastIndex).trim();
+    if (chunk) remainingChunks.push(chunk);
+  }
+
+  const remainingCode = remainingChunks.join('\n\n').trim();
+  if (!remainingCode) {
+    return { imports: importLines, classes, methods: [], statements: [] };
+  }
+
+  // 2. Extract methods from remainingCode
+  // Matches method signatures: [modifiers] ReturnType methodName(...) [throws ...] {
+  const methodRegex = /(?:^|\n)\s*(?:(public|protected|private|static|final|synchronized)\s+)*([A-Za-z0-9_<>\[\]]+)\s+([A-Za-z0-9_$]+)\s*\(([^)]*)\)\s*(?:throws\s+[A-Za-z0-9_$,\s]+)?\s*\{/g;
+  const methods = [];
+  const statementChunks = [];
+  let methodLastIndex = 0;
+  let methodMatch;
+
+  // Reserved statement keywords that must never be treated as method names/return types
+  const statementKeywords = new Set([
+    'if', 'for', 'while', 'switch', 'catch', 'synchronized', 'return', 'new', 'throw', 'assert', 'super', 'this'
+  ]);
+
+  while ((methodMatch = methodRegex.exec(remainingCode)) !== null) {
+    const returnType = methodMatch[2];
+    const methodName = methodMatch[3];
+
+    // If it's a control flow construct (e.g. if (...), for (...), while (...)), skip it!
+    if (statementKeywords.has(returnType) || statementKeywords.has(methodName)) {
+      continue;
+    }
+
+    const startIndex = methodMatch.index + (methodMatch[0].startsWith('\n') ? 1 : 0);
+    if (startIndex > methodLastIndex) {
+      const chunk = remainingCode.substring(methodLastIndex, startIndex).trim();
       if (chunk) statementChunks.push(chunk);
     }
 
@@ -663,49 +704,167 @@ export function prepareJavaCellCode(cellCode) {
         else if (remainingCode[i] === '}') braceCount--;
         i++;
       }
-      const classBody = remainingCode.substring(startIndex, i).trim();
-      // Remove 'public ' from helper classes to avoid multiple public classes error
-      const sanitizedClass = classBody.replace(/^\s*public\s+class\b/, 'class ');
-      helperClasses.push(sanitizedClass);
-      lastIndex = i;
+      let methodBody = remainingCode.substring(startIndex, i).trim();
+      // Ensure the method is static so main() can invoke it without an instance of Main
+      if (!/\bstatic\b/.test(methodMatch[0])) {
+        methodBody = 'static ' + methodBody;
+      }
+      methods.push(methodBody);
+      methodLastIndex = i;
     } else {
-      lastIndex = startIndex + match[0].length;
+      methodLastIndex = startIndex + methodMatch[0].length;
     }
   }
 
-  if (lastIndex < remainingCode.length) {
-    const chunk = remainingCode.substring(lastIndex).trim();
+  if (methodLastIndex < remainingCode.length) {
+    const chunk = remainingCode.substring(methodLastIndex).trim();
     if (chunk) statementChunks.push(chunk);
   }
 
-  const statements = statementChunks.join('\n\n').trim();
-  const importsStr = Array.from(importSet).join('\n');
-  const classesStr = helperClasses.join('\n\n');
+  const statements = statementChunks.filter(Boolean);
+  return { imports: importLines, classes, methods, statements };
+}
 
-  // If there are only classes and no loose statements:
-  if (!statements) {
-    return `${importsStr}
+/**
+ * Prepare single Java cell code for execution
+ * Separates imports, package-private helper classes, class-level methods, and statements
+ * to guarantee valid Java compilation without "illegal start of expression" or filename conflicts.
+ */
+export function prepareJavaCellCode(cellCode) {
+  let text = (cellCode || '').trim();
+  if (!text) return text;
 
-${classesStr}
-
-class Main {
-    public static void main(String[] args) throws Exception {
-        System.out.println("✓ Java class definition loaded successfully.");
-    }
-}`;
+  // 1. If already contains a complete runnable class with main method
+  if (/\b(?:public\s+)?static\s+void\s+main\b/.test(text)) {
+    text = text.replace(/\bpublic\s+(final\s+|abstract\s+)?class\s+([A-Za-z0-9_$]+)/g, (match, mod, name) => {
+      return name === 'Main' ? match : `${mod || ''}class ${name}`;
+    });
+    return text;
   }
 
-  // Wrap loose statements inside class Main main()
-  const indentedStatements = statements
-    .split('\n')
-    .map((l) => '        ' + l)
-    .join('\n');
+  const parsed = parseJavaCellComponents(text);
+  const importSet = new Set([
+    'import java.util.*;',
+    'import java.io.*;',
+    'import java.math.*;',
+    'import java.util.stream.*;',
+    ...parsed.imports,
+  ]);
+
+  const importsStr = Array.from(importSet).join('\n');
+  const classesStr = parsed.classes.join('\n\n');
+  const methodsStr = parsed.methods.map((m) => m.split('\n').map((l) => '    ' + l).join('\n')).join('\n\n');
+
+  let statementsCode = parsed.statements.join('\n\n').trim();
+  if (!statementsCode && parsed.classes.length > 0) {
+    statementsCode = 'System.out.println("✓ Java class definition loaded successfully.");';
+  } else if (!statementsCode && parsed.methods.length > 0) {
+    statementsCode = 'System.out.println("✓ Java method(s) defined successfully.");';
+  }
+
+  const indentedStatements = statementsCode
+    ? statementsCode.split('\n').map((l) => '        ' + l).join('\n')
+    : '';
 
   return `${importsStr}
 
 ${classesStr ? classesStr + '\n\n' : ''}class Main {
-    public static void main(String[] args) throws Exception {
+${methodsStr ? methodsStr + '\n\n' : ''}    public static void main(String[] args) throws Throwable {
 ${indentedStatements}
+    }
+}`;
+}
+
+/**
+ * Prepare multi-cell Java notebook code for execution
+ * Accumulates imports, classes, and helper methods across all cells from 0 to activeIndex,
+ * and replays prior cell statements silently so variables and objects persist across cells!
+ */
+export function prepareJavaNotebookCellCode(cells, activeIndex) {
+  if (!Array.isArray(cells) || cells.length === 0) {
+    return prepareJavaCellCode('');
+  }
+
+  const targetCell = cells[activeIndex];
+  const targetSource = typeof targetCell === 'string'
+    ? targetCell
+    : (Array.isArray(targetCell?.source) ? targetCell.source.join('') : (targetCell?.source || ''));
+
+  // If active cell already contains complete main method, run directly
+  if (/\b(?:public\s+)?static\s+void\s+main\b/.test(targetSource)) {
+    return prepareJavaCellCode(targetSource);
+  }
+
+  const allImports = new Set([
+    'import java.util.*;',
+    'import java.io.*;',
+    'import java.math.*;',
+    'import java.util.stream.*;',
+  ]);
+  const allClasses = [];
+  const allMethods = [];
+  const precedingStatements = [];
+
+  // Parse preceding cells (0 to activeIndex - 1)
+  for (let i = 0; i < activeIndex; i++) {
+    const c = cells[i];
+    if (c && (c.cell_type === 'code' || typeof c === 'string')) {
+      const src = typeof c === 'string' ? c : (Array.isArray(c.source) ? c.source.join('') : (c.source || ''));
+      if (src && src.trim() && !/\b(?:public\s+)?static\s+void\s+main\b/.test(src)) {
+        const parsed = parseJavaCellComponents(src);
+        parsed.imports.forEach((imp) => allImports.add(imp));
+        parsed.classes.forEach((cls) => allClasses.push(cls));
+        parsed.methods.forEach((m) => allMethods.push(m));
+        if (parsed.statements.length > 0) {
+          precedingStatements.push(...parsed.statements);
+        }
+      }
+    }
+  }
+
+  // Parse active cell
+  const activeParsed = parseJavaCellComponents(targetSource);
+  activeParsed.imports.forEach((imp) => allImports.add(imp));
+  activeParsed.classes.forEach((cls) => allClasses.push(cls));
+  activeParsed.methods.forEach((m) => allMethods.push(m));
+
+  const activeStatements = activeParsed.statements;
+
+  const importsStr = Array.from(allImports).join('\n');
+  const classesStr = allClasses.join('\n\n');
+  const methodsStr = allMethods.map((m) => m.split('\n').map((l) => '    ' + l).join('\n')).join('\n\n');
+
+  let activeStatementsCode = activeStatements.join('\n\n').trim();
+  if (!activeStatementsCode && activeParsed.classes.length > 0) {
+    activeStatementsCode = 'System.out.println("✓ Defined class(es) successfully.");';
+  } else if (!activeStatementsCode && activeParsed.methods.length > 0) {
+    activeStatementsCode = 'System.out.println("✓ Defined method(s) successfully.");';
+  }
+
+  let mainBody = '';
+  if (precedingStatements.length > 0 && activeStatementsCode) {
+    const precedingCode = precedingStatements.join('\n\n');
+    mainBody = `        // Silence output during replay of preceding notebook cells
+        java.io.PrintStream __realOut = System.out;
+        System.setOut(new java.io.PrintStream(new java.io.OutputStream() {
+            public void write(int b) {}
+            public void write(byte[] b, int off, int len) {}
+        }));
+
+${precedingCode.split('\n').map((l) => '        ' + l).join('\n')}
+
+        System.setOut(__realOut);
+
+${activeStatementsCode.split('\n').map((l) => '        ' + l).join('\n')}`;
+  } else {
+    mainBody = activeStatementsCode.split('\n').map((l) => '        ' + l).join('\n');
+  }
+
+  return `${importsStr}
+
+${classesStr ? classesStr + '\n\n' : ''}class Main {
+${methodsStr ? methodsStr + '\n\n' : ''}    public static void main(String[] args) throws Throwable {
+${mainBody}
     }
 }`;
 }

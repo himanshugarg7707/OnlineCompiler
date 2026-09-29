@@ -80,26 +80,11 @@ export default function StatusBar() {
           </span>
         )}
 
-        {/* Prominent Footer Terminal Button */}
+        {/* Prominent Footer Terminal Button (Only for regular code files, hidden in notebooks) */}
         {isNotebook ? (
-          <button
-            className={`status-terminal-btn ${terminalHidden ? 'terminal-hidden-badge' : 'terminal-active-badge'}`}
-            onClick={handleToggleTerminal}
-            title={terminalHidden ? "Show Terminal & Output (Ctrl+`)" : "Hide Terminal & Output (Ctrl+`)"}
-          >
-            {terminalHidden ? (
-              <>
-                <Plus size={12} className="terminal-btn-plus" />
-                <Terminal size={12} />
-                <span>Show Terminal</span>
-              </>
-            ) : (
-              <>
-                <Terminal size={12} />
-                <span>Terminal</span>
-              </>
-            )}
-          </button>
+          <span className="status-item notebook-indicator" title="Notebook mode: Cells execute inline">
+            🪐 Notebook (Inline Output)
+          </span>
         ) : (
           <button
             className="status-terminal-btn terminal-active-badge"

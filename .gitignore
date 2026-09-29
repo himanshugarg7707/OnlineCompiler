@@ -27,3 +27,6 @@ dist-ssr
 # Database files
 server/data/databases/*.sqlite*
 .env*
+
+# Native macOS build outputs
+native/*.app

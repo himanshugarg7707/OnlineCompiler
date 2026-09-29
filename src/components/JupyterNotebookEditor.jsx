@@ -42,6 +42,7 @@ import { executeCode } from '../services/judge0Service';
 import {
   createDefaultNotebookJson,
   prepareJavaCellCode,
+  prepareJavaNotebookCellCode,
   prepareCppCellCode,
   prepareCCellCode,
 } from '../services/languageDetector';
@@ -525,8 +526,13 @@ export default function JupyterNotebookEditor({ file, onContentChange }) {
       if (notebookLanguage === 'python') {
         result = await executePythonInBrowser(code);
       } else if (notebookLanguage === 'java') {
-        const prepared = prepareJavaCellCode(code);
+        const prepared = prepareJavaNotebookCellCode(notebook.cells, index);
         result = await executeCode(prepared, 62);
+        // Fallback: If execution failed with variable redeclaration conflict in main, try active cell
+        if (!result.success && result.error && /already defined in method main|is already defined/i.test(result.error)) {
+          const fallbackPrepared = prepareJavaCellCode(code);
+          result = await executeCode(fallbackPrepared, 62);
+        }
       } else if (notebookLanguage === 'cpp') {
         const prepared = prepareCppCellCode(code);
         result = await executeCode(prepared, 54);
@@ -621,9 +627,14 @@ export default function JupyterNotebookEditor({ file, onContentChange }) {
     }
   }, [notebook.cells, executionCounter, notebookLanguage, updateCell]);
 
-  // Listen for Header Run button event
+  // Listen for Header Run button event & notebook shortcut
   useEffect(() => {
+    let lastRunTime = 0;
     const handleRunActiveCellEvent = () => {
+      const now = Date.now();
+      if (now - lastRunTime < 350) return;
+      lastRunTime = now;
+
       if (activeCellIndex !== null && notebook.cells[activeCellIndex]?.cell_type === 'code') {
         runCell(activeCellIndex);
       } else {
@@ -699,6 +710,21 @@ export default function JupyterNotebookEditor({ file, onContentChange }) {
         runCell(idx);
         addCell('code', idx);
       });
+
+      // Stop execution key shortcuts from bubbling to global window listener
+      editor.onKeyDown((e) => {
+        if (
+          (e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) &&
+          (e.keyCode === monaco.KeyCode.Enter || e.code === 'Enter')
+        ) {
+          e.stopPropagation();
+        }
+      });
+
+      // Make Tab indent instead of accepting suggestions when suggest widget is visible
+      editor.addCommand(monaco.KeyCode.Tab, () => {
+        editor.trigger('keyboard', 'tab', {});
+      }, 'suggestWidgetVisible');
 
       // Track active cell on focus
       editor.onDidFocusEditorText(() => {

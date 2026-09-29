@@ -7,6 +7,7 @@
     "dev": "concurrently -n \"vite,server\" -c \"cyan,magenta\" \"vite --port 5173\" \"node --watch server/index.js\"",
     "dev:frontend": "vite",
     "server": "node --watch server/index.js",
+    "desktop": "bash native/build-and-run.sh",
     "build": "vite build",
     "lint": "oxlint",
     "preview": "vite preview"

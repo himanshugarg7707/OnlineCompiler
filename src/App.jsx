@@ -24,6 +24,7 @@ import NotebookSetupPage from './pages/NotebookSetupPage';
 import ExamTestPage from './pages/ExamTestPage';
 import TemplatesPage from './pages/TemplatesPage';
 import PracticePage from './pages/PracticePage';
+import { getLanguageFromFilename } from './services/languageDetector';
 import { FolderTree, ChevronLeft, ChevronRight, Maximize2, Minimize2, Play } from 'lucide-react';
 import './App.css';
 
@@ -41,6 +42,10 @@ function AppContent() {
     handleAcceptIncomingChanges,
     handleDeclineIncomingChanges,
     handleToggleTerminal,
+    handleFormatCode,
+    handleCloseFile,
+    handleDownloadWorkspace,
+    showToast,
   } = useApp();
   const { explorerOpen, practiceOpen, toast, terminalHidden } = state;
 
@@ -51,8 +56,9 @@ function AppContent() {
     state.detectedLanguage?.id === 710
   );
 
-  // Rule: In simple files (without notebooks), the terminal is necessary and MUST NOT be hidden!
-  const effectiveTerminalHidden = isNotebookActive ? terminalHidden : false;
+  // Rule: In notebooks, the terminal is completely hidden (inline cell execution only).
+  // In regular code files, respect terminalHidden state.
+  const effectiveTerminalHidden = isNotebookActive ? true : terminalHidden;
 
   // Vertical Editor/Terminal Split
   const [splitPercent, setSplitPercent] = useState(() => {
@@ -105,6 +111,11 @@ function AppContent() {
       // Ctrl+Enter or Cmd+Enter to Run Code
       if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
         e.preventDefault();
+        if (isNotebookActive) {
+          // In notebooks, execute active notebook cell inline without opening terminal
+          window.dispatchEvent(new CustomEvent('jupyter-run-active-cell'));
+          return;
+        }
         handleRunCode();
       }
       // Ctrl+S or Cmd+S to Save
@@ -137,47 +148,20 @@ function AppContent() {
         e.preventDefault();
         dispatch({ type: 'TOGGLE_NAVBAR_MINIMIZED' });
       }
-      // Option+Space (Alt+Space): Real-time live context sync for macOS ChatGPT Classic App
-      if (e.altKey && (e.code === 'Space' || e.key === ' ' || e.keyCode === 32)) {
-        try {
-          const curFile = state.files.find((f) => f.id === state.activeFileId) || state.files[0];
-          const hasSelection = Boolean(state.selectedCode && state.selectedCode.trim());
-          const codeSnippet = hasSelection ? state.selectedCode.trim() : (curFile?.content || state.code || '');
-          const errorSnippet = state.stderr || state.compileOutput || '';
-
-          // 1. Send direct update to ChatGPT Classic macOS bridge
-          fetch('/api/chatgpt/sync', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              fileName: curFile?.name || 'Main.java',
-              content: curFile?.content || state.code || '',
-              language: state.detectedLanguage?.name || 'java',
-              selectedCode: hasSelection ? state.selectedCode : null,
-              selectionRange: state.selectionRange || null,
-              selectionLine: state.selectionLine ?? null,
-              errorSnippet,
-              outputSnippet: state.stdout || '',
-              files: state.files.map((f) => ({ name: f.name, content: f.content })),
-            }),
-          }).catch(() => {});
-
-          // 2. Also copy to macOS clipboard as instantaneous fallback
-          let payload = `[File: ${curFile?.name || 'main'} (${state.detectedLanguage?.name || 'Code'})]\n\`\`\`${state.detectedLanguage?.monacoLanguage || ''}\n${codeSnippet}\n\`\`\``;
-          if (errorSnippet) {
-            payload += `\n\n[Compiler Output / Error]:\n${errorSnippet}`;
-          }
-
-          if (navigator.clipboard?.writeText) {
-            navigator.clipboard.writeText(payload);
-          }
-          dispatch({
-            type: 'SHOW_TOAST',
-            payload: 'ChatGPT Classic linked! (⌥␣ pill has your live code) 🤖',
-          });
-        } catch (err) {
-          console.warn('ChatGPT sync error:', err);
-        }
+      // Cmd+= or Cmd++ to Zoom In
+      if ((e.ctrlKey || e.metaKey) && (e.key === '=' || e.key === '+')) {
+        e.preventDefault();
+        window.webkit?.messageHandlers?.nativeHost?.postMessage({ type: 'zoom_in' });
+      }
+      // Cmd+- or Cmd+_ to Zoom Out
+      if ((e.ctrlKey || e.metaKey) && (e.key === '-' || e.key === '_')) {
+        e.preventDefault();
+        window.webkit?.messageHandlers?.nativeHost?.postMessage({ type: 'zoom_out' });
+      }
+      // Cmd+0 to Reset Zoom
+      if ((e.ctrlKey || e.metaKey) && e.key === '0') {
+        e.preventDefault();
+        window.webkit?.messageHandlers?.nativeHost?.postMessage({ type: 'zoom_reset' });
       }
       // Escape to exit Full Page Code Mode
       if (e.key === 'Escape' && state.focusMode) {
@@ -187,75 +171,204 @@ function AppContent() {
 
     window.addEventListener('keydown', handleKeyDown, { capture: true });
     return () => window.removeEventListener('keydown', handleKeyDown, { capture: true });
-  }, [handleRunCode, handleSaveActiveFile, handleCreateSequentialFile, handleToggleTerminal, dispatch, state.focusMode, state.files, state.activeFileId, state.selectedCode, state.selectionRange, state.selectionLine, state.code, state.stderr, state.compileOutput, state.stdout, state.detectedLanguage]);
+  }, [handleRunCode, handleSaveActiveFile, handleCreateSequentialFile, handleToggleTerminal, dispatch, state.focusMode, state.files, state.activeFileId, state.code, state.stderr, state.compileOutput, state.stdout, state.detectedLanguage, isNotebookActive]);
 
-  // Real-time debounced synchronization with ChatGPT Classic macOS Bridge
+  // ── macOS Native Taskbar & Menu Bar Integration ──
   useEffect(() => {
-    const curFile = state.files.find((f) => f.id === state.activeFileId) || state.files[0];
-    const codeSnippet = curFile?.content || state.code || '';
-    const hasSelection = Boolean(state.selectedCode && state.selectedCode.trim());
-    const errorSnippet = state.stderr || state.compileOutput || '';
+    if (typeof window !== 'undefined' && window.webkit?.messageHandlers?.nativeHost) {
+      window.webkit.messageHandlers.nativeHost.postMessage({
+        type: 'status_update',
+        status: state.executionStatus,
+        filename: activeFile?.name || '',
+        language: state.detectedLanguage?.name || 'Code',
+        activeId: state.activeFileId,
+        files: state.files.map((f) => ({ id: f.id, name: f.name })),
+        executionTime: state.executionTime ? String(state.executionTime) : null,
+        error: state.stderr || state.compileOutput || null,
+      });
+    }
+  }, [state.executionStatus, activeFile?.name, state.detectedLanguage?.name, state.activeFileId, state.files, state.executionTime, state.stderr, state.compileOutput]);
 
-    const timer = setTimeout(() => {
-      fetch('/api/chatgpt/sync', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          fileName: curFile?.name || 'Main.java',
-          content: codeSnippet,
-          language: state.detectedLanguage?.name || 'java',
-          selectedCode: hasSelection ? state.selectedCode : null,
-          selectionRange: state.selectionRange || null,
-          selectionLine: state.selectionLine ?? null,
-          errorSnippet,
-          outputSnippet: state.stdout || '',
-          files: state.files.map((f) => ({ name: f.name, content: f.content })),
-        }),
-      }).catch(() => {});
-    }, 300);
-
-    return () => clearTimeout(timer);
-  }, [
-    state.activeFileId,
-    state.files,
-    state.code,
-    state.selectedCode,
-    state.selectionRange,
-    state.selectionLine,
-    state.stderr,
-    state.compileOutput,
-    state.stdout,
-    state.detectedLanguage,
-  ]);
-
-  // Inbound code edits listener from ChatGPT Classic (setContent / replaceSelection)
+  // Expose active code getter for native macOS host (Save As... dialog)
   useEffect(() => {
-    const interval = setInterval(async () => {
-      try {
-        const res = await fetch('/api/chatgpt/pending-edits');
-        if (!res.ok) return;
-        const data = await res.json();
-        if (data.edits && data.edits.length > 0) {
-          for (const edit of data.edits) {
-            if (edit.content !== undefined) {
-              dispatch({
-                type: 'SET_CODE',
-                payload: edit.content,
-              });
-              dispatch({
-                type: 'SHOW_TOAST',
-                payload: 'Code updated by ChatGPT Classic ✨',
-              });
-            }
+    window.__FULLCODE_GET_ACTIVE_CODE = () => state.code || activeFile?.content || '';
+    return () => {
+      delete window.__FULLCODE_GET_ACTIVE_CODE;
+    };
+  }, [state.code, activeFile]);
+
+  useEffect(() => {
+    const handleNativeAction = (e) => {
+      const action = e.detail;
+      if (!action) return;
+
+      switch (action.type) {
+        case 'run':
+          handleRunCode();
+          break;
+        case 'new-file':
+          handleCreateSequentialFile();
+          break;
+        case 'save':
+          handleSaveActiveFile();
+          break;
+        case 'toggle-theme':
+          dispatch({ type: 'TOGGLE_THEME' });
+          break;
+        case 'clear-output':
+          dispatch({ type: 'CLEAR_OUTPUT' });
+          showToast('Console output cleared 🧹');
+          break;
+        case 'switch-file':
+          if (action.fileId) {
+            dispatch({ type: 'SELECT_FILE', payload: action.fileId });
           }
+          break;
+        case 'zoom-change':
+          if (action.percent) {
+            showToast(`Zoom: ${action.percent}% 🔍`);
+          }
+          break;
+        case 'copy-code': {
+          const currentCode = state.code || activeFile?.content || '';
+          if (navigator.clipboard) {
+            navigator.clipboard.writeText(currentCode).catch(() => {});
+          }
+          if (window.webkit?.messageHandlers?.nativeHost) {
+            window.webkit.messageHandlers.nativeHost.postMessage({
+              type: 'copy_clipboard',
+              text: currentCode,
+            });
+          }
+          showToast('Code copied to clipboard 📋');
+          break;
         }
-      } catch (e) {
-        // ignore network error when backend restarting
+        case 'load-local-folder': {
+          if (action.files && Array.isArray(action.files) && action.files.length > 0) {
+            const newFiles = action.files.map((f, idx) => ({
+              id: `local-${Date.now()}-${idx}`,
+              name: f.name,
+              content: f.content,
+              language: getLanguageFromFilename(f.name),
+            }));
+            const detectedFolders = [...new Set(
+              newFiles
+                .filter((f) => f.name.includes('/'))
+                .map((f) => f.name.substring(0, f.name.lastIndexOf('/')))
+            )];
+            dispatch({
+              type: 'LOAD_WORKSPACE_STATE',
+              payload: {
+                files: newFiles,
+                folders: detectedFolders,
+                activeFileId: newFiles[0].id,
+              },
+            });
+            showToast(`Opened project folder "${action.folderName || 'Project'}" (${newFiles.length} files) 📂`);
+          }
+          break;
+        }
+        case 'load-local-file': {
+          if (action.name && action.content !== undefined) {
+            dispatch({
+              type: 'ADD_FILE',
+              payload: {
+                name: action.name,
+                content: action.content,
+                folder: null,
+                openTab: true,
+              },
+            });
+            showToast(`Opened file ${action.name} 📄`);
+          }
+          break;
+        }
+        case 'toggle-engine': {
+          const curMode = localStorage.getItem('fullcode_engine_mode') || 'local';
+          const nextMode = curMode === 'local' ? 'cloud' : 'local';
+          localStorage.setItem('fullcode_engine_mode', nextMode);
+          window.dispatchEvent(new CustomEvent('engine-mode-changed', { detail: { mode: nextMode } }));
+          showToast(
+            nextMode === 'local'
+              ? '⚡️ Engine: Local Native Mac Compilers (Ultra-Fast 0.02s)'
+              : '🌐 Engine: Cloud Sandbox (WebAssembly & Remote)'
+          );
+          break;
+        }
+        case 'toggle-terminal':
+          handleToggleTerminal();
+          break;
+        case 'clear-terminal':
+          window.dispatchEvent(new CustomEvent('clear-terminal-history'));
+          showToast('Terminal cleared 🧹');
+          break;
+        case 'toggle-web-preview':
+          dispatch({ type: 'SET_TERMINAL_TAB', payload: 'web' });
+          break;
+        case 'toggle-explorer':
+          dispatch({ type: 'TOGGLE_EXPLORER' });
+          break;
+        case 'toggle-zen':
+          dispatch({ type: 'TOGGLE_FOCUS_MODE' });
+          break;
+        case 'format-code':
+          handleFormatCode();
+          break;
+        case 'export-zip':
+          handleDownloadWorkspace();
+          break;
+        case 'close-tab':
+          if (activeFile) {
+            handleCloseFile(activeFile.id);
+          }
+          break;
+        case 'toast':
+          if (action.message) {
+            showToast(action.message);
+          }
+          break;
+        case 'new-file-lang': {
+          const lang = action.language;
+          const extMap = {
+            python: 'py',
+            cpp: 'cpp',
+            c: 'c',
+            java: 'java',
+            javascript: 'js',
+            typescript: 'ts',
+            rust: 'rs',
+            go: 'go',
+            swift: 'swift',
+            sql: 'sql',
+            html: 'html',
+          };
+          const ext = extMap[lang] || 'txt';
+          let count = 1;
+          while (state.files.some((f) => f.name === `scratch_${count}.${ext}`)) {
+            count++;
+          }
+          const fileName = `scratch_${count}.${ext}`;
+          dispatch({
+            type: 'ADD_FILE',
+            payload: {
+              name: fileName,
+              content: `// Scratchpad (${lang.toUpperCase()})\n`,
+              folder: null,
+              openTab: true,
+            },
+          });
+          showToast(`Created ${fileName} (${lang.toUpperCase()}) 📄`);
+          break;
+        }
+        default:
+          break;
       }
-    }, 1200);
+    };
 
-    return () => clearInterval(interval);
-  }, [dispatch]);
+    window.addEventListener('onlinecompiler-native-action', handleNativeAction);
+    return () => window.removeEventListener('onlinecompiler-native-action', handleNativeAction);
+  }, [handleRunCode, handleCreateSequentialFile, handleSaveActiveFile, handleToggleTerminal, handleFormatCode, handleDownloadWorkspace, handleCloseFile, dispatch, state.code, activeFile, state.files, showToast]);
+
 
   // Handle Vertical Dragging (Editor vs Output)
   const handleVerticalMouseDown = useCallback((e) => {

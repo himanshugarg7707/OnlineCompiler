@@ -1,15 +1,33 @@
 import { Router } from 'express';
 import { executeSqlQuery } from '../dbManager.js';
+import { detectLocalCompilers, executeCodeLocally } from '../localRunner.js';
 
 const router = Router();
 
 // In-memory cache for ultra-fast repeated responses
 const executionCache = new Map();
 
-// POST /api/execute - Fast backend execution endpoint
+// GET /api/execute/status - Check local compiler availability and system environment
+router.get(['/status', '/local-status'], async (req, res) => {
+  try {
+    const info = await detectLocalCompilers();
+    res.json({
+      success: true,
+      ...info,
+    });
+  } catch (err) {
+    res.json({
+      success: false,
+      available: false,
+      error: err.message,
+    });
+  }
+});
+
+// POST /api/execute - Fast backend execution endpoint (Local Native Compilers + SQL)
 router.post('/', async (req, res) => {
   const startTime = performance.now();
-  const { code, languageId, stdin = '', database = 'main_db' } = req.body;
+  const { code, languageId, stdin = '', database = 'main_db', preferLocal = true, filename = '' } = req.body;
 
   if (!code) {
     return res.json({
@@ -85,6 +103,8 @@ router.post('/', async (req, res) => {
         time: elapsed,
         memory: 1024,
         statusCode: 0,
+        isLocal: true,
+        engine: 'sqlite',
       };
 
       if (asciiOutput.length < 50000) {
@@ -105,7 +125,23 @@ router.post('/', async (req, res) => {
     }
   }
 
-  // For other languages, let client know to use optimal runner (Pyodide / Wandbox)
+  // 2. Local Native Compiler & Interpreter Execution (Python, C, C++, Java, JS, TS, Go, Swift, Shell)
+  if (preferLocal && !process.env.VERCEL) {
+    try {
+      const localResult = await executeCodeLocally({ code, languageId, stdin, filename });
+      if (localResult && localResult.canExecuteLocally !== false) {
+        // Cache result if not too large
+        if ((localResult.output || '').length < 50000) {
+          executionCache.set(cacheKey, localResult);
+        }
+        return res.json(localResult);
+      }
+    } catch (err) {
+      console.warn('Local runner failed, falling back to client/cloud runner:', err.message);
+    }
+  }
+
+  // For other languages or when local execution is unavailable, signal client to use optimal runner (Pyodide / Judge0 / Wandbox)
   return res.json({
     useClientRunner: true,
   });

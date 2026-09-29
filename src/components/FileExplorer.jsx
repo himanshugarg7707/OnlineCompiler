@@ -25,8 +25,8 @@ import {
 import { isItemProtected, isItemUnlocked } from '../services/securityService';
 import { sanitizeFilenameIdentifier } from '../services/identifierSanitizer';
 import PasswordPromptModal from './PasswordPromptModal';
-import LanguageIcon, { JupyterIcon, AnacondaIcon } from './LanguageIcon';
-import { createDefaultNotebookJson, setupFileDragDataTransfer, convertJavaFilesToNotebook } from '../services/languageDetector';
+import LanguageIcon from './LanguageIcon';
+import { createDefaultNotebookJson, setupFileDragDataTransfer, getLanguageFromFilename } from '../services/languageDetector';
 import { processFileList } from '../services/importService';
 import FileOptionsMenu from './FileOptionsMenu';
 import './FileExplorer.css';
@@ -154,9 +154,8 @@ export default function FileExplorer() {
   // File Options Multi-Menu (Double-Click & Right-Click)
   const [fileOptionsMenu, setFileOptionsMenu] = useState(null);
 
-  // External File Drag & Drop + Multiple Java Import Prompt State
+  // External File Drag & Drop
   const [isDroppingExternal, setIsDroppingExternal] = useState(false);
-  const [pendingJavaImport, setPendingJavaImport] = useState(null);
 
   const handleExternalDragOver = (e) => {
     if (e.dataTransfer.types && Array.from(e.dataTransfer.types).includes('Files')) {
@@ -191,48 +190,86 @@ export default function FileExplorer() {
         return;
       }
 
-      const javaFiles = processed.filter(
-        (f) => f.path?.endsWith('.java') || f.name?.endsWith('.java')
-      );
-      const otherFiles = processed.filter(
-        (f) => !f.path?.endsWith('.java') && !f.name?.endsWith('.java')
-      );
-
-      // If 2 or more Java files are imported: ask user whether to convert or keep separate
-      if (javaFiles.length >= 2) {
-        setPendingJavaImport({ javaFiles, otherFiles });
-      } else {
-        processed.forEach((f) => {
-          handleAddFile(f.path || f.name, f.content, null, true);
-        });
-        showToast(`Imported ${processed.length} file(s) into workspace 📄`);
-      }
+      processed.forEach((f) => {
+        handleAddFile(f.path || f.name, f.content, null, true);
+      });
+      showToast(`Imported ${processed.length} file(s) into workspace 📄`);
     } catch (err) {
       console.error(err);
       showToast('Error reading dropped files');
     }
   };
 
-  const confirmJavaImportAsNotebook = () => {
-    if (!pendingJavaImport) return;
-    const { javaFiles, otherFiles } = pendingJavaImport;
-    const notebook = convertJavaFilesToNotebook(javaFiles, 'Java_Notebook.ipynb');
-    handleAddFile(notebook.name, notebook.content, null, true);
-    otherFiles.forEach((f) => {
-      handleAddFile(f.path || f.name, f.content, null, true);
-    });
-    showToast(`Converted ${javaFiles.length} Java files into Java_Notebook.ipynb! 📓`);
-    setPendingJavaImport(null);
-  };
+  const handleOpenLocalFolderPrompt = async () => {
+    // 1. If inside native macOS app:
+    if (window.webkit?.messageHandlers?.nativeHost) {
+      window.webkit.messageHandlers.nativeHost.postMessage({ type: 'open_local_folder' });
+      return;
+    }
 
-  const confirmJavaImportAsSeparateFiles = () => {
-    if (!pendingJavaImport) return;
-    const { javaFiles, otherFiles } = pendingJavaImport;
-    [...javaFiles, ...otherFiles].forEach((f) => {
-      handleAddFile(f.path || f.name, f.content, null, true);
-    });
-    showToast(`Imported ${javaFiles.length + otherFiles.length} files as individual files 📄`);
-    setPendingJavaImport(null);
+    // 2. If in modern browser supporting File System Access API:
+    if (typeof window !== 'undefined' && 'showDirectoryPicker' in window) {
+      try {
+        const dirHandle = await window.showDirectoryPicker();
+        const loadedFiles = [];
+        const ignored = new Set(['.git', 'node_modules', 'dist', '.DS_Store', '__pycache__', '.vercel', 'scratch']);
+
+        async function scanDir(handle, currentPath = '') {
+          for await (const entry of handle.values()) {
+            if (ignored.has(entry.name)) continue;
+            if (entry.kind === 'file') {
+              try {
+                const file = await entry.getFile();
+                if (file.size < 1_500_000) {
+                  const text = await file.text();
+                  const relPath = currentPath ? `${currentPath}/${entry.name}` : entry.name;
+                  loadedFiles.push({ name: relPath, content: text });
+                }
+              } catch {}
+            } else if (entry.kind === 'directory') {
+              const subPath = currentPath ? `${currentPath}/${entry.name}` : entry.name;
+              await scanDir(entry, subPath);
+            }
+          }
+        }
+
+        await scanDir(dirHandle);
+
+        if (loadedFiles.length > 0) {
+          const newFiles = loadedFiles.map((f, idx) => ({
+            id: `local-${Date.now()}-${idx}`,
+            name: f.name,
+            content: f.content,
+            language: getLanguageFromFilename(f.name),
+          }));
+          const detectedFolders = [...new Set(
+            newFiles
+              .filter((f) => f.name.includes('/'))
+              .map((f) => f.name.substring(0, f.name.lastIndexOf('/')))
+          )];
+          dispatch({
+            type: 'LOAD_WORKSPACE_STATE',
+            payload: {
+              files: newFiles,
+              folders: detectedFolders,
+              activeFileId: newFiles[0].id,
+            },
+          });
+          showToast(`Opened folder "${dirHandle.name}" (${newFiles.length} files) 📂`);
+        }
+      } catch (err) {
+        if (err.name !== 'AbortError') {
+          showToast(`Could not open directory: ${err.message}`);
+        }
+      }
+      return;
+    }
+
+    // Fallback: navigate to settings import tab
+    if (typeof window !== 'undefined') {
+      window.location.hash = '#/settings?tab=import';
+    }
+    dispatch({ type: 'NAVIGATE_PAGE', payload: 'settings' });
   };
 
   const handleOpenFileOptions = (e, file, folderPath = '') => {
@@ -262,23 +299,7 @@ export default function FileExplorer() {
     });
   };
 
-  // Notebook Dropdown Menu State
-  const [showNotebookDropdown, setShowNotebookDropdown] = useState(false);
-  const notebookDropdownRef = useRef(null);
 
-  useEffect(() => {
-    function handleClickOutside(e) {
-      if (notebookDropdownRef.current && !notebookDropdownRef.current.contains(e.target)) {
-        setShowNotebookDropdown(false);
-      }
-    }
-    if (showNotebookDropdown) {
-      document.addEventListener('mousedown', handleClickOutside);
-    }
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [showNotebookDropdown]);
 
   const addInputRef = useRef(null);
   const editInputRef = useRef(null);
@@ -746,13 +767,6 @@ export default function FileExplorer() {
     );
   };
 
-  const activeFile = files.find((f) => f.id === activeFileId);
-  const currentLang = activeFile?.language || state.detectedLanguage;
-  const isJavaWorkspace =
-    currentLang?.id === 62 ||
-    currentLang?.monacoLanguage === 'java' ||
-    files.some((f) => f.name.endsWith('.java') || f.name.toLowerCase().includes('java'));
-
   return (
     <aside className="file-explorer file-explorer-sidebar">
       {/* Explorer Header */}
@@ -771,111 +785,12 @@ export default function FileExplorer() {
             <FilePlus size={14} />
           </button>
 
-          {/* Unified Notebook Add Button & Language Dropdown */}
-          <div className="notebook-btn-dropdown-group" ref={notebookDropdownRef}>
-            <button
-              className={`explorer-action-btn notebook-main-btn ${isJavaWorkspace ? 'active-lang-btn' : ''}`}
-              id="addnotebook-quick-btn"
-              onClick={() => {
-                if (isJavaWorkspace) {
-                  handleAddFile('java_notebook.ipynb', createDefaultNotebookJson('java'));
-                } else {
-                  handleAddFile('notebook.ipynb', createDefaultNotebookJson('python'));
-                }
-              }}
-              title={isJavaWorkspace ? 'New Java Notebook (java_notebook.ipynb)' : 'New Jupyter Notebook (notebook.ipynb)'}
-            >
-              {isJavaWorkspace ? (
-                <div className="btn-combo-wrapper">
-                  <JupyterIcon size={13} />
-                  <span className="btn-combo-badge">☕</span>
-                </div>
-              ) : (
-                <JupyterIcon size={14} />
-              )}
-            </button>
-
-            <button
-              className={`explorer-action-btn notebook-arrow-btn ${showNotebookDropdown ? 'active' : ''}`}
-              onClick={(e) => {
-                e.stopPropagation();
-                setShowNotebookDropdown((prev) => !prev);
-              }}
-              title="Select Notebook Type (Java, Python, C++, JavaScript)"
-            >
-              <ChevronDown size={11} />
-            </button>
-
-            {showNotebookDropdown && (
-              <div className="notebook-picker-dropdown">
-                <div className="notebook-picker-header">Interactive Notebooks</div>
-
-                <button
-                  className="notebook-picker-item"
-                  id="addjavanotebook-menu"
-                  onClick={() => {
-                    handleAddFile('java_notebook.ipynb', createDefaultNotebookJson('java'));
-                    setShowNotebookDropdown(false);
-                  }}
-                >
-                  <span className="item-icon">☕</span>
-                  <div className="item-text">
-                    <span className="item-title">Java Notebook</span>
-                    <span className="item-sub">OpenJDK / JShell Engine</span>
-                  </div>
-                </button>
-
-                <button
-                  className="notebook-picker-item"
-                  onClick={() => {
-                    handleAddFile('notebook.ipynb', createDefaultNotebookJson('python'));
-                    setShowNotebookDropdown(false);
-                  }}
-                >
-                  <span className="item-icon">🐍</span>
-                  <div className="item-text">
-                    <span className="item-title">Python 3 Notebook</span>
-                    <span className="item-sub">Pyodide WebAssembly</span>
-                  </div>
-                </button>
-
-                <button
-                  className="notebook-picker-item"
-                  onClick={() => {
-                    handleAddFile('cpp_notebook.ipynb', createDefaultNotebookJson('cpp'));
-                    setShowNotebookDropdown(false);
-                  }}
-                >
-                  <span className="item-icon">⚡</span>
-                  <div className="item-text">
-                    <span className="item-title">C++ Notebook</span>
-                    <span className="item-sub">GCC / Clang C++20</span>
-                  </div>
-                </button>
-
-                <button
-                  className="notebook-picker-item"
-                  onClick={() => {
-                    handleAddFile('js_notebook.ipynb', createDefaultNotebookJson('javascript'));
-                    setShowNotebookDropdown(false);
-                  }}
-                >
-                  <span className="item-icon">🟨</span>
-                  <div className="item-text">
-                    <span className="item-title">JavaScript Notebook</span>
-                    <span className="item-sub">Browser V8 Engine</span>
-                  </div>
-                </button>
-              </div>
-            )}
-          </div>
-
           <button
             className="explorer-action-btn"
-            onClick={() => handleAddFile('environment.yml')}
-            title="New Anaconda Environment (environment.yml)"
+            onClick={handleOpenLocalFolderPrompt}
+            title="Open Local Project Folder (⇧⌘O / Directory Picker)"
           >
-            <AnacondaIcon size={14} />
+            <FolderOpen size={14} />
           </button>
 
           <button
@@ -1104,54 +1019,6 @@ export default function FileExplorer() {
         />
       )}
 
-      {/* Java Import Conversion Prompt Modal (Clean 2-choice prompt) */}
-      {pendingJavaImport && (
-        <div className="modal-backdrop" onClick={() => setPendingJavaImport(null)}>
-          <div className="modal-content animate-slide-up" style={{ maxWidth: '420px', padding: '22px' }}>
-            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', marginBottom: '14px' }}>
-              <span style={{ fontSize: '28px', lineHeight: 1 }}>☕</span>
-              <div>
-                <h3 style={{ margin: 0, fontSize: '16px', fontWeight: '700', color: 'var(--text-primary)' }}>
-                  Import Multiple Java Files
-                </h3>
-                <p style={{ margin: '4px 0 0', fontSize: '13px', color: 'var(--text-secondary)' }}>
-                  Found <strong>{pendingJavaImport.javaFiles.length}</strong> Java files. How would you like to add them?
-                </p>
-              </div>
-            </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', margin: '18px 0 16px' }}>
-              <button
-                type="button"
-                className="btn-cyber-primary"
-                style={{ justifyContent: 'center', padding: '11px 14px', fontSize: '13px' }}
-                onClick={confirmJavaImportAsNotebook}
-              >
-                📓 Convert into Java Notebook (.ipynb)
-              </button>
-              <button
-                type="button"
-                className="btn-cyber-secondary"
-                style={{ justifyContent: 'center', padding: '11px 14px', fontSize: '13px' }}
-                onClick={confirmJavaImportAsSeparateFiles}
-              >
-                📄 Import as Separate .java Files
-              </button>
-            </div>
-
-            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-              <button
-                type="button"
-                className="btn-ghost"
-                style={{ fontSize: '12px', color: 'var(--text-secondary)' }}
-                onClick={() => setPendingJavaImport(null)}
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </aside>
   );
 }
