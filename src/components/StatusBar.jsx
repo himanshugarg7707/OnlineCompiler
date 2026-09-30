@@ -2,12 +2,13 @@ import { useMemo } from 'react';
 import { useApp } from '../context/AppContext';
 import { Activity } from 'lucide-react';
 import { analyzeComplexity } from '../services/complexityAnalyzer';
-import { getFriendlyLanguageName } from '../services/languageDetector';
+import { getFriendlyLanguageName, getCompilationIdentifier } from '../services/languageDetector';
+import { getWorkspaceGitStatus } from '../services/gitService';
 import LanguageIcon from './LanguageIcon';
 import './StatusBar.css';
 
 export default function StatusBar() {
-  const { state, dispatch } = useApp();
+  const { state, dispatch, handleGitSync, handleGitPush } = useApp();
   const {
     detectedLanguage,
     cursorPosition,
@@ -18,10 +19,18 @@ export default function StatusBar() {
     activeFileId,
     fileErrors = {},
     stderr,
+    gitBranch = 'main',
+    gitAhead = 0,
+    gitBehind = 0,
+    gitSyncing = false,
   } = state;
 
   const activeFile = files?.find((f) => f.id === activeFileId);
   const displayName = getFriendlyLanguageName(detectedLanguage, activeFile?.name, files);
+  const compilationInfo = useMemo(() => {
+    return getCompilationIdentifier(detectedLanguage, activeFile?.name);
+  }, [detectedLanguage, activeFile?.name]);
+
   const isNotebook = Boolean(
     activeFile?.name?.endsWith('.ipynb') ||
     detectedLanguage?.monacoLanguage === 'ipynb' ||
@@ -41,19 +50,31 @@ export default function StatusBar() {
     return analyzeComplexity(code, detectedLanguage);
   }, [code, detectedLanguage]);
 
+  const gitStatus = useMemo(() => {
+    return getWorkspaceGitStatus(files, []);
+  }, [files]);
+
   return (
     <footer className="status-bar antigravity-status-bar">
       {/* Left: Git branch, Sync & Problems */}
       <div className="status-left">
-        <div className="status-item git-branch" title="Git Branch: main">
-          <span className="material-symbols-outlined text-xs">save_as</span>
-          <span>main</span>
-        </div>
+        <button
+          className="status-item git-branch-btn"
+          onClick={() => dispatch({ type: 'SET_BRANCH_MODAL_OPEN', payload: true })}
+          title={`Git Branch: ${gitBranch} • Click to switch, create or merge branches`}
+        >
+          <span className="material-symbols-outlined text-xs">call_split</span>
+          <span>{gitBranch}{gitStatus.totalCount > 0 ? '*' : ''}</span>
+        </button>
 
-        <div className="status-item git-sync" title="Git Sync Status">
-          <span className="material-symbols-outlined text-xs">sync</span>
-          <span>0↓ 2↑</span>
-        </div>
+        <button
+          className={`status-item git-sync-btn ${gitSyncing ? 'is-syncing' : ''}`}
+          onClick={handleGitSync}
+          title={`Git Sync: ${gitBehind}↓ to pull, ${gitAhead}↑ to push • Click to sync with origin/${gitBranch}`}
+        >
+          <span className={`material-symbols-outlined text-xs ${gitSyncing ? 'animate-spin' : ''}`}>sync</span>
+          <span>{gitBehind}↓ {gitAhead}↑</span>
+        </button>
 
         <div
           className="status-item problems-indicator"
@@ -84,7 +105,7 @@ export default function StatusBar() {
         )}
       </div>
 
-      {/* Right: Encodings, Ln/Col, Language, Prettier, Terminal Toggle */}
+      {/* Right: Encodings, Ln/Col, Language, Compiler Identifier, Prettier, Terminal Toggle */}
       <div className="status-right">
         {executionTime && (
           <span className="status-item time">⏱ {executionTime}s</span>
@@ -99,6 +120,15 @@ export default function StatusBar() {
 
         <span className="status-item">
           Ln {cursorPosition.line}, Col {cursorPosition.column}
+        </span>
+
+        {/* Real File Compilation Identifier Badge */}
+        <span
+          className="status-item compiler-ident-badge"
+          title={`Compiler Engine: ${compilationInfo.displayIdentifier}\nStandard: ${compilationInfo.standard}\nTarget: ${activeFile?.name || 'Code'}`}
+        >
+          <span className="material-symbols-outlined compiler-icon">memory</span>
+          <span>{compilationInfo.displayIdentifier}</span>
         </span>
 
         <span
@@ -118,9 +148,16 @@ export default function StatusBar() {
           <span>Prettier Active</span>
         </span>
 
-        <span className="status-item git-idle-item" title="Git Status: Idle">
-          <span className="material-symbols-outlined text-[13px] animate-spin text-tertiary">progress_activity</span>
-          <span>Git: Idle</span>
+        <span
+          className="status-item git-idle-item"
+          title={`Git: ${gitAhead > 0 ? `${gitAhead} unpushed commit(s) — Click to push` : 'Clean & In Sync'}`}
+          onClick={gitAhead > 0 ? handleGitPush : handleGitSync}
+          style={{ cursor: 'pointer' }}
+        >
+          <span className={`material-symbols-outlined text-[13px] ${gitSyncing ? 'animate-spin text-tertiary' : gitAhead > 0 ? 'text-amber-400' : 'text-tertiary'}`}>
+            {gitSyncing ? 'progress_activity' : gitAhead > 0 ? 'cloud_upload' : 'check_circle'}
+          </span>
+          <span>Git: {gitSyncing ? 'Syncing...' : gitAhead > 0 ? `${gitAhead} Ahead` : 'Synced'}</span>
         </span>
 
         {/* Terminal Toggle Button (hidden in notebook mode since output is inline) */}

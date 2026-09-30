@@ -34,6 +34,8 @@ import {
   saveStagedFileIds,
   getGitBaselines,
   saveGitBaselines,
+  commitChanges,
+  getBranchHistory,
 } from '../services/gitService';
 import { recordSnapshot } from '../services/historyService';
 import FileOptionsMenu from './FileOptionsMenu';
@@ -136,6 +138,9 @@ export default function FileExplorer() {
     handleDownloadWorkspace,
     dispatch,
     showToast,
+    handleGitPush,
+    handleGitPull,
+    handleGitSync,
   } = useApp();
 
   const { files, folders, activeFileId, fileErrors = {} } = state;
@@ -150,10 +155,15 @@ export default function FileExplorer() {
   const [commitMessage, setCommitMessage] = useState('');
   const [stagedExpanded, setStagedExpanded] = useState(true);
   const [unstagedExpanded, setUnstagedExpanded] = useState(true);
+  const [historyExpanded, setHistoryExpanded] = useState(true);
 
   const gitStatus = useMemo(() => {
     return getWorkspaceGitStatus(files, stagedFileIds);
   }, [files, stagedFileIds]);
+
+  const commitHistory = useMemo(() => {
+    return getBranchHistory(state.gitBranch || 'main');
+  }, [state.gitBranch, state.gitAhead]);
 
   const handleStageFile = useCallback((fileId) => {
     setStagedFileIds((prev) => {
@@ -203,21 +213,16 @@ export default function FileExplorer() {
       return;
     }
     const msg = commitMessage.trim() || 'Update files';
-    const baselines = getGitBaselines();
-    filesToCommit.forEach((item) => {
-      baselines[item.file.id] = item.file.content ?? '';
-      recordSnapshot(item.file.name, item.file.content ?? '', item.file.language?.name || 'Code', `Git Commit: ${msg}`);
-    });
-    saveGitBaselines(baselines);
+    const commitRes = commitChanges(msg, files, stagedFileIds);
     setStagedFileIds([]);
     saveStagedFileIds([]);
     setCommitMessage('');
-    showToast(`Committed to main: "${msg}" ✨`);
-  }, [gitStatus, commitMessage, showToast]);
+    showToast(`Committed to ${commitRes.branch}: "${msg}" (${commitRes.commit.hash}) ✨`);
+  }, [gitStatus, commitMessage, files, stagedFileIds, showToast]);
 
   const handleGitMore = useCallback(() => {
-    showToast('Branch: main • Clean working tree');
-  }, [showToast]);
+    dispatch({ type: 'SET_BRANCH_MODAL_OPEN', payload: true });
+  }, [dispatch]);
 
   // Folder collapse state: { [folderPath]: boolean }
   const [collapsedFolders, setCollapsedFolders] = useState({});
@@ -960,7 +965,7 @@ export default function FileExplorer() {
       ) : activeSidebarTab === 'source-control' ? (
         <div className="sidebar-source-control-panel animate-fade-in flex flex-col flex-1 h-full overflow-hidden">
           {/* Header bar */}
-          <div className="flex items-center justify-between px-space-md py-space-sm border-b border-outline-variant shrink-0">
+          <div className="flex items-center justify-between px-space-md py-space-sm border-b border-outline-variant shrink-0 bg-surface-dim">
             <div className="flex items-center space-x-space-xs">
               <span className="font-headline-sm text-headline-sm text-on-surface">SOURCE CONTROL</span>
               <span className="bg-primary-container/20 text-primary px-1.5 py-0.5 rounded-full text-label-sm font-semibold">
@@ -970,28 +975,78 @@ export default function FileExplorer() {
             <div className="flex items-center space-x-1 text-on-surface-variant">
               <button
                 type="button"
-                onClick={handleRefreshGit}
-                className="p-1 hover:text-on-surface rounded transition-colors"
-                title="Refresh"
+                onClick={handleGitPull}
+                disabled={state.gitSyncing}
+                className="p-1 hover:text-on-surface hover:bg-surface-container-high rounded transition-colors relative"
+                title={`Pull from origin/${state.gitBranch || 'main'}${state.gitBehind > 0 ? ` (${state.gitBehind} commits behind)` : ''}`}
               >
-                <span className="material-symbols-outlined text-[16px]">refresh</span>
+                <span className="material-symbols-outlined text-[16px]">cloud_download</span>
+                {state.gitBehind > 0 && (
+                  <span className="absolute -top-1 -right-1 text-[9px] bg-amber-500 text-black font-bold rounded-full px-1 min-w-[14px] text-center">
+                    {state.gitBehind}
+                  </span>
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={handleGitPush}
+                disabled={state.gitSyncing}
+                className="p-1 hover:text-on-surface hover:bg-surface-container-high rounded transition-colors relative"
+                title={`Push to origin/${state.gitBranch || 'main'}${state.gitAhead > 0 ? ` (${state.gitAhead} commits ahead)` : ''}`}
+              >
+                <span className="material-symbols-outlined text-[16px]">cloud_upload</span>
+                {state.gitAhead > 0 && (
+                  <span className="absolute -top-1 -right-1 text-[9px] bg-primary text-on-primary font-bold rounded-full px-1 min-w-[14px] text-center">
+                    {state.gitAhead}
+                  </span>
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={handleGitSync}
+                disabled={state.gitSyncing}
+                className={`p-1 hover:text-on-surface hover:bg-surface-container-high rounded transition-colors ${state.gitSyncing ? 'animate-spin text-primary' : ''}`}
+                title="Sync Changes (Pull then Push)"
+              >
+                <span className="material-symbols-outlined text-[16px]">sync</span>
               </button>
               <button
                 type="button"
                 onClick={handleStageAll}
-                className="p-1 hover:text-on-surface rounded transition-colors"
-                title="Stage All"
+                className="p-1 hover:text-on-surface hover:bg-surface-container-high rounded transition-colors"
+                title="Stage All Changes"
               >
                 <span className="material-symbols-outlined text-[16px]">done_all</span>
               </button>
               <button
                 type="button"
                 onClick={handleGitMore}
-                className="p-1 hover:text-on-surface rounded transition-colors"
-                title="More Actions"
+                className="p-1 hover:text-on-surface hover:bg-surface-container-high rounded transition-colors"
+                title="Branch Switcher & Git Menu"
               >
                 <span className="material-symbols-outlined text-[16px]">more_horiz</span>
               </button>
+            </div>
+          </div>
+
+          {/* Active Branch Pill & Remote Status Row */}
+          <div className="px-space-md py-1.5 border-b border-outline-variant/60 flex items-center justify-between bg-surface-container-low/50 shrink-0">
+            <button
+              type="button"
+              onClick={() => dispatch({ type: 'SET_BRANCH_MODAL_OPEN', payload: true })}
+              className="flex items-center space-x-1.5 px-2 py-0.5 rounded bg-surface-container-high hover:bg-surface-container-highest text-on-surface text-[11px] border border-outline-variant transition-colors cursor-pointer"
+              title="Click to Switch or Create Branch"
+            >
+              <span className="material-symbols-outlined text-[13px] text-tertiary">call_split</span>
+              <span className="font-semibold tracking-wide">{state.gitBranch || 'main'}</span>
+              <span className="material-symbols-outlined text-[12px] opacity-70">expand_more</span>
+            </button>
+            <div className="flex items-center space-x-1 text-[11px] text-on-surface-variant font-mono">
+              <span className="material-symbols-outlined text-[12px] text-emerald-400">cloud_done</span>
+              <span>origin/{state.gitBranch || 'main'}</span>
+              <span className="text-[10px] text-on-surface-variant/70 font-semibold px-1 rounded bg-surface-container-highest">
+                {state.gitBehind || 0}↓ {state.gitAhead || 0}↑
+              </span>
             </div>
           </div>
 
@@ -1013,16 +1068,18 @@ export default function FileExplorer() {
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-1 text-on-surface-variant text-label-sm">
                 <span className="material-symbols-outlined text-[14px]">save_as</span>
-                <span>main{gitStatus.totalCount > 0 ? '*' : ''}</span>
+                <span>{state.gitBranch || 'main'}{gitStatus.totalCount > 0 ? '*' : ''}</span>
               </div>
-              <button
-                type="button"
-                onClick={handleCommit}
-                className="bg-primary-container text-on-primary-container font-headline-sm text-body-sm px-space-md py-1 rounded hover:bg-primary transition-colors flex items-center space-x-1 cursor-pointer"
-              >
-                <span className="material-symbols-outlined text-[16px]">check</span>
-                <span>Commit</span>
-              </button>
+              <div className="flex items-center space-x-1.5">
+                <button
+                  type="button"
+                  onClick={handleCommit}
+                  className="bg-primary-container text-on-primary-container font-headline-sm text-body-sm px-space-md py-1 rounded hover:bg-primary transition-colors flex items-center space-x-1 cursor-pointer"
+                >
+                  <span className="material-symbols-outlined text-[16px]">check</span>
+                  <span>Commit</span>
+                </button>
+              </div>
             </div>
           </div>
 
@@ -1134,6 +1191,50 @@ export default function FileExplorer() {
                           >
                             <span className="material-symbols-outlined text-[14px]">add</span>
                           </button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Commit History on Current Branch */}
+            <div className="px-space-xs py-1 mt-3 border-t border-outline-variant/40 pt-2">
+              <div
+                className="flex items-center justify-between text-label-md text-on-surface-variant uppercase tracking-wider px-space-xs py-1 cursor-pointer select-none hover:text-on-surface"
+                onClick={() => setHistoryExpanded(!historyExpanded)}
+              >
+                <div className="flex items-center space-x-1">
+                  <span className="material-symbols-outlined text-[14px]">
+                    {historyExpanded ? 'expand_more' : 'chevron_right'}
+                  </span>
+                  <span>Commit History ({state.gitBranch || 'main'})</span>
+                </div>
+                <span className="text-[11px] font-mono">{commitHistory.length}</span>
+              </div>
+
+              {historyExpanded && (
+                <div className="mt-1 space-y-1 px-1">
+                  {commitHistory.length === 0 ? (
+                    <div className="text-xs text-on-surface-variant/50 italic px-space-sm py-1">
+                      No commits on this branch yet
+                    </div>
+                  ) : (
+                    commitHistory.slice(0, 15).map((c) => (
+                      <div
+                        key={c.id || c.hash}
+                        className="p-1.5 rounded bg-surface-container-low hover:bg-surface-container-high transition-colors text-body-sm flex flex-col space-y-0.5 border border-outline-variant/30"
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="font-semibold text-on-surface truncate text-[12px]">{c.message}</span>
+                          <span className={`text-[10px] font-mono px-1 py-0.2 rounded font-semibold ${c.pushed ? 'text-emerald-400 bg-emerald-400/10' : 'text-amber-400 bg-amber-400/10'}`}>
+                            {c.pushed ? 'Synced' : 'Local'}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between text-[10px] text-on-surface-variant/70 font-mono">
+                          <span>{c.hash}</span>
+                          <span>{c.timestamp ? new Date(c.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}</span>
                         </div>
                       </div>
                     ))

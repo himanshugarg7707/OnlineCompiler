@@ -54,20 +54,44 @@ export function sanitizeFilenameIdentifier(fullPath) {
   // Remove any non-alphanumeric characters except underscore and dollar sign
   newStem = newStem.replace(/[^a-zA-Z0-9_$]/g, '');
 
-  // 2. Check if starting with numbers followed by letters (e.g. "01java" -> "java_01")
+  // 2. Format stem based on language compilation identifier rules
+  const lowerExt = (ext || '').toLowerCase();
   const leadingDigitsLettersMatch = newStem.match(/^(\d+)([a-zA-Z_$][a-zA-Z0-9_$]*)$/);
-  if (leadingDigitsLettersMatch) {
-    const digits = leadingDigitsLettersMatch[1];
-    const letters = leadingDigitsLettersMatch[2];
-    newStem = `${letters}_${digits}`;
-  } else if (/^\d+$/.test(newStem)) {
-    // Purely numeric (e.g. "01" -> "file_01")
-    newStem = `file_${newStem}`;
-  }
 
-  // 3. Fallback if empty
-  if (!newStem || newStem === '_') {
-    newStem = ext ? `file_01` : `file`;
+  if (lowerExt === 'java') {
+    // Java requires valid PascalCase class identifiers
+    if (/^\d+$/.test(newStem)) {
+      newStem = `Solution${newStem.padStart(2, '0')}`;
+    } else if (leadingDigitsLettersMatch) {
+      const digits = leadingDigitsLettersMatch[1];
+      const letters = leadingDigitsLettersMatch[2];
+      const capLetters = letters.charAt(0).toUpperCase() + letters.slice(1);
+      newStem = `${capLetters}_${digits}`;
+    } else if (!newStem || newStem === '_') {
+      newStem = 'Solution01';
+    } else {
+      newStem = newStem.charAt(0).toUpperCase() + newStem.slice(1);
+    }
+  } else if (lowerExt === 'cs' || lowerExt === 'kt') {
+    // C# and Kotlin prefer PascalCase identifiers
+    if (/^\d+$/.test(newStem)) {
+      newStem = `Program${newStem.padStart(2, '0')}`;
+    } else if (!newStem || newStem === '_') {
+      newStem = 'Program01';
+    } else {
+      newStem = newStem.charAt(0).toUpperCase() + newStem.slice(1);
+    }
+  } else {
+    // Python, C, C++, JavaScript, Rust, Go prefer snake_case identifiers
+    if (leadingDigitsLettersMatch) {
+      const digits = leadingDigitsLettersMatch[1];
+      const letters = leadingDigitsLettersMatch[2];
+      newStem = `${letters}_${digits}`;
+    } else if (/^\d+$/.test(newStem)) {
+      newStem = `solution_${newStem.padStart(2, '0')}`;
+    } else if (!newStem || newStem === '_') {
+      newStem = ext ? `solution_01` : `file`;
+    }
   }
 
   // Ensure no consecutive underscores
@@ -92,15 +116,16 @@ export function sanitizeFilenameIdentifier(fullPath) {
 
 /**
  * Converts a sanitized stem into a standard Java class name (PascalCase valid identifier)
- * e.g. "java_01" -> "Java_01", "hello_world" -> "HelloWorld"
+ * e.g. "solution_01" -> "Solution01", "hello_world" -> "HelloWorld"
  */
 export function getJavaClassNameFromStem(stem) {
   if (!stem) return 'Main';
-  // Capitalize first letter
-  let className = stem.charAt(0).toUpperCase() + stem.slice(1);
+  // Convert snake_case to PascalCase for clean Java class naming
+  let cleaned = stem.replace(/_([a-zA-Z0-9])/g, (_, ch) => ch.toUpperCase());
+  let className = cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
   // Ensure valid Java identifier: must start with [A-Za-z_$]
   if (!/^[a-zA-Z_$]/.test(className)) {
-    className = `Class_${className}`;
+    className = `Solution_${className}`;
   }
   return className;
 }

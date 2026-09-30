@@ -191,13 +191,56 @@
   padding: 0 14px;
 }
 
-.antigravity-status-bar .git-branch {
+.antigravity-status-bar .git-branch-btn,
+.antigravity-status-bar .git-sync-btn {
+  background: transparent;
+  border: 1px solid transparent;
   color: var(--text-primary, #dae2fd);
   font-weight: 500;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
   gap: 4px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-family: inherit;
+  transition: all 0.15s ease;
+}
+
+.antigravity-status-bar .git-branch-btn:hover,
+.antigravity-status-bar .git-sync-btn:hover {
+  background: var(--bg-tertiary, rgba(255, 255, 255, 0.08));
+  border-color: var(--border-primary, rgba(255, 255, 255, 0.15));
+  color: var(--accent-cyan, #00d4ff);
+}
+
+.antigravity-status-bar .git-sync-btn.is-syncing {
+  color: var(--accent-cyan, #00d4ff);
+}
+
+.status-item.compiler-ident-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(0, 212, 255, 0.08);
+  border: 1px solid rgba(0, 212, 255, 0.2);
+  color: var(--accent-cyan, #00d4ff);
+  padding: 1px 7px;
+  border-radius: 4px;
+  font-size: 10.5px;
+  font-weight: 600;
+  cursor: help;
+  transition: all 0.15s ease;
+}
+
+.status-item.compiler-ident-badge:hover {
+  background: rgba(0, 212, 255, 0.15);
+  border-color: var(--accent-cyan, #00d4ff);
+}
+
+.compiler-icon {
+  font-size: 12px;
 }
 
 .antigravity-status-bar .problems-indicator {

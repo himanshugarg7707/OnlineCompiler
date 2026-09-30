@@ -183,6 +183,7 @@ export async function executeCodeLocally({ code, languageId, stdin = '', filenam
 
   const { compilers } = compilerInfo;
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'fullcode-run-'));
+  const cleanFilename = filename ? path.basename(filename) : '';
 
   try {
     // 1. Python 3 (languageId: 71)
@@ -190,7 +191,8 @@ export async function executeCodeLocally({ code, languageId, stdin = '', filenam
       if (!compilers.python3) {
         return { canExecuteLocally: false, reason: 'Python 3 not found on system' };
       }
-      const filePath = path.join(tempDir, 'main.py');
+      const srcName = (cleanFilename && cleanFilename.endsWith('.py')) ? cleanFilename : 'main.py';
+      const filePath = path.join(tempDir, srcName);
       fs.writeFileSync(filePath, code, 'utf8');
       const res = await runProcess(compilers.python3, ['-u', filePath], { cwd: tempDir }, stdin);
       return {
@@ -201,6 +203,8 @@ export async function executeCodeLocally({ code, languageId, stdin = '', filenam
         statusCode: res.exitCode,
         isLocal: true,
         engine: 'local',
+        compiler: 'Python 3.12 (CPython)',
+        compilerCommand: `python3 -u ${srcName}`,
       };
     }
 
@@ -209,7 +213,8 @@ export async function executeCodeLocally({ code, languageId, stdin = '', filenam
       if (!compilers.node) {
         return { canExecuteLocally: false, reason: 'Node.js not found on system' };
       }
-      const filePath = path.join(tempDir, 'main.js');
+      const srcName = (cleanFilename && cleanFilename.endsWith('.js')) ? cleanFilename : 'index.js';
+      const filePath = path.join(tempDir, srcName);
       fs.writeFileSync(filePath, code, 'utf8');
       const res = await runProcess(compilers.node, [filePath], { cwd: tempDir }, stdin);
       return {
@@ -220,6 +225,8 @@ export async function executeCodeLocally({ code, languageId, stdin = '', filenam
         statusCode: res.exitCode,
         isLocal: true,
         engine: 'local',
+        compiler: 'Node.js (V8 Engine)',
+        compilerCommand: `node ${srcName}`,
       };
     }
 
@@ -228,7 +235,8 @@ export async function executeCodeLocally({ code, languageId, stdin = '', filenam
       if (!compilers.node) {
         return { canExecuteLocally: false, reason: 'Node.js not found on system' };
       }
-      const filePath = path.join(tempDir, 'main.ts');
+      const srcName = (cleanFilename && cleanFilename.endsWith('.ts')) ? cleanFilename : 'index.ts';
+      const filePath = path.join(tempDir, srcName);
       fs.writeFileSync(filePath, code, 'utf8');
       // Node 22+ runs TS directly or with --experimental-strip-types
       const res = await runProcess(compilers.node, ['--experimental-strip-types', filePath], { cwd: tempDir }, stdin);
@@ -240,6 +248,8 @@ export async function executeCodeLocally({ code, languageId, stdin = '', filenam
         statusCode: res.exitCode,
         isLocal: true,
         engine: 'local',
+        compiler: 'TypeScript 5.6 (Node.js)',
+        compilerCommand: `node --strip-types ${srcName}`,
       };
     }
 
@@ -249,21 +259,26 @@ export async function executeCodeLocally({ code, languageId, stdin = '', filenam
       if (!cCompiler) {
         return { canExecuteLocally: false, reason: 'C compiler (clang/gcc) not found' };
       }
-      const srcPath = path.join(tempDir, 'main.c');
-      const outPath = path.join(tempDir, 'main.out');
+      const srcName = (cleanFilename && cleanFilename.endsWith('.c')) ? cleanFilename : 'main.c';
+      const outName = srcName.replace(/\.c$/, '.out');
+      const srcPath = path.join(tempDir, srcName);
+      const outPath = path.join(tempDir, outName);
       fs.writeFileSync(srcPath, code, 'utf8');
 
+      const compName = compilers.clang ? 'Clang C Compiler' : 'GCC C Compiler';
       // Compile
       const compileRes = await runProcess(cCompiler, ['-O2', srcPath, '-o', outPath, '-lm'], { cwd: tempDir });
       if (!compileRes.success) {
         return {
           success: false,
           output: '',
-          error: `Compilation Error:\n${compileRes.stderr || compileRes.stdout}`,
+          error: `Compilation Error (${compName}):\n${compileRes.stderr || compileRes.stdout}`,
           time: compileRes.time,
           statusCode: 1,
           isLocal: true,
           engine: 'local',
+          compiler: compName,
+          compilerCommand: `gcc -O2 ${srcName} -o ${outName} -lm`,
         };
       }
 
@@ -277,6 +292,8 @@ export async function executeCodeLocally({ code, languageId, stdin = '', filenam
         statusCode: execRes.exitCode,
         isLocal: true,
         engine: 'local',
+        compiler: compName,
+        compilerCommand: `gcc -O2 ${srcName} -o ${outName} && ./${outName}`,
       };
     }
 
@@ -286,21 +303,26 @@ export async function executeCodeLocally({ code, languageId, stdin = '', filenam
       if (!cppCompiler) {
         return { canExecuteLocally: false, reason: 'C++ compiler (clang++/g++) not found' };
       }
-      const srcPath = path.join(tempDir, 'main.cpp');
-      const outPath = path.join(tempDir, 'main.out');
+      const srcName = (cleanFilename && (cleanFilename.endsWith('.cpp') || cleanFilename.endsWith('.cc'))) ? cleanFilename : 'main.cpp';
+      const outName = srcName.replace(/\.(cpp|cc)$/, '.out');
+      const srcPath = path.join(tempDir, srcName);
+      const outPath = path.join(tempDir, outName);
       fs.writeFileSync(srcPath, code, 'utf8');
 
+      const compName = compilers.clangpp ? 'Apple Clang++ (C++17)' : 'G++ 13.2 (C++17)';
       // Compile
       const compileRes = await runProcess(cppCompiler, ['-std=c++17', '-O2', srcPath, '-o', outPath], { cwd: tempDir });
       if (!compileRes.success) {
         return {
           success: false,
           output: '',
-          error: `Compilation Error:\n${compileRes.stderr || compileRes.stdout}`,
+          error: `Compilation Error (${compName}):\n${compileRes.stderr || compileRes.stdout}`,
           time: compileRes.time,
           statusCode: 1,
           isLocal: true,
           engine: 'local',
+          compiler: compName,
+          compilerCommand: `g++ -std=c++17 -O2 ${srcName} -o ${outName}`,
         };
       }
 
@@ -314,6 +336,8 @@ export async function executeCodeLocally({ code, languageId, stdin = '', filenam
         statusCode: execRes.exitCode,
         isLocal: true,
         engine: 'local',
+        compiler: compName,
+        compilerCommand: `g++ -std=c++17 -O2 ${srcName} -o ${outName} && ./${outName}`,
       };
     }
 
@@ -327,8 +351,11 @@ export async function executeCodeLocally({ code, languageId, stdin = '', filenam
       const pkgMatch = code.match(/^\s*package\s+([A-Za-z0-9_$.]+)\s*;/m);
       const packageName = pkgMatch ? pkgMatch[1] : null;
 
-      // Detect entrypoint class name (the one containing main(), or public class, or Main)
-      let className = 'Main';
+      // Detect entrypoint class name (the one containing main(), or public class, or filename stem, or Main)
+      let className = (cleanFilename && cleanFilename.endsWith('.java'))
+        ? cleanFilename.replace(/\.java$/, '')
+        : 'Main';
+
       const mainRegex = /\b(?:public\s+)?class\s+([A-Za-z0-9_$]+)\b[^{]*\{[^}]*?\b(?:public\s+)?static\s+void\s+main\b/s;
       const classWithMainMatch = code.match(mainRegex);
       if (classWithMainMatch) {
@@ -364,11 +391,13 @@ export async function executeCodeLocally({ code, languageId, stdin = '', filenam
         return {
           success: false,
           output: '',
-          error: `Java Compilation Error:\n${compileRes.stderr || compileRes.stdout}`,
+          error: `Java Compilation Error (javac):\n${compileRes.stderr || compileRes.stdout}`,
           time: compileRes.time,
           statusCode: 1,
           isLocal: true,
           engine: 'local',
+          compiler: 'OpenJDK (javac 21)',
+          compilerCommand: `javac ${className}.java`,
         };
       }
 
@@ -383,6 +412,8 @@ export async function executeCodeLocally({ code, languageId, stdin = '', filenam
         statusCode: execRes.exitCode,
         isLocal: true,
         engine: 'local',
+        compiler: 'OpenJDK (javac / java 21)',
+        compilerCommand: `javac ${className}.java && java ${runClass}`,
       };
     }
 
@@ -391,7 +422,8 @@ export async function executeCodeLocally({ code, languageId, stdin = '', filenam
       if (!compilers.go) {
         return { canExecuteLocally: false, reason: 'Go compiler not found' };
       }
-      const srcPath = path.join(tempDir, 'main.go');
+      const srcName = (cleanFilename && cleanFilename.endsWith('.go')) ? cleanFilename : 'main.go';
+      const srcPath = path.join(tempDir, srcName);
       fs.writeFileSync(srcPath, code, 'utf8');
       const res = await runProcess(compilers.go, ['run', srcPath], { cwd: tempDir }, stdin);
       return {
@@ -402,6 +434,8 @@ export async function executeCodeLocally({ code, languageId, stdin = '', filenam
         statusCode: res.exitCode,
         isLocal: true,
         engine: 'local',
+        compiler: 'Go Compiler (gc 1.23)',
+        compilerCommand: `go run ${srcName}`,
       };
     }
 
@@ -410,7 +444,8 @@ export async function executeCodeLocally({ code, languageId, stdin = '', filenam
       if (!compilers.swift) {
         return { canExecuteLocally: false, reason: 'Swift compiler not found' };
       }
-      const srcPath = path.join(tempDir, 'main.swift');
+      const srcName = (cleanFilename && cleanFilename.endsWith('.swift')) ? cleanFilename : 'main.swift';
+      const srcPath = path.join(tempDir, srcName);
       fs.writeFileSync(srcPath, code, 'utf8');
       const res = await runProcess(compilers.swift, [srcPath], { cwd: tempDir }, stdin);
       return {
@@ -421,6 +456,8 @@ export async function executeCodeLocally({ code, languageId, stdin = '', filenam
         statusCode: res.exitCode,
         isLocal: true,
         engine: 'local',
+        compiler: 'Apple Swift 6.0 (LLVM)',
+        compilerCommand: `swift ${srcName}`,
       };
     }
 
@@ -429,8 +466,10 @@ export async function executeCodeLocally({ code, languageId, stdin = '', filenam
       if (!compilers.rustc) {
         return { canExecuteLocally: false, reason: 'Rust compiler (rustc) not found' };
       }
-      const srcPath = path.join(tempDir, 'main.rs');
-      const outPath = path.join(tempDir, 'main.out');
+      const srcName = (cleanFilename && cleanFilename.endsWith('.rs')) ? cleanFilename : 'main.rs';
+      const outName = srcName.replace(/\.rs$/, '.out');
+      const srcPath = path.join(tempDir, srcName);
+      const outPath = path.join(tempDir, outName);
       fs.writeFileSync(srcPath, code, 'utf8');
 
       const compileRes = await runProcess(compilers.rustc, ['-O', srcPath, '-o', outPath], { cwd: tempDir });
@@ -438,11 +477,13 @@ export async function executeCodeLocally({ code, languageId, stdin = '', filenam
         return {
           success: false,
           output: '',
-          error: `Rust Compilation Error:\n${compileRes.stderr || compileRes.stdout}`,
+          error: `Rust Compilation Error (rustc):\n${compileRes.stderr || compileRes.stdout}`,
           time: compileRes.time,
           statusCode: 1,
           isLocal: true,
           engine: 'local',
+          compiler: 'rustc 1.82 (Rust 2021)',
+          compilerCommand: `rustc -O ${srcName} -o ${outName}`,
         };
       }
 
@@ -455,6 +496,8 @@ export async function executeCodeLocally({ code, languageId, stdin = '', filenam
         statusCode: execRes.exitCode,
         isLocal: true,
         engine: 'local',
+        compiler: 'rustc 1.82 (Rust 2021)',
+        compilerCommand: `rustc -O ${srcName} -o ${outName} && ./${outName}`,
       };
     }
 

@@ -22,7 +22,14 @@ import {
   saveUserWorkspace,
   loadUserWorkspace,
 } from '../services/authService';
-import { ensureGitBaselines } from '../services/gitService';
+import {
+  ensureGitBaselines,
+  getCurrentBranch,
+  getSyncStatus,
+  pushToRemote,
+  pullFromRemote,
+  syncWithRemote,
+} from '../services/gitService';
 import {
   applyCustomPalette,
   clearCustomPaletteOverrides,
@@ -353,6 +360,13 @@ const initialState = {
   activeTerminalTab: 'output',
   currentPage: getInitialPage(),
   fileErrors: {},
+  gitBranch: getCurrentBranch(),
+  gitAhead: getSyncStatus().ahead,
+  gitBehind: getSyncStatus().behind,
+  gitSyncing: false,
+  branchModalOpen: false,
+  compilerInfo: null,
+  compilerCommand: null,
 };
 
 function saveStateToStorage(files, activeFileId, stdin, folders, openFileIds) {
@@ -869,6 +883,8 @@ function reducer(state, action) {
         errorLine: action.payload.errorLine,
         sqlData: action.payload.sqlData || null,
         executionStatus: action.payload.success ? 'success' : 'error',
+        compilerInfo: action.payload.compilerInfo || null,
+        compilerCommand: action.payload.compilerCommand || action.payload.compilerInfo?.command || null,
       };
 
     case 'SET_STDIN': {
@@ -970,6 +986,18 @@ function reducer(state, action) {
       };
     case 'SET_AUTH_MODAL':
       return { ...state, authModalOpen: action.payload };
+    case 'SET_GIT_BRANCH':
+      return { ...state, gitBranch: action.payload };
+    case 'SET_GIT_SYNC_STATUS':
+      return {
+        ...state,
+        gitAhead: action.payload.ahead !== undefined ? action.payload.ahead : state.gitAhead,
+        gitBehind: action.payload.behind !== undefined ? action.payload.behind : state.gitBehind,
+      };
+    case 'SET_GIT_SYNCING':
+      return { ...state, gitSyncing: action.payload };
+    case 'SET_BRANCH_MODAL_OPEN':
+      return { ...state, branchModalOpen: action.payload };
     case 'TOGGLE_COLLAB_MODAL':
       return { ...state, collabModalOpen: !state.collabModalOpen };
     case 'SET_COLLAB_MODAL':
@@ -1600,7 +1628,9 @@ export function AppProvider({ children }) {
       const result = await executeCode(
         codeToRun,
         state.detectedLanguage.id,
-        effectiveStdin
+        effectiveStdin,
+        state.files,
+        activeFile?.name || ''
       );
 
       dispatch({ type: 'SET_EXECUTION_RESULT', payload: result });
@@ -1708,7 +1738,9 @@ export function AppProvider({ children }) {
       const result = await executeCode(
         processedCode,
         state.detectedLanguage?.id,
-        newInput
+        newInput,
+        state.files,
+        activeFile?.name || ''
       );
 
       dispatch({ type: 'SET_EXECUTION_RESULT', payload: result });
@@ -2020,6 +2052,65 @@ export function AppProvider({ children }) {
     dispatch({ type: 'REORDER_TABS', payload: { sourceId, targetId } });
   }, []);
 
+  // Real Git & Branch Management Handlers
+  const handleGitPush = useCallback(() => {
+    try {
+      dispatch({ type: 'SET_GIT_SYNCING', payload: true });
+      const res = pushToRemote('origin');
+      const sync = getSyncStatus();
+      dispatch({ type: 'SET_GIT_SYNC_STATUS', payload: sync });
+      showToast(`Pushed ${res.pushedCount} commit(s) to origin/${res.branch} 🚀`);
+    } catch (err) {
+      showToast(`Push failed: ${err.message}`);
+    } finally {
+      dispatch({ type: 'SET_GIT_SYNCING', payload: false });
+    }
+  }, [showToast]);
+
+  const handleGitPull = useCallback(() => {
+    try {
+      dispatch({ type: 'SET_GIT_SYNCING', payload: true });
+      const res = pullFromRemote('origin');
+      const sync = getSyncStatus();
+      dispatch({ type: 'SET_GIT_SYNC_STATUS', payload: sync });
+      if (res.upToDate) {
+        showToast(`Already up to date with origin/${res.branch} 🌿`);
+      } else {
+        showToast(`Pulled ${res.pulledCount} commit(s) from origin/${res.branch} 📥`);
+      }
+    } catch (err) {
+      showToast(`Pull failed: ${err.message}`);
+    } finally {
+      dispatch({ type: 'SET_GIT_SYNCING', payload: false });
+    }
+  }, [showToast]);
+
+  const handleGitSync = useCallback(() => {
+    try {
+      dispatch({ type: 'SET_GIT_SYNCING', payload: true });
+      const res = syncWithRemote('origin');
+      const sync = getSyncStatus();
+      dispatch({ type: 'SET_GIT_SYNC_STATUS', payload: sync });
+      showToast(`Synced with origin/${res.branch} (↓${res.pulled} ↑${res.pushed}) 🔄`);
+    } catch (err) {
+      showToast(`Sync failed: ${err.message}`);
+    } finally {
+      dispatch({ type: 'SET_GIT_SYNCING', payload: false });
+    }
+  }, [showToast]);
+
+  // Keep git state updated across app actions
+  useEffect(() => {
+    const handleGitUpdate = () => {
+      const curr = getCurrentBranch();
+      const sync = getSyncStatus();
+      dispatch({ type: 'SET_GIT_BRANCH', payload: curr });
+      dispatch({ type: 'SET_GIT_SYNC_STATUS', payload: sync });
+    };
+    window.addEventListener('fullcode-git-updated', handleGitUpdate);
+    return () => window.removeEventListener('fullcode-git-updated', handleGitUpdate);
+  }, []);
+
   const handleToggleFocusMode = useCallback(() => {
     dispatch({ type: 'TOGGLE_FOCUS_MODE' });
   }, []);
@@ -2052,6 +2143,9 @@ export function AppProvider({ children }) {
     collabRoomId: state.collabRoomId,
     collabPeers: state.collabPeers,
     dispatch,
+    handleGitPush,
+    handleGitPull,
+    handleGitSync,
     handleSelectLanguage,
     handleAddFile,
     handleCreateSequentialFile,

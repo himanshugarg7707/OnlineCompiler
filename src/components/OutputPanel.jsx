@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { useApp } from '../context/AppContext';
@@ -22,7 +22,7 @@ import DatabasePanel from './DatabasePanel';
 import WebPreviewPanel from './WebPreviewPanel';
 import ComplexityTab from './ComplexityTab';
 import LanguageIcon from './LanguageIcon';
-import { getFriendlyLanguageName } from '../services/languageDetector';
+import { getFriendlyLanguageName, getCompilationIdentifier } from '../services/languageDetector';
 import { isLocalEnvironment } from '../services/judge0Service';
 import './OutputPanel.css';
 
@@ -846,6 +846,13 @@ export default function OutputPanel() {
   const hasError = stderr || compileOutput;
   const isRunning = executionStatus === 'compiling' || executionStatus === 'running';
 
+  const fileCompilationInfo = useMemo(() => {
+    return getCompilationIdentifier(activeFile?.language || detectedLanguage?.monacoLanguage, activeFile?.name);
+  }, [activeFile?.language, activeFile?.name, detectedLanguage?.monacoLanguage]);
+
+  const activeCompilerInfo = state.compilerInfo || fileCompilationInfo;
+  const activeCompilerCommand = state.compilerCommand || activeCompilerInfo.command;
+
   // If user selects SQL language, auto-show database tab option
   useEffect(() => {
     if (detectedLanguage?.id === 82 && activeTab === 'input') {
@@ -911,6 +918,15 @@ export default function OutputPanel() {
               </select>
               <ChevronDown size={11} className="binding-select-arrow" />
             </div>
+          </div>
+
+          {/* Real Compiler Identifier Badge */}
+          <div
+            className="terminal-compiler-badge"
+            title={`Compiler: ${activeCompilerInfo.compilerName} (${activeCompilerInfo.compilerVersion || 'Standard'}) • Standard: ${activeCompilerInfo.standard || 'Default'} • Invocation: ${activeCompilerCommand}`}
+          >
+            <span className="material-symbols-outlined text-[13px]">terminal</span>
+            <span>{activeCompilerInfo.displayIdentifier}</span>
           </div>
 
           {/* Engine Mode Switcher Pill */}
@@ -1036,6 +1052,17 @@ export default function OutputPanel() {
                   <Globe size={12} />
                   <span>Website</span>
                 </button>
+              </div>
+            </div>
+
+            {/* Terminal Compiler Invocation Prompt Banner */}
+            <div className="terminal-cmd-banner" title={`Exact Invocation: ${activeCompilerCommand}`}>
+              <div className="terminal-cmd-left">
+                <span className="cmd-prompt-sym">$</span>
+                <span className="cmd-prompt-text">{activeCompilerCommand}</span>
+              </div>
+              <div className="terminal-cmd-right">
+                <span className="cmd-compiler-tag">{activeCompilerInfo.compilerName}</span>
               </div>
             </div>
 

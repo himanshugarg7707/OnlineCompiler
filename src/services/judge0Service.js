@@ -8,7 +8,7 @@ import { getConfig } from './configService';
 import { executePythonInBrowser } from './pythonRunner';
 import { executeJavaScriptInBrowser } from './jsRunner';
 import { executeSqlInBrowser } from './sqlRunner';
-import { prepareJavaCellCode, prepareCppCellCode, prepareCCellCode } from './languageDetector';
+import { prepareJavaCellCode, prepareCppCellCode, prepareCCellCode, getCompilationIdentifier, getLanguageById } from './languageDetector';
 
 // ─── Godbolt Compiler Explorer — Primary Execution Engine ─────────────────────
 // Free, no API key, actively maintained, supports execution with stdin
@@ -171,28 +171,36 @@ async function tryLocalExecution(code, languageId, stdin = '', filename = '') {
 /**
  * Execute code with optimal execution engine
  */
-export async function executeCode(code, languageId, stdin = '', allFiles = []) {
+export async function executeCode(code, languageId, stdin = '', allFiles = [], filename = '') {
   const config = getConfig();
 
+  const withCompilerMeta = (res) => {
+    if (!res || typeof res !== 'object') return res;
+    if (!res.compilerInfo) {
+      res.compilerInfo = getCompilationIdentifier(getLanguageById(languageId), filename);
+    }
+    return res;
+  };
+
   if (config.mockExecution) {
-    return mockExecute(code, languageId, stdin);
+    return withCompilerMeta(mockExecute(code, languageId, stdin));
   }
 
   // Fast client cache for repeated identical runs (instant 0ms response)
   const cacheKey = `${languageId}:${(stdin || '').trim()}:${code.trim()}`;
   if (clientExecutionCache.has(cacheKey)) {
     const cached = clientExecutionCache.get(cacheKey);
-    return { ...cached, time: '0.001', cached: true };
+    return withCompilerMeta({ ...cached, time: '0.001', cached: true });
   }
 
   // 0. Try Fast Local Native Backend Runner (Only on local machine with native compilers)
   const isCloudForced = typeof localStorage !== 'undefined' && localStorage.getItem('fullcode_engine_mode') === 'cloud';
   if (isLocalEnvironment() && !isCloudForced && languageId !== 0 && languageId !== 1 && languageId !== 710) {
     try {
-      const localRes = await tryLocalExecution(code, languageId, stdin);
+      const localRes = await tryLocalExecution(code, languageId, stdin, filename);
       if (localRes && (localRes.isLocal || localRes.engine === 'local' || localRes.engine === 'sqlite')) {
         clientExecutionCache.set(cacheKey, localRes);
-        return localRes;
+        return withCompilerMeta(localRes);
       }
     } catch {
       // Local backend unreachable or not supported; continue to in-browser / cloud execution
@@ -204,11 +212,11 @@ export async function executeCode(code, languageId, stdin = '', allFiles = []) {
     try {
       const res = await executePythonInBrowser(code, stdin);
       if (res) clientExecutionCache.set(cacheKey, res);
-      return res;
+      return withCompilerMeta(res);
     } catch (e) {
       console.warn('Pyodide failed, trying Godbolt cloud compiler:', e);
       // Fallback: try Godbolt, then Wandbox
-      return cloudExecuteWithFallback(code, languageId, stdin);
+      return withCompilerMeta(await cloudExecuteWithFallback(code, languageId, stdin));
     }
   }
 
@@ -361,7 +369,7 @@ export async function executeCode(code, languageId, stdin = '', allFiles = []) {
   if (result && result.success && !result.error) {
     clientExecutionCache.set(cacheKey, result);
   }
-  return result;
+  return withCompilerMeta(result);
 }
 
 /**

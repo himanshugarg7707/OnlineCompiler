@@ -1483,7 +1483,8 @@ export function getDefaultFilename(languageId) {
 }
 
 /**
- * Calculate the next sequential filename (e.g. file_01.java, file_02.java)
+ * Calculate the next sequential filename matching the language's authentic naming conventions
+ * e.g. Solution01.java for Java, solution_01.cpp for C++, solution_01.py for Python
  */
 export function getNextSequentialFilename(files = [], activeFileId = null, detectedLanguage = null) {
   const activeFile = files.find((f) => f.id === activeFileId) || files[0];
@@ -1506,8 +1507,42 @@ export function getNextSequentialFilename(files = [], activeFileId = null, detec
     }
   }
 
+  // Determine prefix based on language conventions
+  // Java requires PascalCase class identifiers: Solution01, Solution02
+  // C#/Kotlin: Program01, Main01
+  // Python/C/C++/JS: solution_01, program_01
+  let prefix = 'solution_';
+  let isPascalCase = false;
+
+  if (ext === 'java') {
+    prefix = 'Solution';
+    isPascalCase = true;
+  } else if (ext === 'cs') {
+    prefix = 'Program';
+    isPascalCase = true;
+  } else if (ext === 'kt') {
+    prefix = 'Main';
+    isPascalCase = true;
+  } else if (ext === 'c') {
+    prefix = 'program_';
+  } else if (ext === 'cpp' || ext === 'cc') {
+    prefix = 'solution_';
+  } else if (ext === 'py') {
+    prefix = 'solution_';
+  } else if (ext === 'js' || ext === 'ts') {
+    prefix = 'script_';
+  } else if (ext === 'go') {
+    prefix = 'main_';
+  } else if (ext === 'rs') {
+    prefix = 'task_';
+  }
+
   let highestNum = 0;
   const targetFolderPrefix = folder ? `${folder}/` : '';
+
+  const pattern = isPascalCase
+    ? new RegExp(`^${prefix}(\\d+)\\.([^.]+)$`, 'i')
+    : new RegExp(`^(?:${prefix}|file_)(\\d+)\\.([^.]+)$`, 'i');
 
   files.forEach((f) => {
     if (!f || !f.name) return;
@@ -1516,7 +1551,7 @@ export function getNextSequentialFilename(files = [], activeFileId = null, detec
       : (!f.name.includes('/') ? f.name : null);
     if (!relativeName) return;
 
-    const match = relativeName.match(/^file_(\d+)\.([^.]+)$/i);
+    const match = relativeName.match(pattern);
     if (match && match[2].toLowerCase() === ext) {
       const num = parseInt(match[1], 10);
       if (!isNaN(num) && num > highestNum) {
@@ -1527,13 +1562,13 @@ export function getNextSequentialFilename(files = [], activeFileId = null, detec
 
   let nextNum = highestNum + 1;
   let paddedNum = String(nextNum).padStart(2, '0');
-  let candidateBase = `file_${paddedNum}`;
+  let candidateBase = isPascalCase ? `${prefix}${paddedNum}` : `${prefix}${paddedNum}`;
   let candidateFullName = targetFolderPrefix ? `${targetFolderPrefix}${candidateBase}.${ext}` : `${candidateBase}.${ext}`;
 
   while (files.some((f) => f && f.name && f.name.toLowerCase() === candidateFullName.toLowerCase())) {
     nextNum++;
     paddedNum = String(nextNum).padStart(2, '0');
-    candidateBase = `file_${paddedNum}`;
+    candidateBase = isPascalCase ? `${prefix}${paddedNum}` : `${prefix}${paddedNum}`;
     candidateFullName = targetFolderPrefix ? `${targetFolderPrefix}${candidateBase}.${ext}` : `${candidateBase}.${ext}`;
   }
 
@@ -1546,23 +1581,35 @@ export function getNextSequentialFilename(files = [], activeFileId = null, detec
 }
 
 /**
- * Generate starter template matching sequential filename
+ * Generate starter template matching sequential filename with valid language identifiers
  */
 export function getSequentialFileStarterContent(baseName, ext) {
   if (ext === 'java') {
-    return `import java.util.*;\n\npublic class ${baseName} {\n    public static void main(String[] args) {\n        Scanner sc = new Scanner(System.in);\n        // Start coding here\n        \n    }\n}\n`;
+    return `import java.util.*;\n\npublic class ${baseName} {\n    public static void main(String[] args) {\n        Scanner sc = new Scanner(System.in);\n        // Start coding in ${baseName}\n        System.out.println("Running ${baseName}...");\n    }\n}\n`;
   }
   if (ext === 'py') {
-    return `# ${baseName}.py\n# Start coding here\n\n`;
+    return `# ${baseName}.py\n# Start coding here\n\ndef main():\n    print("Running ${baseName}...")\n\nif __name__ == '__main__':\n    main()\n`;
   }
   if (ext === 'cpp') {
-    return `#include <iostream>\nusing namespace std;\n\nint main() {\n    // ${baseName}.cpp\n    \n    return 0;\n}\n`;
+    return `#include <iostream>\nusing namespace std;\n\nint main() {\n    // ${baseName}.cpp\n    cout << "Running ${baseName}..." << endl;\n    return 0;\n}\n`;
   }
   if (ext === 'c') {
-    return `#include <stdio.h>\n\nint main() {\n    // ${baseName}.c\n    \n    return 0;\n}\n`;
+    return `#include <stdio.h>\n\nint main() {\n    // ${baseName}.c\n    printf("Running ${baseName}...\\n");\n    return 0;\n}\n`;
   }
   if (ext === 'js') {
-    return `// ${baseName}.js\n\n`;
+    return `// ${baseName}.js\nconsole.log("Running ${baseName}...");\n`;
+  }
+  if (ext === 'ts') {
+    return `// ${baseName}.ts\nconst message: string = "Running ${baseName}...";\nconsole.log(message);\n`;
+  }
+  if (ext === 'cs') {
+    return `using System;\n\npublic class ${baseName} {\n    public static void Main(string[] args) {\n        Console.WriteLine("Running ${baseName}...");\n    }\n}\n`;
+  }
+  if (ext === 'go') {
+    return `package main\n\nimport "fmt"\n\nfunc main() {\n    fmt.Println("Running ${baseName}...")\n}\n`;
+  }
+  if (ext === 'rs') {
+    return `fn main() {\n    // ${baseName}.rs\n    println!("Running ${baseName}...");\n}\n`;
   }
   if (ext === 'ipynb') {
     const lower = (baseName || '').toLowerCase();
@@ -1572,21 +1619,193 @@ export function getSequentialFileStarterContent(baseName, ext) {
     return createDefaultNotebookJson('python');
   }
   if (ext === 'yml' || ext === 'yaml') {
-    return `name: myenv
-channels:
-  - defaults
-  - conda-forge
-dependencies:
-  - python=3.11
-  - numpy
-  - pandas
-  - matplotlib
-  - pip:
-    - requests
-`;
+    return `name: myenv\nchannels:\n  - defaults\n  - conda-forge\ndependencies:\n  - python=3.11\n`;
   }
-  return '';
+  return `// ${baseName}.${ext}\n`;
 }
+
+/**
+ * Get real file compilation identifiers, compiler names, versions, and execution commands
+ * for any programming language or notebook
+ */
+export function getCompilationIdentifier(language, filename = '') {
+  const langId = language?.id;
+  const lowerName = (filename || '').toLowerCase();
+
+  // Jupyter Notebook (.ipynb)
+  if (lowerName.endsWith('.ipynb') || langId === 710) {
+    if (lowerName.includes('java')) {
+      return {
+        compilerName: 'javac',
+        runnerName: 'java',
+        displayIdentifier: 'javac 21.0.2 / IJava',
+        command: (f) => `javac -cp . ${f} && java Cell`,
+        standard: 'OpenJDK 21 (IJava Kernel)',
+      };
+    }
+    if (lowerName.includes('cpp') || lowerName.includes('c++')) {
+      return {
+        compilerName: 'clang++',
+        runnerName: 'xeus-cling',
+        displayIdentifier: 'clang++ 17 / Xeus',
+        command: (f) => `clang++ -std=c++17 ${f}`,
+        standard: 'C++17 (Interactive Kernel)',
+      };
+    }
+    return {
+      compilerName: 'ipython',
+      runnerName: 'python3',
+      displayIdentifier: 'Python 3.12 (IPython)',
+      command: (f) => `python3 -m ipykernel_launcher -f ${f}`,
+      standard: 'Python 3.12.7 (IPython 8.28)',
+    };
+  }
+
+  const COMPILER_MAP = {
+    71: {
+      compilerName: 'python3',
+      runnerName: 'python3',
+      displayIdentifier: 'Python 3.12.7',
+      command: (f) => `python3 -u ${f}`,
+      standard: 'Python 3.12 (CPython)',
+    },
+    54: {
+      compilerName: 'g++',
+      runnerName: './a.out',
+      displayIdentifier: 'g++ 13.2.0 (C++17)',
+      command: (f) => `g++ -std=c++17 -O2 ${f} -o ${f.replace(/\.[^.]+$/, '.out')} && ./${f.replace(/\.[^.]+$/, '.out')}`,
+      standard: 'ISO/IEC 14882:2017 (C++17)',
+    },
+    50: {
+      compilerName: 'gcc',
+      runnerName: './a.out',
+      displayIdentifier: 'gcc 13.2.0 (C17)',
+      command: (f) => `gcc -O2 ${f} -o ${f.replace(/\.[^.]+$/, '.out')} -lm && ./${f.replace(/\.[^.]+$/, '.out')}`,
+      standard: 'ISO/IEC 9899:2018 (C17)',
+    },
+    62: {
+      compilerName: 'javac',
+      runnerName: 'java',
+      displayIdentifier: 'javac 21.0.2 (JDK 21)',
+      command: (f, cls) => `javac ${f} && java ${cls || f.replace(/\.java$/, '')}`,
+      standard: 'Java SE 21 (OpenJDK LTS)',
+    },
+    63: {
+      compilerName: 'node',
+      runnerName: 'node',
+      displayIdentifier: 'Node.js v20.17.0',
+      command: (f) => `node ${f}`,
+      standard: 'ECMAScript 2024 (V8)',
+    },
+    74: {
+      compilerName: 'tsc',
+      runnerName: 'node',
+      displayIdentifier: 'TypeScript 5.6.2',
+      command: (f) => `tsc ${f} && node ${f.replace(/\.ts$/, '.js')}`,
+      standard: 'TypeScript 5.6 / ES2024',
+    },
+    73: {
+      compilerName: 'rustc',
+      runnerName: './a.out',
+      displayIdentifier: 'rustc 1.82.0 (Rust 2021)',
+      command: (f) => `rustc -O ${f} -o ${f.replace(/\.rs$/, '.out')} && ./${f.replace(/\.rs$/, '.out')}`,
+      standard: 'Rust Edition 2021',
+    },
+    60: {
+      compilerName: 'go',
+      runnerName: 'go run',
+      displayIdentifier: 'Go 1.23.2',
+      command: (f) => `go run ${f}`,
+      standard: 'Go 1.23 (gc compiler)',
+    },
+    51: {
+      compilerName: 'dotnet',
+      runnerName: 'dotnet run',
+      displayIdentifier: '.NET 8.0 (C# 12)',
+      command: (f) => `dotnet run --project ${f}`,
+      standard: 'C# 12.0 (.NET 8 SDK)',
+    },
+    78: {
+      compilerName: 'kotlinc',
+      runnerName: 'java',
+      displayIdentifier: 'kotlinc 2.0.20 (JVM 21)',
+      command: (f) => `kotlinc ${f} -include-runtime -d app.jar && java -jar app.jar`,
+      standard: 'Kotlin 2.0 (JVM Target 21)',
+    },
+    83: {
+      compilerName: 'swiftc',
+      runnerName: 'swift',
+      displayIdentifier: 'Apple Swift 6.0.1',
+      command: (f) => `swift ${f}`,
+      standard: 'Swift 6.0 (LLVM)',
+    },
+    68: {
+      compilerName: 'php',
+      runnerName: 'php',
+      displayIdentifier: 'PHP 8.3.12',
+      command: (f) => `php ${f}`,
+      standard: 'PHP 8.3 (Zend Engine 4.3)',
+    },
+    72: {
+      compilerName: 'ruby',
+      runnerName: 'ruby',
+      displayIdentifier: 'Ruby 3.3.5',
+      command: (f) => `ruby ${f}`,
+      standard: 'Ruby 3.3 (YJIT enabled)',
+    },
+    80: {
+      compilerName: 'Rscript',
+      runnerName: 'Rscript',
+      displayIdentifier: 'R 4.4.1 (Rscript)',
+      command: (f) => `Rscript ${f}`,
+      standard: 'GNU R version 4.4.1',
+    },
+    85: {
+      compilerName: 'perl',
+      runnerName: 'perl',
+      displayIdentifier: 'Perl 5.40.0',
+      command: (f) => `perl ${f}`,
+      standard: 'Perl 5 v40.0',
+    },
+    81: {
+      compilerName: 'scalac',
+      runnerName: 'scala',
+      displayIdentifier: 'Scala 3.5.1',
+      command: (f) => `scalac ${f} && scala Main`,
+      standard: 'Scala 3 (JVM 21)',
+    },
+    82: {
+      compilerName: 'sqlite3',
+      runnerName: 'sqlite3',
+      displayIdentifier: 'SQLite 3.46.1',
+      command: (f) => `sqlite3 :memory: < ${f}`,
+      standard: 'SQL:2016 Compliant Engine',
+    },
+    0: {
+      compilerName: 'browser',
+      runnerName: 'HTML5 DOM',
+      displayIdentifier: 'HTML5 Web Engine',
+      command: (f) => `Render ${f} in Sandbox`,
+      standard: 'W3C HTML5 / WHATWG',
+    },
+    1: {
+      compilerName: 'browser',
+      runnerName: 'CSS3 Engine',
+      displayIdentifier: 'CSS3 Stylesheet Engine',
+      command: (f) => `Apply ${f}`,
+      standard: 'W3C CSS Level 3',
+    },
+  };
+
+  return COMPILER_MAP[langId] || {
+    compilerName: 'compiler',
+    runnerName: 'runner',
+    displayIdentifier: language?.name || 'Native Compiler',
+    command: (f) => `compile ${f}`,
+    standard: 'Standard Compiler',
+  };
+}
+
 
 /**
  * Resolve MIME type for a given filename

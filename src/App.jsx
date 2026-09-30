@@ -16,6 +16,7 @@ import CookieConsentBanner from './components/CookieConsentBanner';
 import LiveRoomChatDrawer from './components/LiveRoomChatDrawer';
 import StatusBar from './components/StatusBar';
 import WorkspacesModal from './components/WorkspacesModal';
+import BranchSwitcherModal from './components/BranchSwitcherModal';
 import WelcomeLandingModal from './components/WelcomeLandingModal';
 import TemplatesModal from './components/TemplatesModal';
 import SharedWorkspaceBanner from './components/SharedWorkspaceBanner';
@@ -723,6 +724,13 @@ function AppContent() {
       <WorkspacesModal
         isOpen={state.workspacesModalOpen}
         onClose={() => dispatch({ type: 'SET_WORKSPACES_MODAL', payload: false })}
+      />
+      <BranchSwitcherModal
+        isOpen={state.branchModalOpen}
+        onClose={() => dispatch({ type: 'SET_BRANCH_MODAL_OPEN', payload: false })}
+        files={state.files}
+        onFilesUpdated={(newFiles) => dispatch({ type: 'SET_FILES', payload: newFiles })}
+        showToast={showToast}
       />
       <WelcomeLandingModal
         isOpen={state.welcomeModalOpen}
