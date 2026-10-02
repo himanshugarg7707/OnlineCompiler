@@ -449,10 +449,19 @@ export function prepareJavaForExecution(code) {
     }
   } else {
     // No Main class exists. Create class Main bridge AT THE TOP so Main is the first class!
+    // IMPORTANT: Hoist all import statements above the bridge to avoid illegal Java
+    // (imports must appear before any class/interface/enum definitions)
+    const importLines = [];
+    clean = clean.replace(/^\s*import\s+[\w.*]+;\s*$/gm, (m) => {
+      importLines.push(m.trim());
+      return ''; // Remove from original position
+    });
+    const importBlock = importLines.length > 0 ? importLines.join('\n') + '\n\n' : '';
+
     if (classWithMain) {
-      clean = `class Main {\n    public static void main(String[] args) throws Throwable {\n        ${classWithMain}.main(args);\n    }\n}\n\n` + clean;
+      clean = `${importBlock}class Main {\n    public static void main(String[] args) throws Throwable {\n        ${classWithMain}.main(args);\n    }\n}\n\n` + clean;
     } else {
-      clean = `class Main {\n    public static void main(String[] args) throws Throwable {\n        System.out.println("Java code compiled successfully.");\n    }\n}\n\n` + clean;
+      clean = `${importBlock}class Main {\n    public static void main(String[] args) throws Throwable {\n        System.out.println("Java code compiled successfully.");\n    }\n}\n\n` + clean;
     }
   }
 
