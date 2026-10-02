@@ -637,6 +637,11 @@
   background: rgba(248, 81, 73, 0.15);
 }
 
+.file-action-btn.copied-success {
+  color: var(--accent-green, #10b981) !important;
+  background: rgba(16, 185, 129, 0.2) !important;
+}
+
 /* Inline Edit / Add Inputs */
 .file-rename-container {
   display: flex;

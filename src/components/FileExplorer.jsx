@@ -21,6 +21,7 @@ import {
   AlertCircle,
   FolderInput,
   Copy,
+  ClipboardPaste,
 } from 'lucide-react';
 import { isItemProtected, isItemUnlocked } from '../services/securityService';
 import { sanitizeFilenameIdentifier } from '../services/identifierSanitizer';
@@ -122,6 +123,8 @@ export default function FileExplorer() {
     handleCloseFile,
     handleRenameFile,
     handleDuplicateFile,
+    handleCopyFileAsFile,
+    handlePasteFile,
     handleAddFolder,
     handleRenameFolder,
     handleDeleteFolder,
@@ -132,6 +135,9 @@ export default function FileExplorer() {
   } = useApp();
 
   const { files, folders, activeFileId, fileErrors = {} } = state;
+
+  // Track temporarily copied file for visual feedback
+  const [copiedFileId, setCopiedFileId] = useState(null);
 
   // Search query & active tab
   const [activeSidebarTab, setActiveSidebarTab] = useState('explorer'); // 'explorer' | 'search'
@@ -585,6 +591,16 @@ export default function FileExplorer() {
                   <FolderPlus size={11} />
                 </button>
 
+                {state.clipboardFile && (
+                  <button
+                    className="file-action-btn"
+                    onClick={() => handlePasteFile(folderPath)}
+                    title={`Paste ${state.clipboardFile.name || 'file'} into ${folderNode.name}/`}
+                  >
+                    <ClipboardPaste size={11} style={{ color: '#10b981' }} />
+                  </button>
+                )}
+
                 <button
                   className="file-action-btn"
                   onClick={() => handleDownloadWorkspace(folderPath)}
@@ -715,14 +731,20 @@ export default function FileExplorer() {
                   {!isEditingFile && (
                     <div className="file-item-actions">
                       <button
-                        className="file-action-btn"
-                        onClick={(e) => {
+                        className={`file-action-btn ${copiedFileId === file.id ? 'copied-success' : ''}`}
+                        onClick={async (e) => {
                           e.stopPropagation();
-                          handleDuplicateFile(file);
+                          await handleCopyFileAsFile(file);
+                          setCopiedFileId(file.id);
+                          setTimeout(() => setCopiedFileId(null), 1500);
                         }}
-                        title={`Duplicate & make copy of ${baseName}`}
+                        title={`Copy ${baseName} to clipboard as file`}
                       >
-                        <Copy size={11} />
+                        {copiedFileId === file.id ? (
+                          <Check size={11} style={{ color: '#10b981' }} />
+                        ) : (
+                          <Copy size={11} />
+                        )}
                       </button>
 
                       <button
@@ -826,6 +848,16 @@ export default function FileExplorer() {
               >
                 <FolderPlus size={14} />
               </button>
+
+              {state.clipboardFile && (
+                <button
+                  className="explorer-action-btn"
+                  onClick={() => handlePasteFile('')}
+                  title={`Paste ${state.clipboardFile.name || 'file'} into workspace`}
+                >
+                  <ClipboardPaste size={14} style={{ color: '#10b981' }} />
+                </button>
+              )}
 
               <button
                 className="explorer-action-btn"
@@ -934,14 +966,20 @@ export default function FileExplorer() {
               {!isEditing && (
                 <div className="file-item-actions">
                   <button
-                    className="file-action-btn"
-                    onClick={(e) => {
+                    className={`file-action-btn ${copiedFileId === file.id ? 'copied-success' : ''}`}
+                    onClick={async (e) => {
                       e.stopPropagation();
-                      handleDuplicateFile(file);
+                      await handleCopyFileAsFile(file);
+                      setCopiedFileId(file.id);
+                      setTimeout(() => setCopiedFileId(null), 1500);
                     }}
-                    title={`Duplicate & make copy of ${file.name}`}
+                    title={`Copy ${file.name} to clipboard as file`}
                   >
-                    <Copy size={11} />
+                    {copiedFileId === file.id ? (
+                      <Check size={11} style={{ color: '#10b981' }} />
+                    ) : (
+                      <Copy size={11} />
+                    )}
                   </button>
 
                   <button

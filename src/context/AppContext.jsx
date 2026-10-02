@@ -8,6 +8,7 @@ import {
   getNextSequentialFilename,
   getSequentialFileStarterContent,
   createDefaultNotebookJson,
+  getFileMimeType,
 } from '../services/languageDetector';
 import { sanitizeFilenameIdentifier, syncJavaClassWithFilename } from '../services/identifierSanitizer';
 import { executeCode } from '../services/judge0Service';
@@ -395,6 +396,7 @@ const initialState = {
   branchModalOpen: false,
   compilerInfo: null,
   compilerCommand: null,
+  clipboardFile: null, // { file, fileObj, copiedAt }
 };
 
 function saveStateToStorage(files, activeFileId, stdin, folders, openFileIds) {
@@ -1079,6 +1081,8 @@ function reducer(state, action) {
       return { ...state, roomAutoSync: action.payload };
     case 'CLEAR_UNREAD_ROOM_CHAT':
       return { ...state, unreadRoomChatCount: 0 };
+    case 'SET_CLIPBOARD_FILE':
+      return { ...state, clipboardFile: action.payload };
     case 'SET_ACTIVE_USER':
       return { ...state, activeUser: action.payload };
     case 'TOGGLE_FOCUS_MODE':
@@ -1417,6 +1421,147 @@ export function AppProvider({ children }) {
         .catch(() => showToast(`Copied path "${file.name}"! 🔗`));
     }
   }, [state.files, showToast]);
+
+  // Copy file as a real File object to system clipboard + in-app clipboard
+  const handleCopyFileAsFile = useCallback(async (fileOrId) => {
+    const file = typeof fileOrId === 'object' && fileOrId !== null
+      ? fileOrId
+      : state.files.find((f) => f.id === fileOrId);
+    if (!file) return;
+
+    const baseName = file.name.split('/').pop() || 'file.txt';
+    const content = file.content || '';
+    const mime = getFileMimeType(baseName) || 'text/plain';
+
+    // 1. Create genuine Web File instance
+    const fileBlob = new Blob([content], { type: mime });
+    const fileObj = new File([fileBlob], baseName, {
+      type: mime,
+      lastModified: Date.now(),
+    });
+
+    let systemClipboardWritten = false;
+
+    // 2. Write to system clipboard as File via ClipboardItem
+    if (typeof ClipboardItem !== 'undefined' && navigator?.clipboard?.write) {
+      try {
+        const itemRecord = {};
+
+        // Browsers require a supported MIME type. We check ClipboardItem.supports
+        if (typeof ClipboardItem.supports === 'function' && ClipboardItem.supports(mime)) {
+          itemRecord[mime] = fileObj;
+        } else {
+          itemRecord['text/plain'] = fileObj;
+        }
+
+        // Attach custom web format if supported for lossless file metadata transfer
+        try {
+          if (typeof ClipboardItem.supports === 'function' && ClipboardItem.supports('web application/vnd.compiler.file+json')) {
+            itemRecord['web application/vnd.compiler.file+json'] = new Blob(
+              [JSON.stringify({
+                name: baseName,
+                path: file.name,
+                content,
+                language: file.language,
+                size: content.length,
+                isFile: true,
+              })],
+              { type: 'application/json' }
+            );
+          }
+        } catch {}
+
+        const item = new ClipboardItem(itemRecord);
+        await navigator.clipboard.write([item]);
+        systemClipboardWritten = true;
+      } catch (err) {
+        console.warn('Writing File to system clipboard failed, trying text/plain fallback:', err);
+        try {
+          const fallbackItem = new ClipboardItem({ 'text/plain': fileObj });
+          await navigator.clipboard.write([fallbackItem]);
+          systemClipboardWritten = true;
+        } catch {}
+      }
+    }
+
+    if (!systemClipboardWritten && navigator?.clipboard?.writeText) {
+      try {
+        await navigator.clipboard.writeText(content);
+      } catch {}
+    }
+
+    // 3. Set clipboard file in App state & window for fast, reliable in-app file operations
+    dispatch({
+      type: 'SET_CLIPBOARD_FILE',
+      payload: {
+        file: { ...file },
+        fileObj,
+        name: baseName,
+        copiedAt: Date.now(),
+      },
+    });
+
+    try {
+      window.__compilerClipboardFile = {
+        name: baseName,
+        path: file.name,
+        content,
+        language: file.language,
+        timestamp: Date.now(),
+      };
+      sessionStorage.setItem('compiler_clipboard_file', JSON.stringify(window.__compilerClipboardFile));
+    } catch {}
+
+    showToast(`Copied file "${baseName}" to clipboard! 📁`);
+  }, [state.files, showToast]);
+
+  // Paste copied file into a target folder (or root workspace)
+  const handlePasteFile = useCallback((targetFolder = '') => {
+    let sourceFile = state.clipboardFile?.file;
+    if (!sourceFile) {
+      try {
+        const stored = sessionStorage.getItem('compiler_clipboard_file');
+        if (stored) sourceFile = JSON.parse(stored);
+      } catch {}
+    }
+    if (!sourceFile) {
+      showToast('Clipboard is empty. Copy a file first! 📋');
+      return;
+    }
+
+    const baseNameWithExt = sourceFile.name.split('/').pop();
+    const targetPath = targetFolder ? `${targetFolder}/${baseNameWithExt}` : baseNameWithExt;
+
+    // Resolve naming collisions gracefully (e.g. Main (1).java)
+    let finalPath = targetPath;
+    let counter = 1;
+    const dotIdx = baseNameWithExt.lastIndexOf('.');
+    const base = dotIdx !== -1 ? baseNameWithExt.substring(0, dotIdx) : baseNameWithExt;
+    const ext = dotIdx !== -1 ? baseNameWithExt.substring(dotIdx) : '';
+
+    while (state.files.some((f) => f.name === finalPath)) {
+      const copyName = `${base} (${counter})${ext}`;
+      finalPath = targetFolder ? `${targetFolder}/${copyName}` : copyName;
+      counter++;
+    }
+
+    let finalContent = sourceFile.content || '';
+    if (finalPath.endsWith('.java')) {
+      finalContent = syncJavaClassWithFilename(finalContent, finalPath);
+    }
+
+    dispatch({
+      type: 'ADD_FILE',
+      payload: {
+        name: finalPath,
+        content: finalContent,
+        folder: targetFolder || null,
+        openTab: true,
+      },
+    });
+
+    showToast(`Pasted "${finalPath.split('/').pop()}"! 📋`);
+  }, [state.clipboardFile, state.files, showToast]);
 
   // Save single active file: Opens "Save As" modal for custom name & target selection
   const handleSaveActiveFile = useCallback((targetFile = null) => {
@@ -2157,6 +2302,8 @@ export function AppProvider({ children }) {
     handleDuplicateFile,
     handleCopyFileContent,
     handleCopyFilePath,
+    handleCopyFileAsFile,
+    handlePasteFile,
     handleDownloadWorkspace,
     handleLoadWorkspaceState,
     handleRunCode,

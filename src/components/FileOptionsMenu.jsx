@@ -4,6 +4,7 @@ import { useApp } from '../context/AppContext';
 import {
   Copy,
   ClipboardCopy,
+  ClipboardPaste,
   FileText,
   Edit2,
   Download,
@@ -26,7 +27,10 @@ export default function FileOptionsMenu({
 }) {
   const menuRef = useRef(null);
   const {
+    state,
     handleDuplicateFile,
+    handleCopyFileAsFile,
+    handlePasteFile,
     handleCopyFileContent,
     handleCopyFilePath,
     handleSaveActiveFile,
@@ -120,10 +124,42 @@ export default function FileOptionsMenu({
         <div className="file-options-divider" />
 
         {/* Section 1: Copy & Duplication Actions */}
-        <div className="file-options-group-label">Copy & Duplicate</div>
+        <div className="file-options-group-label">File & Clipboard</div>
 
         <button
           className="file-options-btn highlight"
+          onClick={() => {
+            handleCopyFileAsFile(file);
+            onClose();
+          }}
+          title="Copy file to clipboard as a file"
+        >
+          <Copy size={14} className="btn-icon" />
+          <div className="btn-text">
+            <span className="btn-title">Copy File</span>
+            <span className="btn-subtext">Copies file to clipboard as a file</span>
+          </div>
+        </button>
+
+        {state.clipboardFile && (
+          <button
+            className="file-options-btn highlight"
+            onClick={() => {
+              handlePasteFile(folderPath || '');
+              onClose();
+            }}
+            title={`Paste ${state.clipboardFile.name || 'copied file'} here`}
+          >
+            <ClipboardPaste size={14} className="btn-icon" style={{ color: '#10b981' }} />
+            <div className="btn-text">
+              <span className="btn-title">Paste File</span>
+              <span className="btn-subtext">Paste <code>{state.clipboardFile.name}</code></span>
+            </div>
+          </button>
+        )}
+
+        <button
+          className="file-options-btn"
           onClick={() => {
             handleDuplicateFile(file);
             onClose();
@@ -143,12 +179,12 @@ export default function FileOptionsMenu({
             handleCopyFileContent(file);
             onClose();
           }}
-          title="Copy entire file content to clipboard"
+          title="Copy entire file content as plain text"
         >
           <ClipboardCopy size={14} className="btn-icon" />
           <div className="btn-text">
-            <span className="btn-title">Copy Code to Clipboard</span>
-            <span className="btn-subtext">Copies all text to system clipboard</span>
+            <span className="btn-title">Copy Code as Text</span>
+            <span className="btn-subtext">Copies all text characters</span>
           </div>
         </button>
 
