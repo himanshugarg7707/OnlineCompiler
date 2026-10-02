@@ -315,7 +315,7 @@ export function mergeBranch(sourceBranchName, currentFiles = []) {
  * @param {Array} files
  * @param {Array} stagedIds
  */
-export function commitChanges(message, files, stagedIds = []) {
+export function commitChanges(message, files, stagedIds = [], author = null) {
   const repo = getGitRepository();
   const currentBranchName = repo.currentBranch || 'main';
   const branch = repo.branches[currentBranchName];
@@ -329,7 +329,7 @@ export function commitChanges(message, files, stagedIds = []) {
 
   files.forEach((file) => {
     if (!file || !file.id) return;
-    if (stagedIds.length === 0 || stagedIds.includes(file.id)) {
+    if (stagedIds.length === 0 || stagedIds.includes(file.id) || stagedIds.includes(file.name)) {
       baselines[file.id] = file.content ?? '';
       modifiedCount++;
       recordSnapshot(
@@ -348,7 +348,7 @@ export function commitChanges(message, files, stagedIds = []) {
     id: commitId,
     hash: commitHash,
     message: trimmedMsg,
-    author: 'FullCode Developer <dev@fullcode.io>',
+    author: author || 'FullCode Developer <dev@fullcode.io>',
     timestamp: Date.now(),
     pushed: false,
     filesCount: modifiedCount || 1,
@@ -590,14 +590,18 @@ export function getWorkspaceGitStatus(files, stagedIds = []) {
     const isModified = hasBaseline && baselineContent !== currentContent;
 
     if (isUntracked || isModified) {
+      const isStaged = stagedSet.has(file.id) || stagedSet.has(file.name);
       const changeItem = {
         file,
-        status: isUntracked ? 'U' : 'M',
+        filename: file.name,
+        fileId: file.id,
+        status: isUntracked ? 'untracked' : 'modified',
+        statusShort: isUntracked ? 'U' : 'M',
         baselineContent: isUntracked ? '' : baselineContent,
         currentContent,
       };
 
-      if (stagedSet.has(file.id)) {
+      if (isStaged) {
         staged.push(changeItem);
       } else {
         unstaged.push(changeItem);
@@ -610,6 +614,41 @@ export function getWorkspaceGitStatus(files, stagedIds = []) {
     unstaged,
     totalCount: staged.length + unstaged.length,
   };
+}
+
+export const switchBranch = (targetBranchName, currentFiles = []) => checkoutBranch(targetBranchName, currentFiles);
+export const getCommitHistory = (branchName = null, limit = 50) => getBranchHistory(branchName, limit);
+
+export function stageFile(fileIdentifier) {
+  const staged = getStagedFileIds();
+  if (!staged.includes(fileIdentifier)) {
+    saveStagedFileIds([...staged, fileIdentifier]);
+  }
+}
+
+export function unstageFile(fileIdentifier) {
+  const staged = getStagedFileIds();
+  saveStagedFileIds(staged.filter((id) => id !== fileIdentifier));
+}
+
+export function stageAllFiles(files = []) {
+  if (Array.isArray(files) && files.length > 0) {
+    const ids = files.map((f) => f.name || f.id).filter(Boolean);
+    saveStagedFileIds(ids);
+  } else {
+    const baselines = getGitBaselines();
+    const allFiles = Object.keys(baselines);
+    saveStagedFileIds(allFiles);
+  }
+}
+
+export function unstageAllFiles() {
+  saveStagedFileIds([]);
+}
+
+export function commitStagedFiles(files, message, author) {
+  const stagedIds = getStagedFileIds();
+  return commitChanges(message, files, stagedIds, author);
 }
 
 /**

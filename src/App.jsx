@@ -25,6 +25,7 @@ import NotebookSetupPage from './pages/NotebookSetupPage';
 import ExamTestPage from './pages/ExamTestPage';
 import TemplatesPage from './pages/TemplatesPage';
 import PracticePage from './pages/PracticePage';
+import GitPage from './pages/GitPage';
 import { getLanguageFromFilename } from './services/languageDetector';
 import { FolderTree, ChevronLeft, ChevronRight, Maximize2, Minimize2, Play } from 'lucide-react';
 import './App.css';
@@ -761,6 +762,9 @@ function AppRouter() {
   }
   if (state.currentPage === 'practice') {
     return <PracticePage />;
+  }
+  if (state.currentPage === 'git' || state.currentPage === 'source-control') {
+    return <GitPage />;
   }
   return <AppContent />;
 }

@@ -1200,6 +1200,7 @@ export function AppProvider({ children }) {
       else if (hash.includes('exam') || hash.includes('test')) page = 'exam';
       else if (hash.includes('templates')) page = 'templates';
       else if (hash.includes('practice')) page = 'practice';
+      else if (hash.includes('git') || hash.includes('source-control')) page = 'git';
       else if (hash.includes('login') || hash.includes('auth') || hash.includes('welcome') || hash.includes('signup')) {
         dispatch({ type: 'SET_WELCOME_MODAL', payload: true });
         page = 'editor';
@@ -2198,6 +2199,8 @@ export function AppProvider({ children }) {
           'exam-test': '#/exam',
           'templates': '#/templates',
           'practice': '#/practice',
+          'git': '#/git',
+          'source-control': '#/git',
           'editor': '#/',
         };
         const targetHash = hashMap[page] || '#/';

@@ -2410,3 +2410,109 @@
   box-shadow: 0 0 14px color-mix(in srgb, var(--accent-cyan) 35%, transparent);
 }
 
+/* Settings Git & Remote section */
+.settings-git-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.settings-git-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.settings-git-field label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.settings-git-input-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.settings-git-input {
+  width: 100%;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid var(--border-primary);
+  border-radius: 8px;
+  padding: 8px 12px;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-family: inherit;
+  outline: none;
+  transition: all 0.2s ease;
+}
+
+.settings-git-input:focus {
+  border-color: var(--accent-cyan);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent-cyan) 20%, transparent);
+}
+
+.settings-git-toggle-btn {
+  position: absolute;
+  right: 8px;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+}
+
+.settings-git-toggle-btn:hover {
+  color: var(--text-primary);
+}
+
+.settings-git-hint {
+  font-size: 11.5px;
+  color: var(--text-muted);
+}
+
+.settings-git-hint code {
+  color: var(--accent-cyan);
+  background: rgba(255, 255, 255, 0.05);
+  padding: 1px 4px;
+  border-radius: 4px;
+}
+
+.settings-git-link {
+  font-size: 11.5px;
+  color: var(--accent-cyan);
+  text-decoration: none;
+  transition: opacity 0.2s;
+}
+
+.settings-git-link:hover {
+  text-decoration: underline;
+}
+
+.settings-git-status-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 12.5px;
+  font-weight: 500;
+  margin-top: 4px;
+}
+
+.settings-git-status-banner.success {
+  background: color-mix(in srgb, #10b981 12%, transparent);
+  border: 1px solid color-mix(in srgb, #10b981 30%, transparent);
+  color: #34d399;
+}
+
+.settings-git-status-banner.error {
+  background: color-mix(in srgb, #ef4444 12%, transparent);
+  border: 1px solid color-mix(in srgb, #ef4444 30%, transparent);
+  color: #f87171;
+}
+

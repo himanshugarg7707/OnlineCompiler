@@ -1558,6 +1558,8 @@ export function getLanguageFromFilename(filename) {
   return null;
 }
 
+export const detectLanguageByFilename = getLanguageFromFilename;
+
 /**
  * Get standard filename for a language ID
  */

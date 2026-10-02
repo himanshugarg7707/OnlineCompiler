@@ -219,6 +219,29 @@
   color: var(--accent-cyan, #00d4ff);
 }
 
+.status-item.git-footer-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(47, 129, 247, 0.15);
+  border: 1px solid rgba(47, 129, 247, 0.35);
+  color: #58a6ff;
+  border-radius: 4px;
+  padding: 1px 7px;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  margin-right: 2px;
+  transition: all 0.15s ease;
+}
+
+.status-item.git-footer-btn:hover {
+  background: rgba(47, 129, 247, 0.28);
+  border-color: rgba(47, 129, 247, 0.6);
+  color: #79c0ff;
+  transform: translateY(-0.5px);
+}
+
 .status-item.compiler-ident-badge {
   display: inline-flex;
   align-items: center;

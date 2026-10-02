@@ -79,8 +79,19 @@ export default function StatusBar() {
 
   return (
     <footer className="status-bar antigravity-status-bar">
-      {/* Left: Git branch, Sync & Problems */}
+      {/* Left: Git button, Git branch, Sync & Problems */}
       <div className="status-left">
+        <button
+          className="status-item git-footer-btn"
+          onClick={() => {
+            window.location.hash = '#/git';
+            dispatch({ type: 'NAVIGATE_PAGE', payload: 'git' });
+          }}
+          title="Open Source Control & Git Studio"
+        >
+          <span className="material-symbols-outlined text-xs">source_environment</span>
+          <span className="git-footer-label">Git</span>
+        </button>
         <button
           className="status-item git-branch-btn"
           onClick={() => dispatch({ type: 'SET_BRANCH_MODAL_OPEN', payload: true })}

@@ -39,7 +39,16 @@ import {
   KeyRound,
   ShieldCheck,
   GraduationCap,
+  FolderGit2,
+  EyeOff,
+  ExternalLink,
+  AlertCircle,
 } from 'lucide-react';
+import {
+  getGitHubConfig,
+  saveGitHubConfig,
+  testGitHubRepo,
+} from '../services/githubRemoteService';
 import {
   getSecurityLocks,
   lockFile,
@@ -188,6 +197,7 @@ export default function SettingsPage() {
       if (hash.includes('tab=editor')) return 'editor';
       if (hash.includes('tab=ai')) return 'ai';
       if (hash.includes('tab=security')) return 'security';
+      if (hash.includes('tab=git') || hash.includes('tab=source-control')) return 'git';
       if (hash.includes('tab=themes')) return 'themes';
     }
     return 'themes'; // Default to themes & custom color palette
@@ -195,6 +205,35 @@ export default function SettingsPage() {
   const [localConfig, setLocalConfig] = useState(config);
   const [storageInfo, setStorageInfo] = useState(null);
   const [copiedLink, setCopiedLink] = useState(false);
+
+  // Git & GitHub Remote State
+  const [gitConfig, setGitConfig] = useState(() => getGitHubConfig());
+  const [gitTokenVisible, setGitTokenVisible] = useState(false);
+  const [gitTesting, setGitTesting] = useState(false);
+  const [gitStatus, setGitStatus] = useState(null);
+  const [gitSaved, setGitSaved] = useState(false);
+
+  const handleSaveGit = () => {
+    saveGitHubConfig(gitConfig);
+    setGitSaved(true);
+    setTimeout(() => setGitSaved(false), 2500);
+  };
+
+  const handleTestGit = async () => {
+    setGitTesting(true);
+    setGitStatus(null);
+    try {
+      const res = await testGitHubRepo(gitConfig);
+      setGitStatus({
+        ok: true,
+        msg: `Connected successfully as ${res.user ? res.user.login : 'authorized user'} (${res.isEmpty ? 'Empty repository ready' : 'Existing repository'})`,
+      });
+    } catch (err) {
+      setGitStatus({ ok: false, msg: err.message });
+    } finally {
+      setGitTesting(false);
+    }
+  };
 
   // Version History State
   const [snapshots, setSnapshots] = useState([]);
@@ -875,6 +914,17 @@ export default function SettingsPage() {
             <div className="nav-text">
               <span className="nav-title">Security & Storage</span>
               <span className="nav-sub">File PIN lock & quota</span>
+            </div>
+          </button>
+
+          <button
+            className={`settings-nav-item ${activeTab === 'git' ? 'active' : ''}`}
+            onClick={() => setActiveTab('git')}
+          >
+            <FolderGit2 size={16} className="nav-icon" />
+            <div className="nav-text">
+              <span className="nav-title">Git & GitHub</span>
+              <span className="nav-sub">Remote repository & sync</span>
             </div>
           </button>
         </aside>
@@ -2363,6 +2413,167 @@ export default function SettingsPage() {
                   </div>
                 </div>
               )}
+            </div>
+          )}
+
+          {/* TAB: GIT & GITHUB */}
+          {activeTab === 'git' && (
+            <div className="settings-section animate-fade-in">
+              <div className="section-hero">
+                <h2>Git & Remote Repository</h2>
+                <p>Configure credentials and repository links for pulling and pushing your workspace directly to GitHub.</p>
+              </div>
+
+              <div className="settings-cards-grid">
+                {/* Full Git Studio Quick Card */}
+                <div className="feature-card highlight-card">
+                  <div className="card-top">
+                    <div className="card-icon-wrap" style={{ background: 'color-mix(in srgb, #f43f5e 12%, transparent)', color: '#f43f5e' }}>
+                      <FolderGit2 size={22} />
+                    </div>
+                    <div className="card-info">
+                      <h3>Dedicated Git Studio</h3>
+                      <p>
+                        A complete Source Control page is available with file staging, branch switching, commit logs, and 1-click Push & Pull for both empty and existing repositories.
+                      </p>
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: '10px', marginTop: '4px' }}>
+                    <button
+                      type="button"
+                      className="btn-done-primary"
+                      onClick={() => dispatch({ type: 'NAVIGATE_PAGE', payload: 'git' })}
+                      style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}
+                    >
+                      <FolderGit2 size={15} />
+                      Open Full Git Studio
+                    </button>
+                  </div>
+                </div>
+
+                {/* Git Credentials & Repo Config */}
+                <div className="feature-card">
+                  <div className="card-top">
+                    <div className="card-icon-wrap" style={{ background: 'color-mix(in srgb, var(--accent-cyan) 12%, transparent)', color: 'var(--accent-cyan)' }}>
+                      <KeyRound size={22} />
+                    </div>
+                    <div className="card-info">
+                      <h3>Repository & Authentication</h3>
+                      <p>Settings saved here are automatically synced with the Git Studio and stored securely in local browser storage.</p>
+                    </div>
+                  </div>
+
+                  <div className="settings-git-form">
+                    <div className="settings-git-field">
+                      <label>GitHub Repository URL</label>
+                      <input
+                        type="text"
+                        className="settings-git-input"
+                        placeholder="https://github.com/username/repository.git"
+                        value={gitConfig.repoUrl}
+                        onChange={(e) => setGitConfig({ ...gitConfig, repoUrl: e.target.value })}
+                      />
+                      <span className="settings-git-hint">Works with brand-new empty repositories or existing repositories.</span>
+                    </div>
+
+                    <div className="settings-git-field">
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <label>Personal Access Token (Classic or Fine-Grained)</label>
+                        <a
+                          href="https://github.com/settings/tokens/new?scopes=repo"
+                          target="_blank"
+                          rel="noreferrer"
+                          className="settings-git-link"
+                        >
+                          Generate token on GitHub <ExternalLink size={12} style={{ display: 'inline', verticalAlign: 'middle', marginLeft: '3px' }} />
+                        </a>
+                      </div>
+                      <div className="settings-git-input-wrap">
+                        <input
+                          type={gitTokenVisible ? 'text' : 'password'}
+                          className="settings-git-input"
+                          placeholder="ghp_xxxxxxxxxxxxxxxxxxxx"
+                          value={gitConfig.token}
+                          onChange={(e) => setGitConfig({ ...gitConfig, token: e.target.value })}
+                        />
+                        <button
+                          type="button"
+                          className="settings-git-toggle-btn"
+                          onClick={() => setGitTokenVisible(!gitTokenVisible)}
+                          title={gitTokenVisible ? 'Hide token' : 'Show token'}
+                        >
+                          {gitTokenVisible ? <EyeOff size={15} /> : <Eye size={15} />}
+                        </button>
+                      </div>
+                      <span className="settings-git-hint">Requires <code>repo</code> scope to push code and create commits.</span>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px' }}>
+                      <div className="settings-git-field">
+                        <label>Target Branch</label>
+                        <input
+                          type="text"
+                          className="settings-git-input"
+                          placeholder="main"
+                          value={gitConfig.branch}
+                          onChange={(e) => setGitConfig({ ...gitConfig, branch: e.target.value })}
+                        />
+                      </div>
+
+                      <div className="settings-git-field">
+                        <label>Author / Committer Name</label>
+                        <input
+                          type="text"
+                          className="settings-git-input"
+                          placeholder="Your Name"
+                          value={gitConfig.authorName}
+                          onChange={(e) => setGitConfig({ ...gitConfig, authorName: e.target.value })}
+                        />
+                      </div>
+
+                      <div className="settings-git-field">
+                        <label>Author / Committer Email</label>
+                        <input
+                          type="text"
+                          className="settings-git-input"
+                          placeholder="you@example.com"
+                          value={gitConfig.authorEmail}
+                          onChange={(e) => setGitConfig({ ...gitConfig, authorEmail: e.target.value })}
+                        />
+                      </div>
+                    </div>
+
+                    {gitStatus && (
+                      <div className={`settings-git-status-banner ${gitStatus.ok ? 'success' : 'error'}`}>
+                        {gitStatus.ok ? <CheckCircle2 size={16} /> : <AlertCircle size={16} />}
+                        <span>{gitStatus.msg}</span>
+                      </div>
+                    )}
+
+                    <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginTop: '8px' }}>
+                      <button
+                        type="button"
+                        className="btn-done-primary"
+                        onClick={handleSaveGit}
+                        style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                      >
+                        {gitSaved ? <Check size={15} /> : null}
+                        {gitSaved ? 'Saved!' : 'Save Credentials'}
+                      </button>
+
+                      <button
+                        type="button"
+                        className="btn-cyber-secondary"
+                        onClick={handleTestGit}
+                        disabled={gitTesting}
+                        style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                      >
+                        {gitTesting ? 'Testing...' : 'Test Connection'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           )}
         </main>
