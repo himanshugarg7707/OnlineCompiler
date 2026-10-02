@@ -768,11 +768,35 @@ export function prepareJavaCellCode(cellCode) {
   let text = (cellCode || '').trim();
   if (!text) return text;
 
-  // 1. If already contains a complete runnable class with main method
+  // 1. If code contains a main method:
   if (/\b(?:public\s+)?static\s+void\s+main\b/.test(text)) {
+    // Check if it's already inside a class definition
+    const hasEnclosingClass = /\b(?:public\s+|final\s+|abstract\s+)*(?:class|record|enum)\s+[A-Za-z0-9_$]+[^{]*\{/.test(text);
+    if (!hasEnclosingClass) {
+      // It's a bare method definition like: `public static void main(String[] args) { ... }`
+      // Wrap it directly inside a class Main!
+      const imports = [];
+      const lines = text.split('\n');
+      const nonImportLines = [];
+      for (const line of lines) {
+        if (/^\s*import\s+[^;]+;\s*$/.test(line.trim())) {
+          imports.push(line.trim());
+        } else {
+          nonImportLines.push(line);
+        }
+      }
+      const impSet = new Set(['import java.util.*;', 'import java.io.*;', 'import java.math.*;', ...imports]);
+      return `${Array.from(impSet).join('\n')}\n\nclass Main {\n${nonImportLines.map((l) => '    ' + l).join('\n')}\n}\n`;
+    }
+
+    // Already inside a class: rename that class to Main or demote other classes
     text = text.replace(/\bpublic\s+(final\s+|abstract\s+)?class\s+([A-Za-z0-9_$]+)/g, (match, mod, name) => {
       return name === 'Main' ? match : `${mod || ''}class ${name}`;
     });
+    // If no class named Main exists, wrap or ensure Main class
+    if (!/\bclass\s+Main\b/.test(text)) {
+      text = text.replace(/\bclass\s+([A-Za-z0-9_$]+)(\s*[^{]*\{[^}]*?\b(?:public\s+)?static\s+void\s+main\b)/s, 'class Main$2');
+    }
     return text;
   }
 

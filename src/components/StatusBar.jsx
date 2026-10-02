@@ -231,17 +231,6 @@ export default function StatusBar() {
           </button>
         </div>
 
-        <span
-          className="status-item git-idle-item"
-          title={`Git: ${gitAhead > 0 ? `${gitAhead} unpushed commit(s) — Click to push` : 'Clean & In Sync'}`}
-          onClick={gitAhead > 0 ? handleGitPush : handleGitSync}
-          style={{ cursor: 'pointer' }}
-        >
-          <span className={`material-symbols-outlined text-[13px] ${gitSyncing ? 'animate-spin text-tertiary' : gitAhead > 0 ? 'text-amber-400' : 'text-tertiary'}`}>
-            {gitSyncing ? 'progress_activity' : gitAhead > 0 ? 'cloud_upload' : 'check_circle'}
-          </span>
-          <span>Git: {gitSyncing ? 'Syncing...' : gitAhead > 0 ? `${gitAhead} Ahead` : 'Synced'}</span>
-        </span>
 
         {/* Terminal Toggle Button (hidden in notebook mode since output is inline) */}
         {!isNotebook && (

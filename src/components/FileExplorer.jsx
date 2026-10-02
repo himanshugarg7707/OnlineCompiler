@@ -963,95 +963,51 @@ export default function FileExplorer() {
           </div>
         </div>
       ) : activeSidebarTab === 'source-control' ? (
-        <div className="sidebar-source-control-panel animate-fade-in flex flex-col flex-1 h-full overflow-hidden">
+        <div className="sidebar-source-control-panel animate-fade-in">
           {/* Header bar */}
-          <div className="flex items-center justify-between px-space-md py-space-sm border-b border-outline-variant shrink-0 bg-surface-dim">
-            <div className="flex items-center space-x-space-xs">
-              <span className="font-headline-sm text-headline-sm text-on-surface">SOURCE CONTROL</span>
-              <span className="bg-primary-container/20 text-primary px-1.5 py-0.5 rounded-full text-label-sm font-semibold">
-                {gitStatus.totalCount}
-              </span>
+          <div className="sc-header-bar">
+            <div className="sc-header-title">
+              <span>Source Control</span>
+              {gitStatus.totalCount > 0 && (
+                <span className="sc-header-badge">{gitStatus.totalCount}</span>
+              )}
             </div>
-            <div className="flex items-center space-x-1 text-on-surface-variant">
-              <button
-                type="button"
-                onClick={handleGitPull}
-                disabled={state.gitSyncing}
-                className="p-1 hover:text-on-surface hover:bg-surface-container-high rounded transition-colors relative"
-                title={`Pull from origin/${state.gitBranch || 'main'}${state.gitBehind > 0 ? ` (${state.gitBehind} commits behind)` : ''}`}
-              >
-                <span className="material-symbols-outlined text-[16px]">cloud_download</span>
-                {state.gitBehind > 0 && (
-                  <span className="absolute -top-1 -right-1 text-[9px] bg-amber-500 text-black font-bold rounded-full px-1 min-w-[14px] text-center">
-                    {state.gitBehind}
-                  </span>
-                )}
-              </button>
-              <button
-                type="button"
-                onClick={handleGitPush}
-                disabled={state.gitSyncing}
-                className="p-1 hover:text-on-surface hover:bg-surface-container-high rounded transition-colors relative"
-                title={`Push to origin/${state.gitBranch || 'main'}${state.gitAhead > 0 ? ` (${state.gitAhead} commits ahead)` : ''}`}
-              >
-                <span className="material-symbols-outlined text-[16px]">cloud_upload</span>
-                {state.gitAhead > 0 && (
-                  <span className="absolute -top-1 -right-1 text-[9px] bg-primary text-on-primary font-bold rounded-full px-1 min-w-[14px] text-center">
-                    {state.gitAhead}
-                  </span>
-                )}
-              </button>
-              <button
-                type="button"
-                onClick={handleGitSync}
-                disabled={state.gitSyncing}
-                className={`p-1 hover:text-on-surface hover:bg-surface-container-high rounded transition-colors ${state.gitSyncing ? 'animate-spin text-primary' : ''}`}
-                title="Sync Changes (Pull then Push)"
-              >
-                <span className="material-symbols-outlined text-[16px]">sync</span>
-              </button>
+            <div className="sc-header-actions">
               <button
                 type="button"
                 onClick={handleStageAll}
-                className="p-1 hover:text-on-surface hover:bg-surface-container-high rounded transition-colors"
+                className="sc-tool-btn"
                 title="Stage All Changes"
               >
-                <span className="material-symbols-outlined text-[16px]">done_all</span>
+                <span className="material-symbols-outlined text-[15px]">done_all</span>
               </button>
               <button
                 type="button"
                 onClick={handleGitMore}
-                className="p-1 hover:text-on-surface hover:bg-surface-container-high rounded transition-colors"
+                className="sc-tool-btn"
                 title="Branch Switcher & Git Menu"
               >
-                <span className="material-symbols-outlined text-[16px]">more_horiz</span>
+                <span className="material-symbols-outlined text-[15px]">more_horiz</span>
               </button>
             </div>
           </div>
 
-          {/* Active Branch Pill & Remote Status Row */}
-          <div className="px-space-md py-1.5 border-b border-outline-variant/60 flex items-center justify-between bg-surface-container-low/50 shrink-0">
+          {/* Active Branch Pill Row */}
+          <div className="sc-branch-row">
             <button
               type="button"
               onClick={() => dispatch({ type: 'SET_BRANCH_MODAL_OPEN', payload: true })}
-              className="flex items-center space-x-1.5 px-2 py-0.5 rounded bg-surface-container-high hover:bg-surface-container-highest text-on-surface text-[11px] border border-outline-variant transition-colors cursor-pointer"
+              className="sc-branch-pill"
               title="Click to Switch or Create Branch"
             >
-              <span className="material-symbols-outlined text-[13px] text-tertiary">call_split</span>
-              <span className="font-semibold tracking-wide">{state.gitBranch || 'main'}</span>
+              <span className="material-symbols-outlined text-[13px]">call_split</span>
+              <span>{state.gitBranch || 'main'}</span>
               <span className="material-symbols-outlined text-[12px] opacity-70">expand_more</span>
             </button>
-            <div className="flex items-center space-x-1 text-[11px] text-on-surface-variant font-mono">
-              <span className="material-symbols-outlined text-[12px] text-emerald-400">cloud_done</span>
-              <span>origin/{state.gitBranch || 'main'}</span>
-              <span className="text-[10px] text-on-surface-variant/70 font-semibold px-1 rounded bg-surface-container-highest">
-                {state.gitBehind || 0}↓ {state.gitAhead || 0}↑
-              </span>
-            </div>
           </div>
 
           {/* Commit Input Area */}
-          <div className="p-space-md border-b border-outline-variant flex flex-col space-y-space-sm bg-surface-dim shrink-0">
+          <div className="sc-commit-box">
             <textarea
               value={commitMessage}
               onChange={(e) => setCommitMessage(e.target.value)}
@@ -1061,34 +1017,31 @@ export default function FileExplorer() {
                   handleCommit();
                 }
               }}
-              className="w-full bg-surface-container-low text-on-surface border border-outline-variant rounded p-space-sm text-body-sm focus:ring-1 focus:ring-primary focus:border-primary resize-none outline-none font-body-sm"
+              className="sc-commit-textarea"
               placeholder="Message (Ctrl+Enter to commit)"
               rows={3}
             />
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-1 text-on-surface-variant text-label-sm">
-                <span className="material-symbols-outlined text-[14px]">save_as</span>
-                <span>{state.gitBranch || 'main'}{gitStatus.totalCount > 0 ? '*' : ''}</span>
-              </div>
-              <div className="flex items-center space-x-1.5">
-                <button
-                  type="button"
-                  onClick={handleCommit}
-                  className="bg-primary-container text-on-primary-container font-headline-sm text-body-sm px-space-md py-1 rounded hover:bg-primary transition-colors flex items-center space-x-1 cursor-pointer"
-                >
-                  <span className="material-symbols-outlined text-[16px]">check</span>
-                  <span>Commit</span>
-                </button>
-              </div>
+            <div className="sc-commit-footer">
+              <span className="text-[11px] text-muted">
+                {state.gitBranch || 'main'}{gitStatus.totalCount > 0 ? '*' : ''}
+              </span>
+              <button
+                type="button"
+                onClick={handleCommit}
+                className="sc-commit-btn"
+              >
+                <span className="material-symbols-outlined text-[14px]">check</span>
+                <span>Commit</span>
+              </button>
             </div>
           </div>
 
           {/* Changes List Tree */}
-          <div className="flex-1 overflow-y-auto p-space-xs space-y-1">
+          <div className="sc-changes-tree">
             {/* Staged Changes Section */}
-            <div className="px-space-xs py-1">
+            <div>
               <div
-                className="flex items-center justify-between text-label-md text-on-surface-variant uppercase tracking-wider px-space-xs py-1 cursor-pointer select-none hover:text-on-surface"
+                className="sc-section-header"
                 onClick={() => setStagedExpanded(!stagedExpanded)}
               >
                 <div className="flex items-center space-x-1">
@@ -1103,7 +1056,7 @@ export default function FileExplorer() {
               {stagedExpanded && (
                 <div className="mt-1 space-y-0.5">
                   {gitStatus.staged.length === 0 ? (
-                    <div className="text-xs text-on-surface-variant/50 italic px-space-sm py-1">
+                    <div className="text-xs text-muted italic px-3 py-1">
                       No staged changes
                     </div>
                   ) : (
@@ -1111,22 +1064,22 @@ export default function FileExplorer() {
                       <div
                         key={`staged-${item.file.id}`}
                         onClick={() => handleOpenFileDiff(item)}
-                        className="flex items-center justify-between px-space-sm py-1.5 rounded hover:bg-surface-container-high group cursor-pointer text-body-sm bg-surface-container-high/60 border-l-2 border-primary"
+                        className="sc-file-item"
                         title="Click to view Git Diff"
                       >
-                        <div className="flex items-center space-x-space-sm truncate">
-                          <span className="material-symbols-outlined text-[16px] text-tertiary">description</span>
-                          <span className="text-on-surface truncate">{item.file.name}</span>
+                        <div className="flex items-center space-x-2 truncate">
+                          <span className="material-symbols-outlined text-[15px] text-secondary">description</span>
+                          <span className="truncate">{item.file.name}</span>
                         </div>
                         <div className="flex items-center space-x-1 shrink-0">
-                          <span className="text-tertiary font-bold text-label-sm px-1 rounded bg-tertiary/10">M</span>
+                          <span className="sc-file-badge-m">M</span>
                           <button
                             type="button"
                             onClick={(e) => {
                               e.stopPropagation();
                               handleUnstageFile(item.file.id);
                             }}
-                            className="opacity-0 group-hover:opacity-100 p-0.5 hover:text-primary text-on-surface-variant"
+                            className="p-0.5 hover:text-primary text-muted cursor-pointer"
                             title="Unstage changes"
                           >
                             <span className="material-symbols-outlined text-[14px]">remove</span>
@@ -1140,9 +1093,9 @@ export default function FileExplorer() {
             </div>
 
             {/* Changes (Unstaged) Section */}
-            <div className="px-space-xs py-1 mt-2">
+            <div>
               <div
-                className="flex items-center justify-between text-label-md text-on-surface-variant uppercase tracking-wider px-space-xs py-1 cursor-pointer select-none hover:text-on-surface"
+                className="sc-section-header"
                 onClick={() => setUnstagedExpanded(!unstagedExpanded)}
               >
                 <div className="flex items-center space-x-1">
@@ -1157,7 +1110,7 @@ export default function FileExplorer() {
               {unstagedExpanded && (
                 <div className="mt-1 space-y-0.5">
                   {gitStatus.unstaged.length === 0 ? (
-                    <div className="text-xs text-on-surface-variant/50 italic px-space-sm py-1">
+                    <div className="text-xs text-muted italic px-3 py-1">
                       Working tree clean
                     </div>
                   ) : (
@@ -1165,18 +1118,18 @@ export default function FileExplorer() {
                       <div
                         key={`unstaged-${item.file.id}`}
                         onClick={() => handleOpenFileDiff(item)}
-                        className="flex items-center justify-between px-space-sm py-1.5 rounded hover:bg-surface-container-high group cursor-pointer text-body-sm"
+                        className="sc-file-item"
                         title="Click to view Git Diff"
                       >
-                        <div className="flex items-center space-x-space-sm truncate">
-                          <span className="material-symbols-outlined text-[16px] text-on-surface-variant">
+                        <div className="flex items-center space-x-2 truncate">
+                          <span className="material-symbols-outlined text-[15px] text-muted">
                             {item.file.name.endsWith('.css') ? 'css' : item.file.name.endsWith('.py') ? 'code' : 'description'}
                           </span>
-                          <span className="text-on-surface-variant truncate">{item.file.name}</span>
+                          <span className="truncate">{item.file.name}</span>
                         </div>
                         <div className="flex items-center space-x-1 shrink-0">
                           {item.status === 'M' ? (
-                            <span className="text-amber-400 font-bold text-label-sm px-1 rounded bg-amber-400/10">M</span>
+                            <span className="sc-file-badge-m">M</span>
                           ) : (
                             <span className="text-emerald-400 font-bold text-label-sm px-1 rounded bg-emerald-400/10">U</span>
                           )}
@@ -1186,7 +1139,7 @@ export default function FileExplorer() {
                               e.stopPropagation();
                               handleStageFile(item.file.id);
                             }}
-                            className="opacity-0 group-hover:opacity-100 p-0.5 hover:text-primary text-on-surface-variant"
+                            className="p-0.5 hover:text-primary text-muted cursor-pointer"
                             title="Stage changes"
                           >
                             <span className="material-symbols-outlined text-[14px]">add</span>

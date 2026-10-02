@@ -971,17 +971,15 @@ export default function OutputPanel() {
               </div>
             )}
 
-            {/* Hide / Collapse Terminal Button (Only for notebooks where outputs are inline) */}
-            {isNotebook && (
-              <button
-                className="btn-hide-terminal"
-                onClick={handleToggleTerminal}
-                title="Hide Terminal & Output Panel"
-              >
-                <ChevronDown size={13} />
-                <span className="btn-hide-text">Hide</span>
-              </button>
-            )}
+            {/* Hide / Collapse Terminal Button */}
+            <button
+              className="btn-hide-terminal"
+              onClick={handleToggleTerminal}
+              title="Collapse / Hide Terminal (Ctrl+`)"
+            >
+              <ChevronDown size={13} />
+              <span className="btn-hide-text">Hide</span>
+            </button>
           </div>
         </div>
       </div>
