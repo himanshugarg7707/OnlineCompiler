@@ -662,6 +662,7 @@ export function launchSubjectWorkspace(subject, customTitle = null) {
   saveNotebookMeta({
     id: subject.id,
     name: title,
+    title: title,
     shortCode: subject.shortCode || 'SUB',
     icon: subject.icon || '📚',
     badgeColor: subject.badgeColor || '#00d4ff',

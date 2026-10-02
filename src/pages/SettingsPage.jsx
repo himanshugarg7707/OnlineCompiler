@@ -59,6 +59,7 @@ import {
   removeNotebookLock,
 } from '../services/securityService';
 import { getSavedNotebooks } from '../services/notebooksService';
+import { getSavedWorkspaces } from '../services/workspaceService';
 import { applyCustomPalette, clearCustomPaletteOverrides } from '../services/themeService';
 import { getHistorySnapshots, deleteSnapshot, clearAllHistory } from '../services/historyService';
 import {
@@ -350,7 +351,53 @@ export default function SettingsPage() {
 
   const savedNotebooks = useMemo(() => {
     try {
-      return getSavedNotebooks() || [];
+      const rawNotebooks = getSavedNotebooks() || [];
+      const rawWorkspaces = getSavedWorkspaces() || [];
+
+      const items = [];
+      const seenIds = new Set();
+      const seenNames = new Set();
+
+      // Process subject notebooks first
+      rawNotebooks.forEach((nb) => {
+        const wsMatch = rawWorkspaces.find(
+          (w) => w.id === nb.workspaceId || (w.name && nb.name && w.name.toLowerCase() === nb.name.toLowerCase())
+        );
+        const resolvedName = nb.name || nb.title || wsMatch?.name || 'Notebook';
+        const id = nb.id || wsMatch?.id || `nb_${resolvedName}`;
+        seenIds.add(id);
+        if (wsMatch?.id) seenIds.add(wsMatch.id);
+        seenNames.add(resolvedName.toLowerCase());
+
+        items.push({
+          id,
+          workspaceId: nb.workspaceId || wsMatch?.id,
+          name: resolvedName,
+          title: resolvedName,
+          type: 'notebook',
+          badge: nb.languageName || nb.shortCode || 'Notebook',
+          filesCount: nb.filesCount || nb.files?.length || wsMatch?.files?.length || wsMatch?.fileCount || 0,
+          updatedAt: nb.updatedAt || wsMatch?.updatedAt,
+        });
+      });
+
+      // Add user-named workspaces that are not in the notebooks list
+      rawWorkspaces.forEach((ws) => {
+        if (!seenIds.has(ws.id) && !seenNames.has((ws.name || '').toLowerCase())) {
+          items.push({
+            id: ws.id,
+            workspaceId: ws.id,
+            name: ws.name || 'Workspace',
+            title: ws.name || 'Workspace',
+            type: 'workspace',
+            badge: ws.language || 'Workspace',
+            filesCount: ws.files?.length || ws.fileCount || 0,
+            updatedAt: ws.updatedAt,
+          });
+        }
+      });
+
+      return items;
     } catch {
       return [];
     }
@@ -2116,7 +2163,7 @@ export default function SettingsPage() {
                       onClick={() => setLockSubTab('notebooks')}
                     >
                       <GraduationCap size={14} />
-                      <span>Notebooks ({savedNotebooks.length})</span>
+                      <span>Workspaces & Notebooks ({savedNotebooks.length})</span>
                     </button>
                   </div>
                 </div>
@@ -2237,17 +2284,28 @@ export default function SettingsPage() {
                   {lockSubTab === 'notebooks' && (
                     <div className="vault-table">
                       {savedNotebooks.length === 0 ? (
-                        <div className="vault-empty-text">No subject notebooks created yet.</div>
+                        <div className="vault-empty-text">No saved workspaces or subject notebooks found.</div>
                       ) : (
                         savedNotebooks.map((nb) => {
-                          const isLocked = Boolean(securityLocks?.notebooks?.[nb.id]?.locked);
+                          const isLocked = Boolean(
+                            securityLocks?.notebooks?.[nb.id]?.locked ||
+                            securityLocks?.notebooks?.[nb.title]?.locked ||
+                            securityLocks?.notebooks?.[nb.name]?.locked ||
+                            (nb.workspaceId && securityLocks?.notebooks?.[nb.workspaceId]?.locked)
+                          );
+                          const displayName = nb.name || nb.title || 'Workspace';
+                          const fileCount = nb.filesCount ?? nb.files?.length ?? 0;
+                          const badgeText = nb.badge || (nb.type === 'workspace' ? 'Workspace' : 'Notebook');
+
                           return (
                             <div key={nb.id} className="vault-row">
                               <div className="vault-row-left">
                                 <GraduationCap size={16} className={isLocked ? 'vault-icon-locked' : 'vault-icon-normal'} />
                                 <div className="vault-row-meta">
-                                  <span className="vault-item-name">{nb.title || 'Untitled Notebook'}</span>
-                                  <span className="vault-item-sub">{nb.subjectId || 'Notebook'} • {nb.files?.length || 0} notes</span>
+                                  <span className="vault-item-name">{displayName}</span>
+                                  <span className="vault-item-sub">
+                                    {badgeText} • {fileCount} {fileCount === 1 ? 'file' : 'files'}
+                                  </span>
                                 </div>
                               </div>
 
@@ -2255,7 +2313,7 @@ export default function SettingsPage() {
                                 {isLocked ? (
                                   <span className="badge-locked">
                                     <Lock size={12} />
-                                    <span>Notebook Locked</span>
+                                    <span>Locked</span>
                                   </span>
                                 ) : (
                                   <span className="badge-unlocked">
@@ -2270,7 +2328,7 @@ export default function SettingsPage() {
                                     onClick={() => handleOpenLockModal('notebook', nb, 'unlock')}
                                   >
                                     <Unlock size={13} />
-                                    <span>Unlock Notebook</span>
+                                    <span>Unlock</span>
                                   </button>
                                 ) : (
                                   <button
@@ -2301,7 +2359,7 @@ export default function SettingsPage() {
                       <h3>Browser Storage Quota</h3>
                       <p>
                         {storageInfo
-                          ? `${(storageInfo.usage / (1024 * 1024)).toFixed(2)} MB used of ${(storageInfo.quota / (1024 * 1024)).toFixed(0)} MB quota`
+                          ? `${storageInfo.usageFormatted || '0 KB'} used of ${storageInfo.quotaFormatted || 'Unlimited'} quota`
                           : 'Checking quota...'}
                       </p>
                     </div>
