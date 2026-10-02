@@ -786,24 +786,6 @@ export default function OutputPanel() {
   const setActiveTab = (tabId) => dispatch({ type: 'SET_TERMINAL_TAB', payload: tabId });
   const generateInputFn = handleGenerateInput || handleGenerateInputs;
 
-  const [engineMode, setEngineMode] = useState(() => {
-    return localStorage.getItem('fullcode_engine_mode') || 'local';
-  });
-
-  useEffect(() => {
-    const handleEngineChange = (e) => {
-      if (e.detail?.mode) setEngineMode(e.detail.mode);
-    };
-    window.addEventListener('engine-mode-changed', handleEngineChange);
-    return () => window.removeEventListener('engine-mode-changed', handleEngineChange);
-  }, []);
-
-  const toggleEngineMode = () => {
-    const next = engineMode === 'local' ? 'cloud' : 'local';
-    setEngineMode(next);
-    localStorage.setItem('fullcode_engine_mode', next);
-    window.dispatchEvent(new CustomEvent('engine-mode-changed', { detail: { mode: next } }));
-  };
 
   const handleAutoGenerateInputAndRun = async () => {
     setActiveTab('output');
@@ -897,42 +879,6 @@ export default function OutputPanel() {
 
         {/* Terminal Options / Status Area */}
         <div className="terminal-options-area">
-          {/* Active File Binding Pill & Selector */}
-          <div className="terminal-file-binding-badge" title="This terminal is currently executing and showing output for this file">
-            <span className="binding-label">In use with:</span>
-            <div className="binding-select-wrap">
-              <span className="binding-file-icon">
-                <LanguageIcon language={activeFile?.language} filename={activeFile?.name} size={13} />
-              </span>
-              <select
-                className="binding-file-dropdown"
-                value={activeFileId}
-                onChange={(e) => handleSelectFile(e.target.value)}
-                title="Change the target file bound to this terminal"
-              >
-                {files.map((f) => (
-                  <option key={f.id} value={f.id}>
-                    {f.name}
-                  </option>
-                ))}
-              </select>
-              <ChevronDown size={11} className="binding-select-arrow" />
-            </div>
-          </div>
-
-
-          {/* Engine Mode Switcher Pill */}
-          <button
-            className={`engine-mode-pill ${engineMode === 'local' ? 'engine-local' : 'engine-cloud'}`}
-            onClick={toggleEngineMode}
-            title={
-              engineMode === 'local'
-                ? '⚡️ Active: Local Native Mac Compilers (~0.02s). Click to switch to Cloud Sandbox.'
-                : '🌐 Active: Cloud / Web Sandbox. Click to switch to Local Native Mac Compilers.'
-            }
-          >
-            <span>{engineMode === 'local' ? '⚡️ Local Engine' : '🌐 Cloud Sandbox'}</span>
-          </button>
 
           {/* Status indicator & Controls */}
           <div className="execution-status">
