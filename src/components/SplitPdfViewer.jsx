@@ -152,23 +152,24 @@ export default function SplitPdfViewer() {
   const isInteractingRef = useRef(false);
   const currentPointsRef = useRef([]);
 
-  // 3-Finger Gesture Detection: Toggles drawing mode on and off
+  // 4-Finger Gesture Detection (also supports 3 fingers for accessibility): Toggles drawing mode on and off
   const handleTouchGesture = useCallback(
     (e) => {
-      if (e.touches && e.touches.length === 3) {
+      if (e.touches && (e.touches.length === 4 || e.touches.length === 3)) {
         e.preventDefault();
+        const count = e.touches.length;
         setIsDrawingMode((prev) => {
           const next = !prev;
           setGestureToast(
             next
-              ? '✨ Drawing Mode ON (3 Fingers Detected)'
-              : 'Drawing Mode OFF (3 Fingers Detected)'
+              ? `✨ Drawing Mode ON (${count} Fingers Detected)`
+              : `Drawing Mode OFF (${count} Fingers Detected)`
           );
           setTimeout(() => setGestureToast(null), 2400);
           showToast(
             next
-              ? '🎨 PDF Inking Activated via 3-Finger Touch!'
-              : 'PDF Inking Disabled (3 Fingers)'
+              ? `🎨 PDF Inking Activated via ${count}-Finger Touch!`
+              : `PDF Inking Disabled (${count} Fingers)`
           );
           return next;
         });
@@ -505,7 +506,7 @@ export default function SplitPdfViewer() {
                 return next;
               });
             }}
-            title="Toggle Drawing / Annotation Mode (or use 3 fingers on screen)"
+            title="Toggle Drawing / Annotation Mode (or tap with 4 fingers on screen)"
           >
             <Pencil size={12} className={isDrawingMode ? 'pulse-anim' : ''} />
             <span>{isDrawingMode ? 'Drawing Active' : 'Drawing Mode'}</span>
@@ -766,7 +767,7 @@ export default function SplitPdfViewer() {
                     ? '✨ Slide / Move mouse across PDF to ink • Space or click to lift pen'
                     : '✍️ Press and drag cursor across PDF to draw'}
                 </span>
-                <span className="gesture-note">✋ 3 fingers anywhere toggles mode</span>
+                <span className="gesture-note">✋ 4 fingers anywhere toggles mode</span>
               </div>
             )}
 
