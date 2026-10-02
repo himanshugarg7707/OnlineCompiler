@@ -150,30 +150,19 @@ function AppContent() {
         e.preventDefault();
         dispatch({ type: 'TOGGLE_NAVBAR_MINIMIZED' });
       }
-      // Cmd+= or Cmd++ to Zoom In (editor font size)
+      // Cmd+= or Cmd++ to Zoom In
       if ((e.ctrlKey || e.metaKey) && (e.key === '=' || e.key === '+')) {
-        e.preventDefault();
-        const currentSize = state.config?.fontSize || 16;
-        const newSize = Math.min(currentSize + 2, 40);
-        if (newSize !== currentSize) {
-          handleUpdateConfig({ fontSize: newSize });
-        }
+        // Allow native browser full-page zoom to work naturally by NOT blocking default
         window.webkit?.messageHandlers?.nativeHost?.postMessage({ type: 'zoom_in' });
       }
-      // Cmd+- or Cmd+_ to Zoom Out (editor font size)
+      // Cmd+- or Cmd+_ to Zoom Out
       if ((e.ctrlKey || e.metaKey) && (e.key === '-' || e.key === '_')) {
-        e.preventDefault();
-        const currentSize = state.config?.fontSize || 16;
-        const newSize = Math.max(currentSize - 2, 8);
-        if (newSize !== currentSize) {
-          handleUpdateConfig({ fontSize: newSize });
-        }
+        // Allow native browser full-page zoom to work naturally by NOT blocking default
         window.webkit?.messageHandlers?.nativeHost?.postMessage({ type: 'zoom_out' });
       }
-      // Cmd+0 to Reset Zoom (reset editor font size to default)
+      // Cmd+0 to Reset Zoom
       if ((e.ctrlKey || e.metaKey) && e.key === '0') {
-        e.preventDefault();
-        handleUpdateConfig({ fontSize: 16 });
+        // Allow native browser reset zoom to work naturally
         window.webkit?.messageHandlers?.nativeHost?.postMessage({ type: 'zoom_reset' });
       }
       // Escape to exit Full Page Code Mode
