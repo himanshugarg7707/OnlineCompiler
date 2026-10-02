@@ -38,16 +38,6 @@ router.post('/', async (req, res) => {
     });
   }
 
-  // Check cache for identical execution
-  const cacheKey = `${languageId}:${stdin}:${code.trim()}`;
-  if (executionCache.has(cacheKey)) {
-    const cached = executionCache.get(cacheKey);
-    return res.json({
-      ...cached,
-      cached: true,
-      time: '0.001',
-    });
-  }
 
   // 1. SQL Execution via native fast SQLite backend
   if (languageId === 82) {
@@ -130,9 +120,9 @@ router.post('/', async (req, res) => {
     try {
       const localResult = await executeCodeLocally({ code, languageId, stdin, filename });
       if (localResult && localResult.canExecuteLocally !== false) {
-        // Cache result if not too large
-        if ((localResult.output || '').length < 50000) {
-          executionCache.set(cacheKey, localResult);
+        const totalServerElapsed = ((performance.now() - startTime) / 1000).toFixed(3);
+        if (!localResult.time || parseFloat(totalServerElapsed) > parseFloat(localResult.time)) {
+          localResult.time = totalServerElapsed;
         }
         return res.json(localResult);
       }

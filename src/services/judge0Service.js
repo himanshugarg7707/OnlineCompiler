@@ -28,8 +28,6 @@ const GODBOLT_COMPILERS = {
   81: null,                                            // Scala
 };
 
-// Fast in-memory cache for 0ms re-runs of identical code & input
-const clientExecutionCache = new Map();
 
 // ─── Wandbox — Secondary Fallback Compiler ────────────────────────────────────
 const WANDBOX_COMPILERS = {
@@ -173,24 +171,27 @@ async function tryLocalExecution(code, languageId, stdin = '', filename = '') {
  */
 export async function executeCode(code, languageId, stdin = '', allFiles = [], filename = '') {
   const config = getConfig();
+  const wallClockStart = performance.now();
 
   const withCompilerMeta = (res) => {
     if (!res || typeof res !== 'object') return res;
     if (!res.compilerInfo) {
       res.compilerInfo = getCompilationIdentifier(getLanguageById(languageId), filename);
     }
+    const realWallClockTime = ((performance.now() - wallClockStart) / 1000).toFixed(3);
+    const reportedTime = parseFloat(res.time);
+    const measuredTime = parseFloat(realWallClockTime);
+    // If sandbox returned an artificial CPU-slice (e.g. 0.043s) or if real elapsed time is higher,
+    // show the true wall-clock time that the user actually experienced
+    if (!reportedTime || isNaN(reportedTime) || measuredTime > reportedTime) {
+      res.cpuTime = res.time;
+      res.time = realWallClockTime;
+    }
     return res;
   };
 
   if (config.mockExecution) {
-    return withCompilerMeta(mockExecute(code, languageId, stdin));
-  }
-
-  // Fast client cache for repeated identical runs (instant 0ms response)
-  const cacheKey = `${languageId}:${(stdin || '').trim()}:${code.trim()}`;
-  if (clientExecutionCache.has(cacheKey)) {
-    const cached = clientExecutionCache.get(cacheKey);
-    return withCompilerMeta({ ...cached, time: '0.001', cached: true });
+    return withCompilerMeta(await mockExecute(code, languageId, stdin));
   }
 
   // 0. Try Fast Local Native Backend Runner (Only on local machine with native compilers)
@@ -199,7 +200,6 @@ export async function executeCode(code, languageId, stdin = '', allFiles = [], f
     try {
       const localRes = await tryLocalExecution(code, languageId, stdin, filename);
       if (localRes && (localRes.isLocal || localRes.engine === 'local' || localRes.engine === 'sqlite')) {
-        clientExecutionCache.set(cacheKey, localRes);
         return withCompilerMeta(localRes);
       }
     } catch {
@@ -211,7 +211,6 @@ export async function executeCode(code, languageId, stdin = '', allFiles = [], f
   if (languageId === 71) {
     try {
       const res = await executePythonInBrowser(code, stdin);
-      if (res) clientExecutionCache.set(cacheKey, res);
       return withCompilerMeta(res);
     } catch (e) {
       console.warn('Pyodide failed, trying Godbolt cloud compiler:', e);
@@ -284,11 +283,9 @@ export async function executeCode(code, languageId, stdin = '', allFiles = [], f
     }
   }
 
-  // 2. JavaScript — Use in-browser runner
   if (languageId === 63) {
     const res = await executeJavaScriptInBrowser(code, stdin);
-    if (res) clientExecutionCache.set(cacheKey, res);
-    return res;
+    return withCompilerMeta(res);
   }
 
   // 3. HTML — Launch live HTML page in a new browser tab
@@ -366,9 +363,6 @@ export async function executeCode(code, languageId, stdin = '', allFiles = [], f
   }
 
   const result = await cloudExecuteWithFallback(processedCode, languageId, stdin);
-  if (result && result.success && !result.error) {
-    clientExecutionCache.set(cacheKey, result);
-  }
   return withCompilerMeta(result);
 }
 

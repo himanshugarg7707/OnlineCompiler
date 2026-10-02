@@ -284,11 +284,12 @@ export async function executeCodeLocally({ code, languageId, stdin = '', filenam
 
       // Execute binary
       const execRes = await runProcess(outPath, [], { cwd: tempDir }, stdin);
+      const totalElapsed = (parseFloat(compileRes.time || 0) + parseFloat(execRes.time || 0)).toFixed(3);
       return {
         success: execRes.success,
         output: execRes.stdout,
         error: execRes.stderr,
-        time: execRes.time,
+        time: totalElapsed,
         statusCode: execRes.exitCode,
         isLocal: true,
         engine: 'local',
@@ -328,11 +329,12 @@ export async function executeCodeLocally({ code, languageId, stdin = '', filenam
 
       // Execute binary
       const execRes = await runProcess(outPath, [], { cwd: tempDir }, stdin);
+      const totalElapsed = (parseFloat(compileRes.time || 0) + parseFloat(execRes.time || 0)).toFixed(3);
       return {
         success: execRes.success,
         output: execRes.stdout,
         error: execRes.stderr,
-        time: execRes.time,
+        time: totalElapsed,
         statusCode: execRes.exitCode,
         isLocal: true,
         engine: 'local',
@@ -404,11 +406,12 @@ export async function executeCodeLocally({ code, languageId, stdin = '', filenam
       // Run with package-qualified class name if package exists
       const runClass = packageName ? `${packageName}.${className}` : className;
       const execRes = await runProcess(compilers.java, ['-cp', tempDir, runClass], { cwd: tempDir }, stdin);
+      const totalElapsed = (parseFloat(compileRes.time || 0) + parseFloat(execRes.time || 0)).toFixed(3);
       return {
         success: execRes.success,
         output: execRes.stdout,
         error: execRes.stderr,
-        time: execRes.time,
+        time: totalElapsed,
         statusCode: execRes.exitCode,
         isLocal: true,
         engine: 'local',
@@ -488,11 +491,12 @@ export async function executeCodeLocally({ code, languageId, stdin = '', filenam
       }
 
       const execRes = await runProcess(outPath, [], { cwd: tempDir }, stdin);
+      const totalElapsed = (parseFloat(compileRes.time || 0) + parseFloat(execRes.time || 0)).toFixed(3);
       return {
         success: execRes.success,
         output: execRes.stdout,
         error: execRes.stderr,
-        time: execRes.time,
+        time: totalElapsed,
         statusCode: execRes.exitCode,
         isLocal: true,
         engine: 'local',
