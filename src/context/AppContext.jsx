@@ -52,6 +52,25 @@ const AppContext = createContext(null);
 
 const defaultLang = getLanguageById(71); // Python 3
 
+export function resolveLanguage(fileOrLang, filename = '') {
+  if (fileOrLang && typeof fileOrLang === 'object' && fileOrLang.name && fileOrLang.monacoLanguage) {
+    return fileOrLang;
+  }
+  if (typeof fileOrLang === 'string') {
+    const fromIdOrName = getLanguageById(fileOrLang) || getLanguageFromFilename(fileOrLang) || (filename ? getLanguageFromFilename(filename) : null);
+    if (fromIdOrName) return fromIdOrName;
+  }
+  if (fileOrLang && (typeof fileOrLang.id === 'number' || typeof fileOrLang.id === 'string')) {
+    const fromId = getLanguageById(fileOrLang.id);
+    if (fromId) return fromId;
+  }
+  if (filename) {
+    const fromName = getLanguageFromFilename(filename);
+    if (fromName) return fromName;
+  }
+  return defaultLang;
+}
+
 const STORAGE_FILES_KEY = 'fullcode_files_v3';
 const STORAGE_ACTIVE_KEY = 'fullcode_active_file_id_v3';
 const STORAGE_STDIN_KEY = 'fullcode_stdin_v3';
@@ -110,8 +129,14 @@ function normalizeLoadedFiles(files) {
   );
 
   return files.map((f) => {
+    const safeLang = resolveLanguage(f.language, f.name);
     const isIpynb = f.name?.endsWith('.ipynb') || f.language?.id === 710 || f.language?.monacoLanguage === 'ipynb';
-    if (!isIpynb) return f;
+    if (!isIpynb) {
+      return {
+        ...f,
+        language: safeLang,
+      };
+    }
 
     const lower = (f.name || '').toLowerCase();
     let targetLang = 'python';
@@ -127,7 +152,7 @@ function normalizeLoadedFiles(files) {
       return {
         ...f,
         language: {
-          ...f.language,
+          ...safeLang,
           id: 710,
           name: 'Java Notebook',
           notebookLanguage: 'java',
@@ -141,7 +166,7 @@ function normalizeLoadedFiles(files) {
       return {
         ...f,
         language: {
-          ...f.language,
+          ...safeLang,
           id: 710,
           name: 'C++ Notebook',
           notebookLanguage: 'cpp',
@@ -155,7 +180,7 @@ function normalizeLoadedFiles(files) {
       return {
         ...f,
         language: {
-          ...f.language,
+          ...safeLang,
           id: 710,
           name: 'JavaScript Notebook',
           notebookLanguage: 'javascript',
@@ -166,7 +191,10 @@ function normalizeLoadedFiles(files) {
         },
       };
     }
-    return f;
+    return {
+      ...f,
+      language: safeLang,
+    };
   });
 }
 
@@ -305,7 +333,7 @@ const initialState = {
   activeFileId: initialActiveId,
   activeDiffFile: null, // { file, baselineContent }
   code: initialActiveFile ? initialActiveFile.content : getStarterTemplate(71),
-  detectedLanguage: initialActiveFile ? initialActiveFile.language : defaultLang,
+  detectedLanguage: resolveLanguage(initialActiveFile?.language, initialActiveFile?.name),
   output: '',
   stderr: '',
   compileOutput: '',
@@ -438,7 +466,7 @@ function reducer(state, action) {
 
       return {
         ...state,
-        detectedLanguage: newLang,
+        detectedLanguage: resolveLanguage(newLang),
         code: currentActive ? currentActive.content : state.code,
         files: updatedFiles,
         errorLine: null,
@@ -449,15 +477,16 @@ function reducer(state, action) {
       const { fileId, language } = action.payload;
       const updatedFiles = state.files.map((file) => {
         if (file.id === fileId) {
-          return { ...file, language };
+          return { ...file, language: resolveLanguage(language, file.name) };
         }
         return file;
       });
       saveStateToStorage(updatedFiles, state.activeFileId, state.stdin, state.folders, state.openFileIds);
+      const activeFile = updatedFiles.find((f) => f.id === state.activeFileId);
       return {
         ...state,
         files: updatedFiles,
-        detectedLanguage: state.activeFileId === fileId ? language : state.detectedLanguage,
+        detectedLanguage: state.activeFileId === fileId ? resolveLanguage(language, activeFile?.name) : (state.detectedLanguage || defaultLang),
       };
     }
 
@@ -468,7 +497,7 @@ function reducer(state, action) {
 
       const shouldOpen = openTab !== false;
 
-      let rawName = inputName || getDefaultFilename(state.detectedLanguage.id);
+      let rawName = inputName || getDefaultFilename(state.detectedLanguage?.id || 71);
       // Auto-sanitize invalid filename identifiers (e.g. "01java.java" -> "java_01.java")
       const { sanitizedPath: sanitizedRawName } = sanitizeFilenameIdentifier(rawName);
       let targetName = folder ? `${folder}/${sanitizedRawName}` : sanitizedRawName;
@@ -588,7 +617,7 @@ function reducer(state, action) {
         openFileIds: updatedOpenIds,
         activeFileId: nextActiveId,
         code: nextActiveFile.content,
-        detectedLanguage: nextActiveFile.language,
+        detectedLanguage: resolveLanguage(nextActiveFile?.language, nextActiveFile?.name),
         errorLine: null,
       };
     }
@@ -650,7 +679,7 @@ function reducer(state, action) {
         activeDiffFile: null,
         openFileIds: updatedOpenIds,
         code: targetFile.content,
-        detectedLanguage: activeLang,
+        detectedLanguage: resolveLanguage(activeLang, targetFile?.name),
         terminalHidden: state.terminalHidden,
         errorLine: null,
       };
@@ -684,7 +713,7 @@ function reducer(state, action) {
         openFileIds: filteredOpenIds,
         activeFileId: newActiveId,
         code: newActiveFile ? newActiveFile.content : state.code,
-        detectedLanguage: newActiveFile ? newActiveFile.language : state.detectedLanguage,
+        detectedLanguage: resolveLanguage(newActiveFile?.language, newActiveFile?.name),
         terminalHidden: state.terminalHidden,
         errorLine: null,
       };
@@ -712,7 +741,7 @@ function reducer(state, action) {
           openFileIds: resetOpen,
           activeFileId: defaultFile.id,
           code: defaultFile.content,
-          detectedLanguage: defaultFile.language,
+          detectedLanguage: resolveLanguage(defaultFile.language, defaultFile.name),
           terminalHidden: state.terminalHidden,
           errorLine: null,
         };
@@ -741,7 +770,7 @@ function reducer(state, action) {
         openFileIds: finalOpenIds,
         activeFileId: newActiveId,
         code: newActiveFile.content,
-        detectedLanguage: newActiveFile.language,
+        detectedLanguage: resolveLanguage(newActiveFile?.language, newActiveFile?.name),
         terminalHidden: state.terminalHidden,
         errorLine: null,
       };
@@ -788,7 +817,7 @@ function reducer(state, action) {
         ...state,
         files: updatedFiles,
         folders: updatedFolders,
-        detectedLanguage: currentActive ? currentActive.language : state.detectedLanguage,
+        detectedLanguage: resolveLanguage(currentActive?.language, currentActive?.name),
       };
     }
 
@@ -863,7 +892,7 @@ function reducer(state, action) {
         files: updatedFiles,
         activeFileId: newActiveId,
         code: newActiveFile.content,
-        detectedLanguage: newActiveFile.language,
+        detectedLanguage: resolveLanguage(newActiveFile?.language, newActiveFile?.name),
       };
     }
 
@@ -951,7 +980,7 @@ function reducer(state, action) {
       return { ...state, sharedNotice: false };
     case 'LOAD_WORKSPACE_STATE': {
       const { files, folders, activeFileId, stdin } = action.payload;
-      const validFiles = Array.isArray(files) && files.length > 0 ? files : state.files;
+      const validFiles = Array.isArray(files) && files.length > 0 ? normalizeLoadedFiles(files) : state.files;
       const nextActiveId = activeFileId || validFiles[0]?.id;
       const nextActiveFile = validFiles.find((f) => f.id === nextActiveId) || validFiles[0];
       const openIds = validFiles.map((f) => f.id);
@@ -963,19 +992,19 @@ function reducer(state, action) {
         openFileIds: openIds,
         activeFileId: nextActiveId,
         code: nextActiveFile ? nextActiveFile.content : state.code,
-        detectedLanguage: nextActiveFile ? nextActiveFile.language : state.detectedLanguage,
+        detectedLanguage: resolveLanguage(nextActiveFile?.language, nextActiveFile?.name),
         stdin: stdin !== undefined ? stdin : state.stdin,
       };
     }
     case 'SET_FILES': {
-      const updatedFiles = action.payload;
+      const updatedFiles = normalizeLoadedFiles(action.payload);
       const curActiveFile = updatedFiles.find((f) => f.id === state.activeFileId) || updatedFiles[0];
       saveStateToStorage(updatedFiles, state.activeFileId, state.stdin, state.folders, state.openFileIds);
       return {
         ...state,
         files: updatedFiles,
         code: curActiveFile ? curActiveFile.content : state.code,
-        detectedLanguage: curActiveFile ? curActiveFile.language : state.detectedLanguage,
+        detectedLanguage: resolveLanguage(curActiveFile?.language, curActiveFile?.name),
       };
     }
     case 'SET_SAVE_AS_MODAL':
@@ -1092,17 +1121,18 @@ function reducer(state, action) {
     }
     case 'HYDRATE_USER_WORKSPACE': {
       const payload = action.payload;
-      const curFile = payload.files.find((f) => f.id === payload.activeFileId) || payload.files[0];
+      const safeFiles = normalizeLoadedFiles(payload.files || []);
+      const curFile = safeFiles.find((f) => f.id === payload.activeFileId) || safeFiles[0];
       return {
         ...state,
         activeUser: payload.activeUser,
-        files: payload.files,
+        files: safeFiles,
         folders: payload.folders || [],
         activeFileId: payload.activeFileId,
         openFileIds: payload.openFileIds || [payload.activeFileId],
         stdin: payload.stdin || '',
         code: curFile ? curFile.content : '',
-        detectedLanguage: curFile ? curFile.language : defaultLang,
+        detectedLanguage: resolveLanguage(curFile?.language, curFile?.name),
         config: payload.config || state.config,
         output: '',
         stderr: '',
@@ -1608,7 +1638,7 @@ export function AppProvider({ children }) {
 
       const result = await executeCode(
         codeToRun,
-        state.detectedLanguage.id,
+        state.detectedLanguage?.id || 71,
         effectiveStdin,
         state.files,
         activeFile?.name || ''
@@ -1735,7 +1765,7 @@ export function AppProvider({ children }) {
     try {
       const hint = await getLogicHint(
         activeFile.content,
-        state.detectedLanguage.name,
+        state.detectedLanguage?.name || 'Python 3',
         state.hintLevel
       );
       dispatch({ type: 'SET_HINT', payload: { ...hint, level: state.hintLevel } });
@@ -1758,7 +1788,7 @@ export function AppProvider({ children }) {
         const reply = await chatWithAI(
           userMessage,
           activeFile.content,
-          state.detectedLanguage.name,
+          state.detectedLanguage?.name || 'Python 3',
           state.output,
           state.stderr
         );

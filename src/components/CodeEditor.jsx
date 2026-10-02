@@ -617,7 +617,7 @@ export default function CodeEditor() {
     handleCodeChange?.(newCode);
 
     // Record dynamic user variable identifiers for instant autocomplete
-    recordVariablesFromCode(newCode, detectedLanguage.name);
+    recordVariablesFromCode(newCode, detectedLanguage?.name || 'Code');
   };
 
   useEffect(() => {

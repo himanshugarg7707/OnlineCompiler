@@ -225,7 +225,7 @@ export default function FileTabs() {
               onDragLeave={(e) => handleDragLeave(e, file.id)}
               onDrop={(e) => handleDrop(e, file.id)}
               onDragEnd={handleDragEnd}
-              title={`${file.name} (${file.language.name}) — Double-click or right-click for options`}
+              title={`${file.name || 'File'} (${file.language?.name || 'Code'}) — Double-click or right-click for options`}
             >
               <span className="file-tab-icon">
                 <LanguageIcon language={file.language} filename={file.name} workspaceFiles={openFiles} size={14} />
