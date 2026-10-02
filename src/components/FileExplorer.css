@@ -268,6 +268,12 @@
   align-items: center;
   gap: 6px;
   background: rgba(0, 0, 0, 0.05);
+  transition: all 0.2s ease;
+}
+
+.explorer-search.active-search-highlight {
+  background: var(--glow-diffusion, rgba(173, 198, 255, 0.08));
+  border-bottom-color: var(--accent-purple, #adc6ff);
 }
 
 .explorer-search .search-icon {

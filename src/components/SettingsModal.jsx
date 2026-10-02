@@ -26,6 +26,7 @@ import {
   Sliders,
   Paintbrush,
   Archive,
+  FolderGit2,
 } from 'lucide-react';
 import { getSupportedLanguages, getLanguageById } from '../services/languageDetector';
 import { resetConfig } from '../services/configService';
@@ -908,7 +909,44 @@ export default function SettingsModal() {
             </div>
           </div>
 
-          {/* ─── 5. NOTEBOOK EXPORT FORMAT ─── */}
+          {/* ─── 5. SOURCE CONTROL & GIT STUDIO ─── */}
+          <div className="settings-section">
+            <div className="section-title-wrapper">
+              <FolderGit2 size={16} className="section-icon-accent" />
+              <h3 className="section-title">Source Control & Git Studio</h3>
+            </div>
+            <p className="section-desc">
+              Manage branches, commits, file diffs, credentials, and push or pull directly from your remote repositories.
+            </p>
+            <div style={{ marginTop: '12px', display: 'flex', gap: '10px' }}>
+              <button
+                type="button"
+                className="btn-primary"
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  padding: '9px 16px',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  fontWeight: 600,
+                  fontSize: '12px',
+                  background: 'var(--accent-purple, #adc6ff)',
+                  color: '#001b3f',
+                  border: 'none',
+                }}
+                onClick={() => {
+                  dispatch({ type: 'TOGGLE_SETTINGS' });
+                  dispatch({ type: 'NAVIGATE_PAGE', payload: 'git' });
+                }}
+              >
+                <FolderGit2 size={15} />
+                Open Source Control & Git Studio ↗
+              </button>
+            </div>
+          </div>
+
+          {/* ─── 6. NOTEBOOK EXPORT FORMAT ─── */}
           <div className="settings-section">
             <div className="section-title-wrapper">
               <Archive size={16} className="section-icon-accent" />

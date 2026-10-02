@@ -28,15 +28,6 @@ import PasswordPromptModal from './PasswordPromptModal';
 import LanguageIcon from './LanguageIcon';
 import { createDefaultNotebookJson, setupFileDragDataTransfer, getLanguageFromFilename } from '../services/languageDetector';
 import { processFileList } from '../services/importService';
-import {
-  getWorkspaceGitStatus,
-  getStagedFileIds,
-  saveStagedFileIds,
-  getGitBaselines,
-  saveGitBaselines,
-  commitChanges,
-  getBranchHistory,
-} from '../services/gitService';
 import { recordSnapshot } from '../services/historyService';
 import FileOptionsMenu from './FileOptionsMenu';
 import './FileExplorer.css';
@@ -138,91 +129,14 @@ export default function FileExplorer() {
     handleDownloadWorkspace,
     dispatch,
     showToast,
-    handleGitPush,
-    handleGitPull,
-    handleGitSync,
   } = useApp();
 
   const { files, folders, activeFileId, fileErrors = {} } = state;
 
   // Search query & active tab
-  const [activeSidebarTab, setActiveSidebarTab] = useState('explorer'); // 'explorer' | 'search' | 'source-control' | 'extensions'
+  const [activeSidebarTab, setActiveSidebarTab] = useState('explorer'); // 'explorer' | 'search'
   const [searchQuery, setSearchQuery] = useState('');
   const searchInputRef = useRef(null);
-
-  // Source Control Git states
-  const [stagedFileIds, setStagedFileIds] = useState(() => getStagedFileIds());
-  const [commitMessage, setCommitMessage] = useState('');
-  const [stagedExpanded, setStagedExpanded] = useState(true);
-  const [unstagedExpanded, setUnstagedExpanded] = useState(true);
-  const [historyExpanded, setHistoryExpanded] = useState(true);
-
-  const gitStatus = useMemo(() => {
-    return getWorkspaceGitStatus(files, stagedFileIds);
-  }, [files, stagedFileIds]);
-
-  const commitHistory = useMemo(() => {
-    return getBranchHistory(state.gitBranch || 'main');
-  }, [state.gitBranch, state.gitAhead]);
-
-  const handleStageFile = useCallback((fileId) => {
-    setStagedFileIds((prev) => {
-      const next = Array.from(new Set([...prev, fileId]));
-      saveStagedFileIds(next);
-      return next;
-    });
-  }, []);
-
-  const handleUnstageFile = useCallback((fileId) => {
-    setStagedFileIds((prev) => {
-      const next = prev.filter((id) => id !== fileId);
-      saveStagedFileIds(next);
-      return next;
-    });
-  }, []);
-
-  const handleStageAll = useCallback(() => {
-    const allChangedIds = [...gitStatus.staged, ...gitStatus.unstaged].map((item) => item.file.id);
-    if (allChangedIds.length === 0) {
-      showToast('No changes to stage');
-      return;
-    }
-    setStagedFileIds(allChangedIds);
-    saveStagedFileIds(allChangedIds);
-    showToast(`Staged ${allChangedIds.length} changes`);
-  }, [gitStatus, showToast]);
-
-  const handleRefreshGit = useCallback(() => {
-    showToast('Git status refreshed 🔄');
-  }, [showToast]);
-
-  const handleOpenFileDiff = useCallback((item) => {
-    dispatch({
-      type: 'OPEN_GIT_DIFF',
-      payload: {
-        file: item.file,
-        baselineContent: item.baselineContent,
-      },
-    });
-  }, [dispatch]);
-
-  const handleCommit = useCallback(() => {
-    const filesToCommit = gitStatus.staged.length > 0 ? gitStatus.staged : gitStatus.unstaged;
-    if (filesToCommit.length === 0) {
-      showToast('No changes to commit (working tree clean)');
-      return;
-    }
-    const msg = commitMessage.trim() || 'Update files';
-    const commitRes = commitChanges(msg, files, stagedFileIds);
-    setStagedFileIds([]);
-    saveStagedFileIds([]);
-    setCommitMessage('');
-    showToast(`Committed to ${commitRes.branch}: "${msg}" (${commitRes.commit.hash}) ✨`);
-  }, [gitStatus, commitMessage, files, stagedFileIds, showToast]);
-
-  const handleGitMore = useCallback(() => {
-    dispatch({ type: 'SET_BRANCH_MODAL_OPEN', payload: true });
-  }, [dispatch]);
 
   // Folder collapse state: { [folderPath]: boolean }
   const [collapsedFolders, setCollapsedFolders] = useState({});
@@ -864,11 +778,13 @@ export default function FileExplorer() {
         <span className="sidebar-workspace-sub">PROJECT ROOT</span>
       </div>
 
-      {/* Side Navigation Tabs (Explorer, Search, Extensions) */}
+      {/* Side Navigation Tabs (Explorer & Search for files) */}
       <div className="sidebar-nav-tabs">
         <div
           className={`sidebar-nav-tab ${activeSidebarTab === 'explorer' ? 'active' : ''}`}
-          onClick={() => setActiveSidebarTab('explorer')}
+          onClick={() => {
+            setActiveSidebarTab('explorer');
+          }}
           title="File Tree Explorer"
         >
           <span className="material-symbols-outlined text-sm">folder</span>
@@ -883,322 +799,11 @@ export default function FileExplorer() {
           title="Search Workspace Files"
         >
           <span className="material-symbols-outlined text-sm">search</span>
-          <span className="sidebar-tab-title">Search</span>
-        </div>
-        <div
-          className={`sidebar-nav-tab ${activeSidebarTab === 'source-control' ? 'active' : ''}`}
-          onClick={() => setActiveSidebarTab('source-control')}
-          title="Source Control (Git Diff & Commits)"
-        >
-          <span className="material-symbols-outlined text-sm" style={{ fontVariationSettings: "'FILL' 1" }}>
-            view_in_ar_new
-          </span>
-          <span className="sidebar-tab-title">Source Control</span>
-          {gitStatus.totalCount > 0 && (
-            <span className="sidebar-tab-badge">{gitStatus.totalCount}</span>
-          )}
-        </div>
-        <div
-          className={`sidebar-nav-tab ${activeSidebarTab === 'extensions' ? 'active' : ''}`}
-          onClick={() => setActiveSidebarTab('extensions')}
-          title="Features & Extensions Hub"
-        >
-          <span className="material-symbols-outlined text-sm">extension</span>
-          <span className="sidebar-tab-title">Extensions</span>
+          <span className="sidebar-tab-title">Search for files</span>
         </div>
       </div>
 
-      {/* Extensions Hub Panel View */}
-      {activeSidebarTab === 'extensions' ? (
-        <div className="sidebar-extensions-panel animate-fade-in">
-          <div className="extensions-group-title">INSTALLED EXTENSIONS & LABS</div>
-          <div className="extension-card" onClick={() => dispatch({ type: 'NAVIGATE_PAGE', payload: 'practice' })}>
-            <div className="extension-icon-box practice-box">
-              <span className="material-symbols-outlined text-sm">code</span>
-            </div>
-            <div className="extension-info">
-              <div className="extension-name">DSA Practice Lab</div>
-              <div className="extension-desc">70+ curated coding questions, test cases & hints</div>
-            </div>
-          </div>
 
-          <div className="extension-card" onClick={() => dispatch({ type: 'NAVIGATE_PAGE', payload: 'exam' })}>
-            <div className="extension-icon-box exam-box">
-              <span className="material-symbols-outlined text-sm">assignment</span>
-            </div>
-            <div className="extension-info">
-              <div className="extension-name">Proctored Exam & Tests</div>
-              <div className="extension-desc">Exam mode with PDF questions & auto grading</div>
-            </div>
-          </div>
-
-          <div className="extension-card" onClick={() => dispatch({ type: 'NAVIGATE_PAGE', payload: 'notebook-setup' })}>
-            <div className="extension-icon-box notebook-box">
-              <span className="material-symbols-outlined text-sm">school</span>
-            </div>
-            <div className="extension-info">
-              <div className="extension-name">Subject Course Notebooks</div>
-              <div className="extension-desc">Interactive Jupyter notebooks for Java, Python & C++</div>
-            </div>
-          </div>
-
-          <div className="extension-card" onClick={() => dispatch({ type: 'NAVIGATE_PAGE', payload: 'templates' })}>
-            <div className="extension-icon-box template-box">
-              <span className="material-symbols-outlined text-sm">view_quilt</span>
-            </div>
-            <div className="extension-info">
-              <div className="extension-name">Algorithm Templates</div>
-              <div className="extension-desc">Boilerplates, DSA algorithms & snippets</div>
-            </div>
-          </div>
-
-          <div className="extension-card" onClick={() => dispatch({ type: 'TOGGLE_COLLAB_MODAL' })}>
-            <div className="extension-icon-box live-box">
-              <span className="material-symbols-outlined text-sm">wifi_tethering</span>
-            </div>
-            <div className="extension-info">
-              <div className="extension-name">Live Room Collaboration</div>
-              <div className="extension-desc">Real-time peer pair programming & shared edits</div>
-            </div>
-          </div>
-        </div>
-      ) : activeSidebarTab === 'source-control' ? (
-        <div className="sidebar-source-control-panel animate-fade-in">
-          {/* Header bar */}
-          <div className="sc-header-bar">
-            <div className="sc-header-title">
-              <span>Source Control</span>
-              {gitStatus.totalCount > 0 && (
-                <span className="sc-header-badge">{gitStatus.totalCount}</span>
-              )}
-            </div>
-            <div className="sc-header-actions">
-              <button
-                type="button"
-                onClick={handleStageAll}
-                className="sc-tool-btn"
-                title="Stage All Changes"
-              >
-                <span className="material-symbols-outlined text-[15px]">done_all</span>
-              </button>
-              <button
-                type="button"
-                onClick={handleGitMore}
-                className="sc-tool-btn"
-                title="Branch Switcher & Git Menu"
-              >
-                <span className="material-symbols-outlined text-[15px]">more_horiz</span>
-              </button>
-            </div>
-          </div>
-
-          {/* Active Branch Pill Row */}
-          <div className="sc-branch-row">
-            <button
-              type="button"
-              onClick={() => dispatch({ type: 'SET_BRANCH_MODAL_OPEN', payload: true })}
-              className="sc-branch-pill"
-              title="Click to Switch or Create Branch"
-            >
-              <span className="material-symbols-outlined text-[13px]">call_split</span>
-              <span>{state.gitBranch || 'main'}</span>
-              <span className="material-symbols-outlined text-[12px] opacity-70">expand_more</span>
-            </button>
-          </div>
-
-          {/* Commit Input Area */}
-          <div className="sc-commit-box">
-            <textarea
-              value={commitMessage}
-              onChange={(e) => setCommitMessage(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
-                  e.preventDefault();
-                  handleCommit();
-                }
-              }}
-              className="sc-commit-textarea"
-              placeholder="Message (Ctrl+Enter to commit)"
-              rows={3}
-            />
-            <div className="sc-commit-footer">
-              <span className="text-[11px] text-muted">
-                {state.gitBranch || 'main'}{gitStatus.totalCount > 0 ? '*' : ''}
-              </span>
-              <button
-                type="button"
-                onClick={handleCommit}
-                className="sc-commit-btn"
-              >
-                <span className="material-symbols-outlined text-[14px]">check</span>
-                <span>Commit</span>
-              </button>
-            </div>
-          </div>
-
-          {/* Changes List Tree */}
-          <div className="sc-changes-tree">
-            {/* Staged Changes Section */}
-            <div>
-              <div
-                className="sc-section-header"
-                onClick={() => setStagedExpanded(!stagedExpanded)}
-              >
-                <div className="flex items-center space-x-1">
-                  <span className="material-symbols-outlined text-[14px]">
-                    {stagedExpanded ? 'expand_more' : 'chevron_right'}
-                  </span>
-                  <span>Staged Changes</span>
-                </div>
-                <span>{gitStatus.staged.length}</span>
-              </div>
-
-              {stagedExpanded && (
-                <div className="mt-1 space-y-0.5">
-                  {gitStatus.staged.length === 0 ? (
-                    <div className="text-xs text-muted italic px-3 py-1">
-                      No staged changes
-                    </div>
-                  ) : (
-                    gitStatus.staged.map((item) => (
-                      <div
-                        key={`staged-${item.file.id}`}
-                        onClick={() => handleOpenFileDiff(item)}
-                        className="sc-file-item"
-                        title="Click to view Git Diff"
-                      >
-                        <div className="flex items-center space-x-2 truncate">
-                          <span className="material-symbols-outlined text-[15px] text-secondary">description</span>
-                          <span className="truncate">{item.file.name}</span>
-                        </div>
-                        <div className="flex items-center space-x-1 shrink-0">
-                          <span className="sc-file-badge-m">M</span>
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleUnstageFile(item.file.id);
-                            }}
-                            className="p-0.5 hover:text-primary text-muted cursor-pointer"
-                            title="Unstage changes"
-                          >
-                            <span className="material-symbols-outlined text-[14px]">remove</span>
-                          </button>
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
-              )}
-            </div>
-
-            {/* Changes (Unstaged) Section */}
-            <div>
-              <div
-                className="sc-section-header"
-                onClick={() => setUnstagedExpanded(!unstagedExpanded)}
-              >
-                <div className="flex items-center space-x-1">
-                  <span className="material-symbols-outlined text-[14px]">
-                    {unstagedExpanded ? 'expand_more' : 'chevron_right'}
-                  </span>
-                  <span>Changes</span>
-                </div>
-                <span>{gitStatus.unstaged.length}</span>
-              </div>
-
-              {unstagedExpanded && (
-                <div className="mt-1 space-y-0.5">
-                  {gitStatus.unstaged.length === 0 ? (
-                    <div className="text-xs text-muted italic px-3 py-1">
-                      Working tree clean
-                    </div>
-                  ) : (
-                    gitStatus.unstaged.map((item) => (
-                      <div
-                        key={`unstaged-${item.file.id}`}
-                        onClick={() => handleOpenFileDiff(item)}
-                        className="sc-file-item"
-                        title="Click to view Git Diff"
-                      >
-                        <div className="flex items-center space-x-2 truncate">
-                          <span className="material-symbols-outlined text-[15px] text-muted">
-                            {item.file.name.endsWith('.css') ? 'css' : item.file.name.endsWith('.py') ? 'code' : 'description'}
-                          </span>
-                          <span className="truncate">{item.file.name}</span>
-                        </div>
-                        <div className="flex items-center space-x-1 shrink-0">
-                          {item.status === 'M' ? (
-                            <span className="sc-file-badge-m">M</span>
-                          ) : (
-                            <span className="text-emerald-400 font-bold text-label-sm px-1 rounded bg-emerald-400/10">U</span>
-                          )}
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleStageFile(item.file.id);
-                            }}
-                            className="p-0.5 hover:text-primary text-muted cursor-pointer"
-                            title="Stage changes"
-                          >
-                            <span className="material-symbols-outlined text-[14px]">add</span>
-                          </button>
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
-              )}
-            </div>
-
-            {/* Commit History on Current Branch */}
-            <div className="px-space-xs py-1 mt-3 border-t border-outline-variant/40 pt-2">
-              <div
-                className="flex items-center justify-between text-label-md text-on-surface-variant uppercase tracking-wider px-space-xs py-1 cursor-pointer select-none hover:text-on-surface"
-                onClick={() => setHistoryExpanded(!historyExpanded)}
-              >
-                <div className="flex items-center space-x-1">
-                  <span className="material-symbols-outlined text-[14px]">
-                    {historyExpanded ? 'expand_more' : 'chevron_right'}
-                  </span>
-                  <span>Commit History ({state.gitBranch || 'main'})</span>
-                </div>
-                <span className="text-[11px] font-mono">{commitHistory.length}</span>
-              </div>
-
-              {historyExpanded && (
-                <div className="mt-1 space-y-1 px-1">
-                  {commitHistory.length === 0 ? (
-                    <div className="text-xs text-on-surface-variant/50 italic px-space-sm py-1">
-                      No commits on this branch yet
-                    </div>
-                  ) : (
-                    commitHistory.slice(0, 15).map((c) => (
-                      <div
-                        key={c.id || c.hash}
-                        className="p-1.5 rounded bg-surface-container-low hover:bg-surface-container-high transition-colors text-body-sm flex flex-col space-y-0.5 border border-outline-variant/30"
-                      >
-                        <div className="flex items-center justify-between">
-                          <span className="font-semibold text-on-surface truncate text-[12px]">{c.message}</span>
-                          <span className={`text-[10px] font-mono px-1 py-0.2 rounded font-semibold ${c.pushed ? 'text-emerald-400 bg-emerald-400/10' : 'text-amber-400 bg-amber-400/10'}`}>
-                            {c.pushed ? 'Synced' : 'Local'}
-                          </span>
-                        </div>
-                        <div className="flex items-center justify-between text-[10px] text-on-surface-variant/70 font-mono">
-                          <span>{c.hash}</span>
-                          <span>{c.timestamp ? new Date(c.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}</span>
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      ) : (
-        <>
           {/* Explorer Header */}
           <div className="explorer-header">
             <div className="explorer-title-group">
@@ -1216,31 +821,10 @@ export default function FileExplorer() {
 
               <button
                 className="explorer-action-btn"
-                onClick={handleOpenLocalFolderPrompt}
-                title="Open Local Project Folder"
-              >
-                <FolderOpen size={14} />
-              </button>
-
-              <button
-                className="explorer-action-btn"
                 onClick={() => startAddFolder('')}
                 title="New Folder"
               >
                 <FolderPlus size={14} />
-              </button>
-
-              <button
-                className="explorer-action-btn"
-                onClick={() => {
-                  if (typeof window !== 'undefined') {
-                    window.location.hash = '#/settings?tab=import';
-                  }
-                  dispatch({ type: 'NAVIGATE_PAGE', payload: 'settings' });
-                }}
-                title="Import Folder"
-              >
-                <FolderInput size={14} />
               </button>
 
               <button
@@ -1253,19 +837,31 @@ export default function FileExplorer() {
             </div>
           </div>
 
-          {/* Search Input (visible if Search tab active or always available as search filter) */}
-          <div className="explorer-search">
+          {/* Search Input */}
+          <div className={`explorer-search ${activeSidebarTab === 'search' ? 'active-search-highlight' : ''}`}>
             <Search size={12} className="search-icon" />
             <input
               ref={searchInputRef}
               type="text"
-              placeholder="Search workspace files..."
+              placeholder="Search for files..."
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onFocus={() => setActiveSidebarTab('search')}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                if (activeSidebarTab !== 'search') {
+                  setActiveSidebarTab('search');
+                }
+              }}
               className="explorer-search-input"
             />
             {searchQuery && (
-              <button className="btn-clear-search" onClick={() => setSearchQuery('')}>
+              <button
+                className="btn-clear-search"
+                onClick={() => {
+                  setSearchQuery('');
+                  searchInputRef.current?.focus();
+                }}
+              >
                 <X size={11} />
               </button>
             )}
@@ -1420,8 +1016,6 @@ export default function FileExplorer() {
           </div>
         )}
       </div>
-        </>
-      )}
 
       {/* Footer Nav inside Sidebar */}
       <div className="sidebar-footer">
