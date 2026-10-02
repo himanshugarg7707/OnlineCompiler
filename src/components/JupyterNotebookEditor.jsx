@@ -705,26 +705,28 @@ export default function JupyterNotebookEditor({ file, onContentChange }) {
           (/System\.(out|err|in)\b|(?:public|private|protected)?\s*(?:class|interface|enum|record)\s+\w+|public\s+static\s+void\s+main|Scanner\s+\w+|import\s+java\.|List<\w+>|ArrayList<\w+>|Map<\w+|HashMap<\w+|Set<\w+|\/\/.*(?:Java|JShell)/i.test(code) ||
            appState?.files?.some((f) => f.name?.endsWith('.java') || f.language?.id === 62)));
 
+      const effectiveStdin = appState?.stdin || '';
+
       if (isJavaExecution) {
         const prepared = prepareJavaNotebookCellCode(notebook.cells, index);
-        result = await executeCode(prepared, 62);
+        result = await executeCode(prepared, 62, effectiveStdin);
         // Fallback: If execution failed with variable redeclaration conflict in main, try active cell
         if (!result.success && result.error && /already defined in method main|is already defined/i.test(result.error)) {
           const fallbackPrepared = prepareJavaCellCode(code);
-          result = await executeCode(fallbackPrepared, 62);
+          result = await executeCode(fallbackPrepared, 62, effectiveStdin);
         }
       } else if (notebookLanguage === 'python') {
-        result = await executePythonInBrowser(code);
+        result = await executePythonInBrowser(code, effectiveStdin);
       } else if (notebookLanguage === 'cpp') {
         const prepared = prepareCppCellCode(code);
-        result = await executeCode(prepared, 54);
+        result = await executeCode(prepared, 54, effectiveStdin);
       } else if (notebookLanguage === 'javascript') {
-        result = await executeCode(code, 63);
+        result = await executeCode(code, 63, effectiveStdin);
       } else if (notebookLanguage === 'c') {
         const prepared = prepareCCellCode(code);
-        result = await executeCode(prepared, 50);
+        result = await executeCode(prepared, 50, effectiveStdin);
       } else {
-        result = await executePythonInBrowser(code);
+        result = await executePythonInBrowser(code, effectiveStdin);
       }
 
       const outputs = [];
@@ -743,11 +745,15 @@ export default function JupyterNotebookEditor({ file, onContentChange }) {
         });
       }
       if (result.error) {
+        let errMessage = result.error;
+        if (/NoSuchElementException/i.test(errMessage) && /Scanner|System\.in/i.test(code)) {
+          errMessage += '\n\n💡 Tip: Your code is waiting for user input via Scanner/System.in. Please enter your input in the "Input" tab below before running the cell.';
+        }
         outputs.push({
           output_type: 'error',
           ename: 'ExecutionError',
-          evalue: result.error,
-          traceback: [result.error],
+          evalue: errMessage,
+          traceback: [errMessage],
         });
       }
 

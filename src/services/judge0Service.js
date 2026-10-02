@@ -8,7 +8,7 @@ import { getConfig } from './configService';
 import { executePythonInBrowser } from './pythonRunner';
 import { executeJavaScriptInBrowser } from './jsRunner';
 import { executeSqlInBrowser } from './sqlRunner';
-import { prepareJavaCellCode, prepareCppCellCode, prepareCCellCode, getCompilationIdentifier, getLanguageById } from './languageDetector';
+import { prepareJavaCellCode, prepareCppCellCode, prepareCCellCode, normalizeJavaMainMethod, getCompilationIdentifier, getLanguageById } from './languageDetector';
 
 // ─── Godbolt Compiler Explorer — Primary Execution Engine ─────────────────────
 // Free, no API key, actively maintained, supports execution with stdin
@@ -386,6 +386,9 @@ export function prepareJavaForExecution(code) {
   // 1. Strip package declaration (sandbox has flat directory structure)
   let clean = code.replace(/^\s*package\s+[\w.]+;\s*$/gm, '// package stripped');
 
+  // Normalize any main/Main method signatures to canonical JVM entry point
+  clean = normalizeJavaMainMethod(clean);
+
   // If code already contains class Main with main method, return clean as-is
   if (/\b(?:public\s+|final\s+|abstract\s+)*class\s+Main\b/.test(clean) && /\b(?:public\s+)?static\s+void\s+main\b/.test(clean)) {
     return clean;
@@ -461,7 +464,7 @@ export function prepareJavaForExecution(code) {
     if (classWithMain) {
       clean = `${importBlock}class Main {\n    public static void main(String[] args) throws Throwable {\n        ${classWithMain}.main(args);\n    }\n}\n\n` + clean;
     } else {
-      clean = `${importBlock}class Main {\n    public static void main(String[] args) throws Throwable {\n        System.out.println("Java code compiled successfully.");\n    }\n}\n\n` + clean;
+      clean = `${importBlock}class Main {\n    public static void main(String[] args) throws Throwable {\n        // Code compiled successfully\n    }\n}\n\n` + clean;
     }
   }
 

@@ -760,6 +760,48 @@ export function parseJavaCellComponents(codeText) {
 }
 
 /**
+ * Normalizes user-written Java main methods into canonical standard JVM entrypoint:
+ * `public static void main(String[] args)`
+ * Handles:
+ * - Capitalized 'Main' (e.g. `static void Main(String[] args)`)
+ * - Missing 'public' modifier (e.g. `static void main(String[] args)`)
+ * - C#-style / Java 21 instance main (e.g. `void main()`, `void Main(String[] args)`)
+ * - Array syntax variations (e.g. `String args[]`, `String... args`, `String[] args`)
+ */
+export function normalizeJavaMainMethod(code) {
+  if (!code || typeof code !== 'string') return code;
+  let res = code;
+
+  // 1. Convert any (public/protected/private)? (static)? void Main( -> public static void main(String[] args)
+  res = res.replace(
+    /\b(?:public\s+|protected\s+|private\s+)?(?:static\s+)?void\s+Main\s*\(\s*(?:String\s*(?:\[\s*\]|\.\.\.)\s*\w+|\w+\s*\[\s*\]|\s*)\)/gi,
+    'public static void main(String[] args)'
+  );
+
+  // 2. Normalize package-private/protected/private static void main( -> public static void main(
+  res = res.replace(
+    /\b(?:protected|private)?\s*static\s+void\s+main\s*\(\s*(?:String\s*(?:\[\s*\]|\.\.\.)\s*\w+|\w+\s*\[\s*\]|\s*)\)/g,
+    'public static void main(String[] args)'
+  );
+
+  // 3. Normalize instance void main() -> public static void main(String[] args)
+  res = res.replace(
+    /\b(?:public\s+|protected\s+|private\s+)?void\s+main\s*\(\s*\)/g,
+    'public static void main(String[] args)'
+  );
+
+  return res;
+}
+
+/**
+ * Checks if code contains any variation of a Java main method
+ */
+export function hasJavaMainMethod(code) {
+  if (!code || typeof code !== 'string') return false;
+  return /\b(?:public\s+|protected\s+|private\s+)?(?:static\s+)?void\s+main\s*\(/i.test(code);
+}
+
+/**
  * Prepare single Java cell code for execution
  * Separates imports, package-private helper classes, class-level methods, and statements
  * to guarantee valid Java compilation without "illegal start of expression" or filename conflicts.
@@ -768,10 +810,13 @@ export function prepareJavaCellCode(cellCode) {
   let text = (cellCode || '').trim();
   if (!text) return text;
 
+  // Normalize any main/Main method signatures to standard JVM entry point
+  text = normalizeJavaMainMethod(text);
+
   // 1. If code contains a main method:
-  if (/\b(?:public\s+)?static\s+void\s+main\b/.test(text)) {
+  if (/\bpublic\s+static\s+void\s+main\b/.test(text)) {
     // Check if it's already inside a class definition
-    const hasEnclosingClass = /\b(?:public\s+|final\s+|abstract\s+)*(?:class|record|enum)\s+[A-Za-z0-9_$]+[^{]*\{/.test(text);
+    const hasEnclosingClass = /\b(?:public\s+|final\s+|abstract\s+)*(?:class|record|enum)\s+([A-Za-z0-9_$]+)[^{]*\{/.test(text);
     if (!hasEnclosingClass) {
       // It's a bare method definition like: `public static void main(String[] args) { ... }`
       // Wrap it directly inside a class Main!
@@ -795,7 +840,15 @@ export function prepareJavaCellCode(cellCode) {
     });
     // If no class named Main exists, wrap or ensure Main class
     if (!/\bclass\s+Main\b/.test(text)) {
-      text = text.replace(/\bclass\s+([A-Za-z0-9_$]+)(\s*[^{]*\{[^}]*?\b(?:public\s+)?static\s+void\s+main\b)/s, 'class Main$2');
+      let renamedClass = null;
+      text = text.replace(/\bclass\s+([A-Za-z0-9_$]+)(\s*[^{]*\{[^}]*?\bpublic\s+static\s+void\s+main\b)/s, (m, oldName, rest) => {
+        renamedClass = oldName;
+        return `class Main${rest}`;
+      });
+      if (renamedClass && renamedClass !== 'Main') {
+        const ctorRegex = new RegExp(`\\b${renamedClass}\\s*\\(`, 'g');
+        text = text.replace(ctorRegex, 'Main(');
+      }
     }
     return text;
   }
@@ -814,10 +867,9 @@ export function prepareJavaCellCode(cellCode) {
   const methodsStr = parsed.methods.map((m) => m.split('\n').map((l) => '    ' + l).join('\n')).join('\n\n');
 
   let statementsCode = parsed.statements.join('\n\n').trim();
-  if (!statementsCode && parsed.classes.length > 0) {
-    statementsCode = 'System.out.println("✓ Java class definition loaded successfully.");';
-  } else if (!statementsCode && parsed.methods.length > 0) {
-    statementsCode = 'System.out.println("✓ Java method(s) defined successfully.");';
+  if (!statementsCode) {
+    // Keep definition cells silent without polluting stdout with dummy strings
+    statementsCode = '// Java definition cell compiled successfully';
   }
 
   const indentedStatements = statementsCode
@@ -846,14 +898,11 @@ export function prepareJavaNotebookCellCode(cells, activeIndex) {
   }
 
   const targetCell = cells[activeIndex];
-  const targetSource = typeof targetCell === 'string'
+  const rawTargetSource = typeof targetCell === 'string'
     ? targetCell
     : (Array.isArray(targetCell?.source) ? targetCell.source.join('') : (targetCell?.source || ''));
 
-  // If active cell already contains complete main method, run directly
-  if (/\b(?:public\s+)?static\s+void\s+main\b/.test(targetSource)) {
-    return prepareJavaCellCode(targetSource);
-  }
+  const normalizedTarget = normalizeJavaMainMethod(rawTargetSource);
 
   const allImports = new Set([
     'import java.util.*;',
@@ -870,7 +919,7 @@ export function prepareJavaNotebookCellCode(cells, activeIndex) {
     const c = cells[i];
     if (c && (c.cell_type === 'code' || typeof c === 'string')) {
       const src = typeof c === 'string' ? c : (Array.isArray(c.source) ? c.source.join('') : (c.source || ''));
-      if (src && src.trim() && !/\b(?:public\s+)?static\s+void\s+main\b/.test(src)) {
+      if (src && src.trim() && !hasJavaMainMethod(src)) {
         const parsed = parseJavaCellComponents(src);
         parsed.imports.forEach((imp) => allImports.add(imp));
         parsed.classes.forEach((cls) => allClasses.push(cls));
@@ -882,8 +931,19 @@ export function prepareJavaNotebookCellCode(cells, activeIndex) {
     }
   }
 
+  // If active cell contains a main method (standalone or inside class), run it directly!
+  if (hasJavaMainMethod(normalizedTarget)) {
+    const preparedActive = prepareJavaCellCode(normalizedTarget);
+    if (allClasses.length === 0) {
+      return preparedActive;
+    }
+    // Append helper classes from preceding cells so the main method can reference them
+    const precedingClassesStr = allClasses.join('\n\n');
+    return `${preparedActive}\n\n${precedingClassesStr}`;
+  }
+
   // Parse active cell
-  const activeParsed = parseJavaCellComponents(targetSource);
+  const activeParsed = parseJavaCellComponents(normalizedTarget);
   activeParsed.imports.forEach((imp) => allImports.add(imp));
   activeParsed.classes.forEach((cls) => allClasses.push(cls));
   activeParsed.methods.forEach((m) => allMethods.push(m));
@@ -895,14 +955,13 @@ export function prepareJavaNotebookCellCode(cells, activeIndex) {
   const methodsStr = allMethods.map((m) => m.split('\n').map((l) => '    ' + l).join('\n')).join('\n\n');
 
   let activeStatementsCode = activeStatements.join('\n\n').trim();
-  if (!activeStatementsCode && activeParsed.classes.length > 0) {
-    activeStatementsCode = 'System.out.println("✓ Defined class(es) successfully.");';
-  } else if (!activeStatementsCode && activeParsed.methods.length > 0) {
-    activeStatementsCode = 'System.out.println("✓ Defined method(s) successfully.");';
+  if (!activeStatementsCode) {
+    // Keep definition cells silent without polluting stdout with dummy strings
+    activeStatementsCode = '// Notebook cell compiled successfully';
   }
 
   let mainBody = '';
-  if (precedingStatements.length > 0 && activeStatementsCode) {
+  if (precedingStatements.length > 0 && activeStatementsCode && activeStatementsCode !== '// Notebook cell compiled successfully') {
     const precedingCode = precedingStatements.join('\n\n');
     mainBody = `        // Silence output during replay of preceding notebook cells
         java.io.PrintStream __realOut = System.out;
