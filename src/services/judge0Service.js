@@ -388,6 +388,7 @@ export function prepareJavaForExecution(code) {
 
   // Normalize any main/Main method signatures to canonical JVM entry point
   clean = normalizeJavaMainMethod(clean);
+  clean = clean.replace(/\bpublic\s*public\b/g, 'public');
 
   // If code already contains class Main with main method, return clean as-is
   if (/\b(?:public\s+|final\s+|abstract\s+)*class\s+Main\b/.test(clean) && /\b(?:public\s+)?static\s+void\s+main\b/.test(clean)) {

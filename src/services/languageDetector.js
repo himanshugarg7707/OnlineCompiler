@@ -772,23 +772,50 @@ export function normalizeJavaMainMethod(code) {
   if (!code || typeof code !== 'string') return code;
   let res = code;
 
-  // 1. Convert any (public/protected/private)? (static)? void Main( -> public static void main(String[] args)
+  // 1. Capitalized Main with public static -> public static void main(
   res = res.replace(
-    /\b(?:public\s+|protected\s+|private\s+)?(?:static\s+)?void\s+Main\s*\(\s*(?:String\s*(?:\[\s*\]|\.\.\.)\s*\w+|\w+\s*\[\s*\]|\s*)\)/gi,
+    /\bpublic\s+static\s+void\s+Main\s*\(/g,
+    'public static void main('
+  );
+
+  // 2. Convert protected/private static void main/Main -> public static void main(
+  res = res.replace(
+    /\b(?:protected|private)\s+static\s+void\s+main\s*\(/gi,
+    'public static void main('
+  );
+
+  // 3. Package-private: static void main NOT preceded by public, protected, or private
+  res = res.replace(
+    /(?<!\b(?:public|protected|private)\s+)\bstatic\s+void\s+main\s*\(/gi,
+    'public static void main('
+  );
+
+  // 4. Instance main: void main() or public void main() without static
+  res = res.replace(
+    /(?<!\bstatic\s+)\b(?:public\s+|protected\s+|private\s+)?void\s+main\s*\(\s*\)/gi,
     'public static void main(String[] args)'
   );
 
-  // 2. Normalize package-private/protected/private static void main( -> public static void main(
+  // 5. Clean up any parameter variations for public static void main
   res = res.replace(
-    /\b(?:protected|private)?\s*static\s+void\s+main\s*\(\s*(?:String\s*(?:\[\s*\]|\.\.\.)\s*\w+|\w+\s*\[\s*\]|\s*)\)/g,
-    'public static void main(String[] args)'
+    /\b(public\s+static\s+void\s+main\s*\()\s*String\s*\[\s*\]\s*args\s*\)/g,
+    '$1String[] args)'
+  );
+  res = res.replace(
+    /\b(public\s+static\s+void\s+main\s*\()\s*String\s+(\w+)\s*\[\s*\]\s*\)/g,
+    '$1String[] $2)'
+  );
+  res = res.replace(
+    /\b(public\s+static\s+void\s+main\s*\()\s*String\s*\.\.\.\s*(\w+)\s*\)/g,
+    '$1String[] $2)'
+  );
+  res = res.replace(
+    /\b(public\s+static\s+void\s+main\s*\()\s*\)/g,
+    '$1String[] args)'
   );
 
-  // 3. Normalize instance void main() -> public static void main(String[] args)
-  res = res.replace(
-    /\b(?:public\s+|protected\s+|private\s+)?void\s+main\s*\(\s*\)/g,
-    'public static void main(String[] args)'
-  );
+  // 6. Safety deduplication: ensure no repeated 'public' modifier
+  res = res.replace(/\bpublic\s*public\b/g, 'public');
 
   return res;
 }
