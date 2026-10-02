@@ -46,6 +46,7 @@ function AppContent() {
     handleFormatCode,
     handleCloseFile,
     handleDownloadWorkspace,
+    handleUpdateConfig,
     showToast,
   } = useApp();
   const { explorerOpen, practiceOpen, toast, terminalHidden } = state;
@@ -149,19 +150,30 @@ function AppContent() {
         e.preventDefault();
         dispatch({ type: 'TOGGLE_NAVBAR_MINIMIZED' });
       }
-      // Cmd+= or Cmd++ to Zoom In
+      // Cmd+= or Cmd++ to Zoom In (editor font size)
       if ((e.ctrlKey || e.metaKey) && (e.key === '=' || e.key === '+')) {
         e.preventDefault();
+        const currentSize = state.config?.fontSize || 16;
+        const newSize = Math.min(currentSize + 2, 40);
+        if (newSize !== currentSize) {
+          handleUpdateConfig({ fontSize: newSize });
+        }
         window.webkit?.messageHandlers?.nativeHost?.postMessage({ type: 'zoom_in' });
       }
-      // Cmd+- or Cmd+_ to Zoom Out
+      // Cmd+- or Cmd+_ to Zoom Out (editor font size)
       if ((e.ctrlKey || e.metaKey) && (e.key === '-' || e.key === '_')) {
         e.preventDefault();
+        const currentSize = state.config?.fontSize || 16;
+        const newSize = Math.max(currentSize - 2, 8);
+        if (newSize !== currentSize) {
+          handleUpdateConfig({ fontSize: newSize });
+        }
         window.webkit?.messageHandlers?.nativeHost?.postMessage({ type: 'zoom_out' });
       }
-      // Cmd+0 to Reset Zoom
+      // Cmd+0 to Reset Zoom (reset editor font size to default)
       if ((e.ctrlKey || e.metaKey) && e.key === '0') {
         e.preventDefault();
+        handleUpdateConfig({ fontSize: 16 });
         window.webkit?.messageHandlers?.nativeHost?.postMessage({ type: 'zoom_reset' });
       }
       // Escape to exit Full Page Code Mode
@@ -172,7 +184,7 @@ function AppContent() {
 
     window.addEventListener('keydown', handleKeyDown, { capture: true });
     return () => window.removeEventListener('keydown', handleKeyDown, { capture: true });
-  }, [handleRunCode, handleSaveActiveFile, handleCreateSequentialFile, handleToggleTerminal, dispatch, state.focusMode, state.files, state.activeFileId, state.code, state.stderr, state.compileOutput, state.stdout, state.detectedLanguage, isNotebookActive]);
+  }, [handleRunCode, handleSaveActiveFile, handleCreateSequentialFile, handleToggleTerminal, dispatch, state.focusMode, state.files, state.activeFileId, state.code, state.stderr, state.compileOutput, state.stdout, state.detectedLanguage, isNotebookActive, state.config, handleUpdateConfig]);
 
   // ── macOS Native Taskbar & Menu Bar Integration ──
   useEffect(() => {
