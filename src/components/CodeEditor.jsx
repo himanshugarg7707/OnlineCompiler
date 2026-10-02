@@ -459,10 +459,11 @@ export default function CodeEditor() {
       const model = editorRef.current.getModel();
       if (model && (monacoRef.current || window.monaco)) {
         const monaco = monacoRef.current || window.monaco;
-        monaco.editor.setModelLanguage(model, detectedLanguage.monacoLanguage);
+        const targetLang = detectedLanguage?.monacoLanguage || activeFile?.language?.monacoLanguage || 'plaintext';
+        monaco.editor.setModelLanguage(model, targetLang);
       }
     }
-  }, [detectedLanguage.monacoLanguage]);
+  }, [detectedLanguage?.monacoLanguage, activeFile?.language?.monacoLanguage]);
 
   // Synchronize editor content when changed from EXTERNAL sources (switching tabs, formatting, template load)
   useEffect(() => {
@@ -659,7 +660,7 @@ export default function CodeEditor() {
           <>
             <Editor
               height="100%"
-              language={detectedLanguage.monacoLanguage}
+              language={detectedLanguage?.monacoLanguage || activeFile?.language?.monacoLanguage || 'plaintext'}
               defaultValue={code}
               theme={activeMonacoTheme}
               options={editorOptions}

@@ -179,8 +179,8 @@ export default function SettingsModal() {
 
   const filteredLanguages = supportedLanguages.filter(
     (l) =>
-      l.name.toLowerCase().includes(langSearch.toLowerCase()) ||
-      l.monacoLanguage.toLowerCase().includes(langSearch.toLowerCase())
+      (l.name || '').toLowerCase().includes(langSearch.toLowerCase()) ||
+      (l.monacoLanguage || '').toLowerCase().includes(langSearch.toLowerCase())
   );
 
   const [storageInfo, setStorageInfo] = useState({

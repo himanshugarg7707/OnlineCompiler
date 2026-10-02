@@ -371,7 +371,12 @@ export async function pullWorkspaceFromGitHub(repoUrl, token = '', branch = 'mai
       content = blobData.content || '';
     }
 
-    const detectedLang = detectLanguageByFilename(blob.path);
+    const detectedLang = detectLanguageByFilename(blob.path) || {
+      id: 99,
+      name: 'Plain Text',
+      monacoLanguage: 'plaintext',
+      extension: 'txt',
+    };
     pulledFiles.push({
       id: `gh-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
       name: blob.path,

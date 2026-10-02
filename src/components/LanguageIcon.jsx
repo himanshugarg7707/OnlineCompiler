@@ -452,7 +452,7 @@ export function resolveLanguageKey(language, filename = '', workspaceFiles = [])
     if (id === 710) return 'jupyter';
     if (id === 711) return 'anaconda';
 
-    const str = `${language.name || ''} ${language.monacoLanguage || ''} ${language.extension || ''}`.toLowerCase();
+    const str = `${language?.name || ''} ${language?.monacoLanguage || ''} ${language?.extension || ''}`.toLowerCase();
     if (str.includes('ipynb') || str.includes('jupyter')) return 'jupyter';
     if (str.includes('anaconda') || str.includes('conda') || str.includes('yaml') || str.includes('yml')) return 'anaconda';
     if (str.includes('java') && !str.includes('javascript')) return 'java';
@@ -466,7 +466,7 @@ export function resolveLanguageKey(language, filename = '', workspaceFiles = [])
     if (str.includes('markdown') || str.includes('md')) return 'markdown';
     if (str.includes('rust')) return 'rust';
     if (str.includes('go')) return 'go';
-    if (language.name === 'C') return 'c';
+    if (language?.name === 'C') return 'c';
   }
 
   return 'generic';
