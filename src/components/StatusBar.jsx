@@ -2,9 +2,7 @@ import { useMemo, useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { Activity } from 'lucide-react';
 import { analyzeComplexity } from '../services/complexityAnalyzer';
-import { getFriendlyLanguageName, getCompilationIdentifier } from '../services/languageDetector';
 import { getWorkspaceGitStatus } from '../services/gitService';
-import LanguageIcon from './LanguageIcon';
 import './StatusBar.css';
 
 export default function StatusBar() {
@@ -55,10 +53,6 @@ export default function StatusBar() {
   } = state;
 
   const activeFile = files?.find((f) => f.id === activeFileId);
-  const displayName = getFriendlyLanguageName(detectedLanguage, activeFile?.name, files);
-  const compilationInfo = useMemo(() => {
-    return getCompilationIdentifier(detectedLanguage, activeFile?.name);
-  }, [detectedLanguage, activeFile?.name]);
 
   const isNotebook = Boolean(
     activeFile?.name?.endsWith('.ipynb') ||
@@ -151,26 +145,6 @@ export default function StatusBar() {
           Ln {cursorPosition.line}, Col {cursorPosition.column}
         </span>
 
-        {/* Real File Compilation Identifier Badge */}
-        <span
-          className="status-item compiler-ident-badge"
-          title={`Compiler Engine: ${compilationInfo.displayIdentifier}\nStandard: ${compilationInfo.standard}\nTarget: ${activeFile?.name || 'Code'}`}
-        >
-          <span className="material-symbols-outlined compiler-icon">memory</span>
-          <span>{compilationInfo.displayIdentifier}</span>
-        </span>
-
-        <span
-          className="status-item language"
-          onClick={() => {
-            window.location.hash = '#/settings?tab=general';
-            dispatch({ type: 'NAVIGATE_PAGE', payload: 'settings' });
-          }}
-          title="Detected Language"
-        >
-          <LanguageIcon language={detectedLanguage} filename={activeFile?.name} workspaceFiles={files} size={13} />
-          <span>{displayName}</span>
-        </span>
 
         <span className="status-item prettier-active" title="Code Formatter Active">
           <span className="prettier-indicator-dot" />

@@ -920,14 +920,6 @@ export default function OutputPanel() {
             </div>
           </div>
 
-          {/* Real Compiler Identifier Badge */}
-          <div
-            className="terminal-compiler-badge"
-            title={`Compiler: ${activeCompilerInfo.compilerName} (${activeCompilerInfo.compilerVersion || 'Standard'}) • Standard: ${activeCompilerInfo.standard || 'Default'} • Invocation: ${activeCompilerCommand}`}
-          >
-            <span className="material-symbols-outlined text-[13px]">terminal</span>
-            <span>{activeCompilerInfo.displayIdentifier}</span>
-          </div>
 
           {/* Engine Mode Switcher Pill */}
           <button
