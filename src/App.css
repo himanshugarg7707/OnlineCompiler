@@ -534,7 +534,47 @@ body.resizing-vertical * {
   z-index: 9999;
   display: flex;
   align-items: center;
+  gap: 8px;
   pointer-events: auto;
+}
+
+.zen-btn-split {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: var(--radius-full, 9999px);
+  background: rgba(15, 23, 42, 0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: var(--text-secondary, #94a3b8);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  opacity: 0.4;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+}
+
+.zen-btn-split:hover,
+.zen-btn-split.active {
+  opacity: 1;
+  background: rgba(99, 102, 241, 0.25);
+  color: #c7d2fe;
+  border-color: rgba(99, 102, 241, 0.5);
+  box-shadow: 0 4px 20px rgba(99, 102, 241, 0.25);
+  transform: translateY(-1px);
+}
+
+.zen-btn-split kbd {
+  font-size: 9px;
+  font-family: inherit;
+  padding: 1px 4px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.12);
+  color: inherit;
+  margin-left: 2px;
 }
 
 .zen-btn-exit {

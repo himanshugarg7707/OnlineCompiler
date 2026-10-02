@@ -511,6 +511,23 @@ export default function Header() {
                 </button>
                 <button
                   className="dropdown-entry"
+                  onClick={() => closeMenuAndRun(() => dispatch({ type: 'TOGGLE_SPLIT_VIEW' }))}
+                >
+                  <span>Toggle Split View (2 Files / Terminals)</span>
+                  <kbd>Alt+\</kbd>
+                </button>
+                <button
+                  className="dropdown-entry"
+                  onClick={() => closeMenuAndRun(() => {
+                    dispatch({ type: 'SET_SPLIT_VIEW', payload: true });
+                    dispatch({ type: 'SET_SPLIT_PANE_TYPE', payload: 'pdf' });
+                  })}
+                >
+                  <span>Open PDF in Split View</span>
+                  <kbd>PDF</kbd>
+                </button>
+                <button
+                  className="dropdown-entry"
                   onClick={() => closeMenuAndRun(() => dispatch({ type: 'TOGGLE_NAVBAR_MINIMIZED' }))}
                 >
                   <span>Minimize Navigation Bar</span>

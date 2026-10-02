@@ -26,8 +26,9 @@ import ExamTestPage from './pages/ExamTestPage';
 import TemplatesPage from './pages/TemplatesPage';
 import PracticePage from './pages/PracticePage';
 import GitPage from './pages/GitPage';
+import SplitPaneContainer from './components/SplitPaneContainer';
 import { getLanguageFromFilename } from './services/languageDetector';
-import { FolderTree, ChevronLeft, ChevronRight, Maximize2, Minimize2, Play } from 'lucide-react';
+import { FolderTree, ChevronLeft, ChevronRight, Maximize2, Minimize2, Play, Columns2 } from 'lucide-react';
 import './App.css';
 
 const SPLIT_STORAGE_KEY = 'fullcode_split_percent';
@@ -145,6 +146,11 @@ function AppContent() {
       if (e.key === 'F11' || (e.altKey && (e.key === 'z' || e.key === 'Z'))) {
         e.preventDefault();
         dispatch({ type: 'TOGGLE_FOCUS_MODE' });
+      }
+      // Alt+\ or Ctrl+\ to toggle Split View
+      if ((e.altKey && (e.key === '\\' || e.key === '|')) || ((e.ctrlKey || e.metaKey) && (e.key === '\\' || e.key === '|'))) {
+        e.preventDefault();
+        dispatch({ type: 'TOGGLE_SPLIT_VIEW' });
       }
       // Alt+M to toggle Navbar Minimized
       if (e.altKey && (e.key === 'm' || e.key === 'M')) {
@@ -566,6 +572,17 @@ function AppContent() {
             <span>Exit Full Screen</span>
             <kbd>Esc</kbd>
           </button>
+
+          <button
+            type="button"
+            className={`zen-btn-split ${state.splitViewOpen ? 'active' : ''}`}
+            onClick={() => dispatch({ type: 'TOGGLE_SPLIT_VIEW' })}
+            title="Toggle Split View (2 Files & 2 Terminals or PDF) (Alt+\)"
+          >
+            <Columns2 size={11} />
+            <span>{state.splitViewOpen ? 'Single View' : 'Split View (2 Terminals)'}</span>
+            <kbd>Alt+\</kbd>
+          </button>
         </div>
       )}
 
@@ -629,33 +646,41 @@ function AppContent() {
 
         {/* Main Editor & Output Split Panel */}
         <div className="main-content" ref={mainContentRef}>
-          <div
-            className="editor-section"
-            style={{
-              height: effectiveTerminalHidden ? '100%' : `${effectiveSplitPercent}%`,
-              flex: 'none',
-            }}
-          >
-            <CodeEditor />
-          </div>
-
-          {!effectiveTerminalHidden && (
+          {state.focusMode && state.splitViewOpen ? (
+            <div className="editor-section" style={{ height: '100%', flex: '1 1 auto' }}>
+              <SplitPaneContainer />
+            </div>
+          ) : (
             <>
               <div
-                className={`split-resizer ${isVerticalDragging ? 'dragging' : ''}`}
-                onMouseDown={handleVerticalMouseDown}
-                onTouchStart={handleVerticalTouchStart}
-                title="Drag to resize editor and terminal"
+                className="editor-section"
+                style={{
+                  height: effectiveTerminalHidden ? '100%' : `${effectiveSplitPercent}%`,
+                  flex: 'none',
+                }}
               >
-                <div className="resizer-handle" />
+                {state.splitViewOpen ? <SplitPaneContainer /> : <CodeEditor />}
               </div>
 
-              <div
-                className="output-section"
-                style={{ height: `${100 - effectiveSplitPercent}%`, flex: 'none' }}
-              >
-                <OutputPanel />
-              </div>
+              {!effectiveTerminalHidden && (
+                <>
+                  <div
+                    className={`split-resizer ${isVerticalDragging ? 'dragging' : ''}`}
+                    onMouseDown={handleVerticalMouseDown}
+                    onTouchStart={handleVerticalTouchStart}
+                    title="Drag to resize editor and terminal"
+                  >
+                    <div className="resizer-handle" />
+                  </div>
+
+                  <div
+                    className="output-section"
+                    style={{ height: `${100 - effectiveSplitPercent}%`, flex: 'none' }}
+                  >
+                    <OutputPanel />
+                  </div>
+                </>
+              )}
             </>
           )}
         </div>

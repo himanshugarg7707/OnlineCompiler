@@ -10,6 +10,8 @@ import {
   Lock,
   ZoomIn,
   ZoomOut,
+  Columns2,
+  FileText,
 } from 'lucide-react';
 import { isItemProtected, isItemUnlocked } from '../services/securityService';
 import PasswordPromptModal from './PasswordPromptModal';
@@ -28,6 +30,8 @@ export default function FileTabs() {
     handleCloseTab,
     handleRenameFile,
     handleSaveActiveFile,
+    handleToggleSplitView,
+    handleSetSplitPaneType,
     handleDownloadWorkspace,
     handleReorderTabs,
     handleUpdateConfig,
@@ -344,6 +348,38 @@ export default function FileTabs() {
         >
           <Download size={13} />
           <span>Save</span>
+        </button>
+
+        <button
+          className={`btn-tab-action ${state.splitViewOpen && state.splitPaneType !== 'pdf' ? 'active' : ''}`}
+          onClick={() => {
+            if (state.splitViewOpen && state.splitPaneType === 'file') {
+              handleToggleSplitView(false);
+            } else {
+              handleToggleSplitView(true);
+              handleSetSplitPaneType('file');
+            }
+          }}
+          title="Split View: Edit two files side-by-side (Alt+\)"
+        >
+          <Columns2 size={13} />
+          <span>Split</span>
+        </button>
+
+        <button
+          className={`btn-tab-action ${state.splitViewOpen && state.splitPaneType === 'pdf' ? 'active' : ''}`}
+          onClick={() => {
+            if (state.splitViewOpen && state.splitPaneType === 'pdf') {
+              handleToggleSplitView(false);
+            } else {
+              handleToggleSplitView(true);
+              handleSetSplitPaneType('pdf');
+            }
+          }}
+          title="Open PDF Viewer in Split View (Read notes/questions while coding)"
+        >
+          <FileText size={13} />
+          <span>PDF</span>
         </button>
 
         <button

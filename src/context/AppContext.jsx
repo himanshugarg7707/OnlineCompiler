@@ -397,6 +397,20 @@ const initialState = {
   compilerInfo: null,
   compilerCommand: null,
   clipboardFile: null, // { file, fileObj, copiedAt }
+  splitViewOpen: false,
+  splitPaneType: 'file', // 'file' | 'pdf'
+  splitActiveFileId: null,
+  splitPdfData: null, // { name, url, size }
+  splitRatio: 50,
+  splitExecution: {
+    output: '',
+    stderr: '',
+    compileOutput: '',
+    executionStatus: 'idle',
+    executionTime: null,
+    executionMemory: null,
+    stdin: '',
+  },
 };
 
 function saveStateToStorage(files, activeFileId, stdin, folders, openFileIds) {
@@ -1083,6 +1097,69 @@ function reducer(state, action) {
       return { ...state, unreadRoomChatCount: 0 };
     case 'SET_CLIPBOARD_FILE':
       return { ...state, clipboardFile: action.payload };
+    case 'TOGGLE_SPLIT_VIEW': {
+      const willOpen = !state.splitViewOpen;
+      let newSplitFileId = state.splitActiveFileId;
+      if (willOpen && !newSplitFileId) {
+        const otherFile = state.files.find((f) => f.id !== state.activeFileId) || state.files[0];
+        newSplitFileId = otherFile ? otherFile.id : null;
+      }
+      return {
+        ...state,
+        splitViewOpen: willOpen,
+        splitActiveFileId: newSplitFileId,
+      };
+    }
+    case 'SET_SPLIT_VIEW': {
+      let newSplitFileId = state.splitActiveFileId;
+      if (action.payload && !newSplitFileId) {
+        const otherFile = state.files.find((f) => f.id !== state.activeFileId) || state.files[0];
+        newSplitFileId = otherFile ? otherFile.id : null;
+      }
+      return {
+        ...state,
+        splitViewOpen: Boolean(action.payload),
+        splitActiveFileId: newSplitFileId,
+      };
+    }
+    case 'SET_SPLIT_PANE_TYPE':
+      return { ...state, splitPaneType: action.payload };
+    case 'SET_SPLIT_ACTIVE_FILE':
+      return { ...state, splitActiveFileId: action.payload };
+    case 'SET_SPLIT_PDF':
+      return { ...state, splitPdfData: action.payload };
+    case 'SET_SPLIT_RATIO':
+      return { ...state, splitRatio: action.payload };
+    case 'SET_SPLIT_CODE': {
+      const { fileId, content } = action.payload;
+      return {
+        ...state,
+        files: state.files.map((f) => (f.id === fileId ? { ...f, content } : f)),
+      };
+    }
+    case 'SET_SPLIT_STDIN':
+      return {
+        ...state,
+        splitExecution: { ...state.splitExecution, stdin: action.payload },
+      };
+    case 'SET_SPLIT_EXECUTION_STATUS':
+      return {
+        ...state,
+        splitExecution: { ...state.splitExecution, executionStatus: action.payload },
+      };
+    case 'SET_SPLIT_EXECUTION_RESULT':
+      return {
+        ...state,
+        splitExecution: {
+          ...state.splitExecution,
+          output: action.payload.output ?? '',
+          stderr: action.payload.error ?? action.payload.stderr ?? '',
+          compileOutput: action.payload.compileOutput ?? '',
+          executionStatus: action.payload.status ?? (action.payload.success ? 'success' : 'error'),
+          executionTime: action.payload.time ?? null,
+          executionMemory: action.payload.memory ?? null,
+        },
+      };
     case 'SET_ACTIVE_USER':
       return { ...state, activeUser: action.payload };
     case 'TOGGLE_FOCUS_MODE':
@@ -1562,6 +1639,103 @@ export function AppProvider({ children }) {
 
     showToast(`Pasted "${finalPath.split('/').pop()}"! 📋`);
   }, [state.clipboardFile, state.files, showToast]);
+
+  // Toggle or force split view
+  const handleToggleSplitView = useCallback((forcedState = null) => {
+    if (forcedState !== null) {
+      dispatch({ type: 'SET_SPLIT_VIEW', payload: forcedState });
+    } else {
+      dispatch({ type: 'TOGGLE_SPLIT_VIEW' });
+    }
+  }, []);
+
+  // Set the active file displayed in the second/split pane
+  const handleSetSplitActiveFile = useCallback((fileId) => {
+    dispatch({ type: 'SET_SPLIT_ACTIVE_FILE', payload: fileId });
+    dispatch({ type: 'SET_SPLIT_PANE_TYPE', payload: 'file' });
+  }, []);
+
+  // Switch right pane type: 'file' | 'pdf'
+  const handleSetSplitPaneType = useCallback((type) => {
+    dispatch({ type: 'SET_SPLIT_PANE_TYPE', payload: type });
+  }, []);
+
+  // Upload or set a PDF for the split pane
+  const handleUploadSplitPdf = useCallback((fileOrBlob, fileName = 'document.pdf') => {
+    if (!fileOrBlob) return;
+    try {
+      const url = URL.createObjectURL(fileOrBlob);
+      const name = fileOrBlob.name || fileName;
+      const size = fileOrBlob.size || 0;
+      dispatch({
+        type: 'SET_SPLIT_PDF',
+        payload: { name, url, size },
+      });
+      dispatch({ type: 'SET_SPLIT_PANE_TYPE', payload: 'pdf' });
+      dispatch({ type: 'SET_SPLIT_VIEW', payload: true });
+      showToast(`Loaded "${name}" in Split PDF Viewer 📄`);
+    } catch (err) {
+      showToast(`Failed to load PDF: ${err.message}`);
+    }
+  }, [showToast]);
+
+  // Close active split PDF
+  const handleCloseSplitPdf = useCallback(() => {
+    if (state.splitPdfData?.url) {
+      try { URL.revokeObjectURL(state.splitPdfData.url); } catch {}
+    }
+    dispatch({ type: 'SET_SPLIT_PDF', payload: null });
+    dispatch({ type: 'SET_SPLIT_PANE_TYPE', payload: 'file' });
+  }, [state.splitPdfData]);
+
+  // Update code content inside split pane
+  const handleSplitCodeChange = useCallback((fileId, newContent) => {
+    dispatch({
+      type: 'SET_SPLIT_CODE',
+      payload: { fileId, content: newContent },
+    });
+  }, []);
+
+  // Execute the code in Pane 2 independently
+  const handleRunSplitCode = useCallback(async () => {
+    const splitFile = state.files.find((f) => f.id === state.splitActiveFileId) || state.files[1] || state.files[0];
+    if (!splitFile) {
+      showToast('No file to run in split pane ⚠️');
+      return;
+    }
+
+    dispatch({ type: 'SET_SPLIT_EXECUTION_STATUS', payload: 'running' });
+
+    try {
+      const codeToRun = splitFile.content || '';
+      const lang = resolveLanguage(splitFile.language, splitFile.name);
+      const effectiveStdin = state.splitExecution?.stdin || '';
+
+      const result = await executeCode(codeToRun, lang.id, effectiveStdin, state.files, splitFile.name);
+
+      dispatch({
+        type: 'SET_SPLIT_EXECUTION_RESULT',
+        payload: {
+          output: result.output || '',
+          stderr: result.error || result.stderr || '',
+          compileOutput: result.compileOutput || '',
+          success: result.success,
+          time: result.time,
+          memory: result.memory,
+        },
+      });
+      showToast(`Finished running ${splitFile.name} in Terminal 2 🚀`);
+    } catch (err) {
+      dispatch({
+        type: 'SET_SPLIT_EXECUTION_RESULT',
+        payload: {
+          output: '',
+          stderr: err.message || 'Execution failed',
+          success: false,
+        },
+      });
+    }
+  }, [state.files, state.splitActiveFileId, state.splitExecution?.stdin, showToast]);
 
   // Save single active file: Opens "Save As" modal for custom name & target selection
   const handleSaveActiveFile = useCallback((targetFile = null) => {
@@ -2304,6 +2478,13 @@ export function AppProvider({ children }) {
     handleCopyFilePath,
     handleCopyFileAsFile,
     handlePasteFile,
+    handleToggleSplitView,
+    handleSetSplitActiveFile,
+    handleSetSplitPaneType,
+    handleUploadSplitPdf,
+    handleCloseSplitPdf,
+    handleSplitCodeChange,
+    handleRunSplitCode,
     handleDownloadWorkspace,
     handleLoadWorkspaceState,
     handleRunCode,

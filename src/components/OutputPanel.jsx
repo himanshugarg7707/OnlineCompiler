@@ -770,7 +770,13 @@ function TerminalTab() {
 }
 
 // ─── Main OutputPanel ────────────────────────────────────────────────────
-export default function OutputPanel() {
+export default function OutputPanel({
+  isSplitTerminal = false,
+  overrideFile = null,
+  overrideState = null,
+  onRun = null,
+  terminalTitle = '',
+} = {}) {
   const {
     state,
     dispatch,
@@ -785,7 +791,7 @@ export default function OutputPanel() {
   const activeTab = state.activeTerminalTab || 'output';
   const setActiveTab = (tabId) => dispatch({ type: 'SET_TERMINAL_TAB', payload: tabId });
   const generateInputFn = handleGenerateInput || handleGenerateInputs;
-
+  const runCodeFn = onRun || handleRunCode;
 
   const handleAutoGenerateInputAndRun = async () => {
     setActiveTab('output');
@@ -801,14 +807,9 @@ export default function OutputPanel() {
     }
   };
 
+  const effectiveState = isSplitTerminal && overrideState ? overrideState : state;
+
   const {
-    output,
-    stderr,
-    compileOutput,
-    executionStatus,
-    executionTime,
-    executionMemory,
-    stdin,
     inputDescription,
     aiExplanation,
     sqlData,
@@ -819,7 +820,15 @@ export default function OutputPanel() {
     activeFileId,
   } = state;
 
-  const activeFile = files.find((f) => f.id === activeFileId) || files[0];
+  const output = effectiveState.output ?? state.output;
+  const stderr = effectiveState.stderr ?? state.stderr;
+  const compileOutput = effectiveState.compileOutput ?? state.compileOutput;
+  const executionStatus = effectiveState.executionStatus ?? state.executionStatus;
+  const executionTime = effectiveState.executionTime ?? state.executionTime;
+  const executionMemory = effectiveState.executionMemory ?? state.executionMemory;
+  const stdin = effectiveState.stdin ?? state.stdin;
+
+  const activeFile = isSplitTerminal && overrideFile ? overrideFile : (files.find((f) => f.id === activeFileId) || files[0]);
   const isNotebook = Boolean(
     activeFile?.name?.endsWith('.ipynb') ||
     detectedLanguage?.monacoLanguage === 'ipynb' ||
@@ -950,16 +959,16 @@ export default function OutputPanel() {
             {/* Terminal in use indicator banner */}
             <div className="terminal-in-use-banner">
               <div className="in-use-left">
-                <span className="in-use-dot" />
+                <span className={`in-use-dot ${isSplitTerminal ? 'split-terminal-dot' : ''}`} />
                 <span className="in-use-text">
-                  Terminal in use with: <strong>{activeFile?.name || 'File'}</strong>
+                  {terminalTitle || (isSplitTerminal ? 'Terminal 2 in use with:' : 'Terminal in use with:')} <strong>{activeFile?.name || 'File'}</strong>
                 </span>
                 <span className="in-use-lang">({getFriendlyLanguageName(activeFile?.language, activeFile?.name)})</span>
               </div>
               <div className="in-use-right">
                 <button
                   className="btn-in-use-action"
-                  onClick={handleRunCode}
+                  onClick={runCodeFn}
                   disabled={isRunning}
                   title={`Run ${activeFile?.name}`}
                 >
