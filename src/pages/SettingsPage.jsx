@@ -45,7 +45,9 @@ import {
   AlertCircle,
   Glasses,
   Ghost,
+  BookOpen,
 } from 'lucide-react';
+import MemoryLearningLab from '../components/MemoryLearningLab';
 import {
   getGitHubConfig,
   saveGitHubConfig,
@@ -198,6 +200,7 @@ export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState(() => {
     if (typeof window !== 'undefined') {
       const hash = window.location.hash || '';
+      if (hash.includes('tab=learning') || hash.includes('tab=dsa')) return 'learning';
       if (hash.includes('tab=incognito')) return 'incognito';
       if (hash.includes('tab=import')) return 'import';
       if (hash.includes('tab=history')) return 'history';
@@ -980,6 +983,21 @@ export default function SettingsPage() {
               <span className="nav-title">Git & GitHub</span>
               <span className="nav-sub">Remote repository & sync</span>
             </div>
+          </button>
+
+          <div className="sidebar-group-title">LEARNING & ALGORITHMS</div>
+          <button
+            className={`settings-nav-item ${activeTab === 'learning' ? 'active' : ''}`}
+            onClick={() => setActiveTab('learning')}
+          >
+            <BookOpen size={16} className="nav-icon" style={{ color: '#c084fc' }} />
+            <div className="nav-text">
+              <span className="nav-title">Memory & DSA Lab</span>
+              <span className="nav-sub">Stack, Heap, Queue & Pointers</span>
+            </div>
+            <span className="nav-pill highlight" style={{ background: 'rgba(192, 132, 252, 0.25)', color: '#e9d5ff' }}>
+              Lab
+            </span>
           </button>
 
           <div className="sidebar-group-title">PRIVACY & EPHEMERAL</div>
@@ -2797,6 +2815,13 @@ export default function SettingsPage() {
                   </div>
                 </div>
               </div>
+            </div>
+          )}
+
+          {/* TAB: INTERACTIVE LEARNING & MEMORY LAB */}
+          {activeTab === 'learning' && (
+            <div className="settings-section animate-fade-in" style={{ height: 'calc(100vh - 120px)', minHeight: '600px' }}>
+              <MemoryLearningLab />
             </div>
           )}
         </main>

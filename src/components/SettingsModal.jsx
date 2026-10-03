@@ -29,7 +29,9 @@ import {
   FolderGit2,
   Glasses,
   Ghost,
+  BookOpen,
 } from 'lucide-react';
+import MemoryLearningLab from './MemoryLearningLab';
 import { getSupportedLanguages, getLanguageById } from '../services/languageDetector';
 import { resetConfig } from '../services/configService';
 import {
@@ -982,7 +984,48 @@ export default function SettingsModal() {
             </div>
           </div>
 
-          {/* ─── 6. INCOGNITO MODE (EPHEMERAL WORKSPACE) ─── */}
+          {/* ─── 6. INTERACTIVE DSA & MEMORY LEARNING LAB ─── */}
+          <div className="settings-section learning-settings-section">
+            <div className="section-title-wrapper" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <BookOpen size={18} className="section-icon-accent" style={{ color: '#c084fc' }} />
+                <h3 className="section-title">Interactive Memory & Algorithm Lab</h3>
+              </div>
+              <button
+                type="button"
+                className="btn-open-learning-full"
+                onClick={() => {
+                  dispatch({ type: 'TOGGLE_SETTINGS' });
+                  window.location.hash = '#/settings?tab=learning';
+                  dispatch({ type: 'NAVIGATE_PAGE', payload: 'settings' });
+                }}
+                style={{
+                  background: 'rgba(192, 132, 252, 0.15)',
+                  border: '1px solid rgba(192, 132, 252, 0.4)',
+                  color: '#e9d5ff',
+                  padding: '4px 10px',
+                  borderRadius: '6px',
+                  fontSize: '11.5px',
+                  fontWeight: '600',
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '5px',
+                }}
+              >
+                <span>Full Lab View</span>
+                <span>→</span>
+              </button>
+            </div>
+            <p className="section-desc" style={{ margin: '6px 0 12px 0', fontSize: '12px', color: 'var(--text-secondary)' }}>
+              Editable sample code on the left — animated Stack frames, dynamic Heap allocations, Queue buffers and pointers on the right.
+            </p>
+            <div style={{ height: '360px', borderRadius: '8px', overflow: 'hidden', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
+              <MemoryLearningLab initialPresetId="heap-allocation-pointers" />
+            </div>
+          </div>
+
+          {/* ─── 7. INCOGNITO MODE (EPHEMERAL WORKSPACE) ─── */}
           <div className="settings-section incognito-settings-section">
             <div className="section-title-wrapper">
               <Glasses size={18} className="section-icon-accent incognito-accent" />

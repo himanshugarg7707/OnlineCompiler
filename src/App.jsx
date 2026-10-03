@@ -19,6 +19,7 @@ import WorkspacesModal from './components/WorkspacesModal';
 import BranchSwitcherModal from './components/BranchSwitcherModal';
 import WelcomeLandingModal from './components/WelcomeLandingModal';
 import TemplatesModal from './components/TemplatesModal';
+import DsaVisualizerModal from './components/DsaVisualizerModal';
 import SharedWorkspaceBanner from './components/SharedWorkspaceBanner';
 import SettingsPage from './pages/SettingsPage';
 import NotebookSetupPage from './pages/NotebookSetupPage';
@@ -63,6 +64,15 @@ function AppContent() {
   // Rule: In notebooks, the terminal is completely hidden (inline cell execution only).
   // In regular code files, respect terminalHidden state.
   const effectiveTerminalHidden = isNotebookActive ? true : terminalHidden;
+
+  // Interactive DSA & Execution Visualizer Modal State
+  const [dsaVisualizerOpen, setDsaVisualizerOpen] = useState(false);
+
+  useEffect(() => {
+    const handleOpenDsa = () => setDsaVisualizerOpen(true);
+    window.addEventListener('open-dsa-visualizer', handleOpenDsa);
+    return () => window.removeEventListener('open-dsa-visualizer', handleOpenDsa);
+  }, []);
 
   // Vertical Editor/Terminal Split
   const [splitPercent, setSplitPercent] = useState(() => {
@@ -766,6 +776,10 @@ function AppContent() {
       <TemplatesModal
         isOpen={state.templatesModalOpen}
         onClose={() => dispatch({ type: 'SET_TEMPLATES_MODAL', payload: false })}
+      />
+      <DsaVisualizerModal
+        isOpen={dsaVisualizerOpen}
+        onClose={() => setDsaVisualizerOpen(false)}
       />
     </div>
   );

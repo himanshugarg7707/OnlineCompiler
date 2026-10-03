@@ -26,6 +26,8 @@ import {
   Search,
   ExternalLink,
   Glasses,
+  FlaskConical,
+  Brain,
 } from 'lucide-react';
 import LanguageSelector from './LanguageSelector';
 import LanguageIcon from './LanguageIcon';
@@ -968,6 +970,34 @@ export default function Header() {
         >
           <Glasses size={14} />
           {state.incognitoMode && <span className="glass-incognito-pip" />}
+        </button>
+
+        {/* Test Suite & Stress Tester Quick Glass Button */}
+        <button
+          type="button"
+          className="btn-icon-top header-glass-top-btn"
+          onClick={() => {
+            dispatch({ type: 'SET_TERMINAL_TAB', payload: 'tests' });
+            if (state.terminalHidden) {
+              dispatch({ type: 'SET_TERMINAL_HIDDEN', payload: false });
+            }
+            showToast('🧪 Test Case Suite & Stress Tester opened in bottom panel');
+          }}
+          title="🧪 Test Case Suite & Stress Tester: Batch I/O, Character Diff & Edge Case Generator"
+        >
+          <FlaskConical size={14} />
+        </button>
+
+        {/* Interactive DSA & Memory Visualizer Glass Button */}
+        <button
+          type="button"
+          className="btn-icon-top header-glass-top-btn"
+          onClick={() => {
+            window.dispatchEvent(new CustomEvent('open-dsa-visualizer'));
+          }}
+          title="🧠 Interactive DSA & Execution Visualizer: Call Stack, Heap Objects, Recursion Tree & Complexity Heatmap"
+        >
+          <Brain size={14} />
         </button>
 
         {/* Settings Button */}

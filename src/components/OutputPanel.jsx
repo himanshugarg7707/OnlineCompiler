@@ -17,10 +17,12 @@ import {
   CheckCircle2,
   Activity,
   AlertCircle,
+  FlaskConical,
 } from 'lucide-react';
 import DatabasePanel from './DatabasePanel';
 import WebPreviewPanel from './WebPreviewPanel';
 import ComplexityTab from './ComplexityTab';
+import TestCaseSuitePanel from './TestCaseSuitePanel';
 import LanguageIcon from './LanguageIcon';
 import { getFriendlyLanguageName, getCompilationIdentifier } from '../services/languageDetector';
 import { isLocalEnvironment } from '../services/judge0Service';
@@ -29,6 +31,7 @@ import './OutputPanel.css';
 const TABS = [
   { id: 'terminal', label: 'Terminal', icon: TerminalSquare },
   { id: 'output', label: 'Output', icon: Terminal },
+  { id: 'tests', label: 'Test Suite', icon: FlaskConical },
   { id: 'problems', label: 'Problems', icon: AlertCircle },
   { id: 'complexity', label: 'Complexity', icon: Activity },
   { id: 'web', label: 'Web Preview', icon: Globe },
@@ -1164,6 +1167,9 @@ export default function OutputPanel({
             )}
           </div>
         )}
+        {/* Test Suite & Stress Tester Tab */}
+        {activeTab === 'tests' && <TestCaseSuitePanel />}
+
         {/* Complexity Tab */}
         {activeTab === 'complexity' && <ComplexityTab />}
 
