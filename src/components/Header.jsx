@@ -948,6 +948,29 @@ export default function Header() {
           <span>{isRunning ? 'Running...' : 'Run'}</span>
         </button>
 
+        {/* Incognito Mode Quick Button */}
+        <button
+          type="button"
+          className={`btn-header-incognito ${state.incognitoMode ? 'active' : ''}`}
+          onClick={() => {
+            window.location.hash = '#/settings?tab=incognito';
+            dispatch({ type: 'NAVIGATE_PAGE', payload: 'settings' });
+          }}
+          title={
+            state.incognitoMode
+              ? '🕶️ Incognito Mode is ACTIVE: Data vanishes on refresh. Click to configure.'
+              : 'Incognito Mode: Ephemeral workspace that vanishes on refresh. Click to open.'
+          }
+        >
+          <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>
+            visibility_off
+          </span>
+          <span className="btn-header-incognito-text">
+            {state.incognitoMode ? 'Incognito ON' : 'Incognito'}
+          </span>
+          {state.incognitoMode && <span className="header-incognito-dot" />}
+        </button>
+
         {/* Settings Button */}
         <button
           className="btn-icon-top"

@@ -1491,5 +1491,64 @@
   cursor: pointer;
 }
 
+/* ─── Incognito Quick Button in Top Header ───────────────────────────────── */
+.btn-header-incognito {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: var(--radius-sm, 6px);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: var(--text-secondary, #c2c6d6);
+  font-size: 11.5px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  user-select: none;
+}
+
+.btn-header-incognito:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text-primary, #ffffff);
+  border-color: rgba(255, 255, 255, 0.25);
+}
+
+.btn-header-incognito.active {
+  background: rgba(192, 132, 252, 0.18);
+  border-color: rgba(192, 132, 252, 0.5);
+  color: #e9d5ff;
+  box-shadow: 0 0 12px rgba(192, 132, 252, 0.25);
+}
+
+.btn-header-incognito.active:hover {
+  background: rgba(192, 132, 252, 0.28);
+  color: #ffffff;
+}
+
+.btn-header-incognito .material-symbols-outlined {
+  color: #c084fc;
+}
+
+.header-incognito-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #c084fc;
+  box-shadow: 0 0 8px #c084fc;
+  display: inline-block;
+}
+
+@media (max-width: 680px) {
+  .btn-header-incognito-text {
+    display: none;
+  }
+  .btn-header-incognito {
+    padding: 0 6px;
+  }
+}
+
+
 
 

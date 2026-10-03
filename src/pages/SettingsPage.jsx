@@ -43,6 +43,8 @@ import {
   EyeOff,
   ExternalLink,
   AlertCircle,
+  Glasses,
+  Ghost,
 } from 'lucide-react';
 import {
   getGitHubConfig,
@@ -66,6 +68,7 @@ import {
   getStorageEstimate,
   requestPersistentStorage,
   downloadBackupFile,
+  hasPersistedDataInLocalStorage,
 } from '../services/storageService';
 import { generateShareUrl } from '../services/shareService';
 import {
@@ -185,13 +188,17 @@ export default function SettingsPage() {
     handleCodeChange,
     handleAddFile,
     handleLoadWorkspaceState,
+    handleToggleIncognitoMode,
+    handleVanishIncognitoData,
+    handleRestoreSavedWorkspace,
     showToast,
   } = useApp();
 
-  const { config, files, folders } = state;
+  const { config, files, folders, incognitoMode } = state;
   const [activeTab, setActiveTab] = useState(() => {
     if (typeof window !== 'undefined') {
       const hash = window.location.hash || '';
+      if (hash.includes('tab=incognito')) return 'incognito';
       if (hash.includes('tab=import')) return 'import';
       if (hash.includes('tab=history')) return 'history';
       if (hash.includes('tab=zip')) return 'zip';
@@ -973,6 +980,25 @@ export default function SettingsPage() {
               <span className="nav-title">Git & GitHub</span>
               <span className="nav-sub">Remote repository & sync</span>
             </div>
+          </button>
+
+          <div className="sidebar-group-title">PRIVACY & EPHEMERAL</div>
+          <button
+            className={`settings-nav-item incognito-sidebar-item ${activeTab === 'incognito' ? 'active' : ''}`}
+            onClick={() => setActiveTab('incognito')}
+          >
+            <Glasses size={16} className="nav-icon incognito-nav-icon" />
+            <div className="nav-text">
+              <span className="nav-title">Incognito Mode</span>
+              <span className="nav-sub">Vanish on refresh, no disk save</span>
+            </div>
+            {incognitoMode ? (
+              <span className="nav-pill highlight" style={{ background: '#c084fc', color: '#000', fontWeight: 'bold' }}>
+                ON
+              </span>
+            ) : (
+              <span className="nav-pill">OFF</span>
+            )}
           </button>
         </aside>
 
@@ -2628,6 +2654,145 @@ export default function SettingsPage() {
                       >
                         {gitTesting ? 'Testing...' : 'Test Connection'}
                       </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* TAB: INCOGNITO EPHEMERAL MODE */}
+          {activeTab === 'incognito' && (
+            <div className="settings-section animate-fade-in">
+              <div className="section-hero">
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <Glasses size={28} style={{ color: '#c084fc' }} />
+                  <div>
+                    <h2>Incognito Mode (Ephemeral Workspace)</h2>
+                    <p>Work privately without leaving traces. Data is never saved to disk and vanishes automatically on refresh.</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="settings-cards-grid">
+                {/* Main Toggle Banner Card */}
+                <div className={`feature-card ${incognitoMode ? 'highlight-card' : ''}`} style={incognitoMode ? { borderColor: 'rgba(192, 132, 252, 0.5)', background: 'linear-gradient(145deg, rgba(24, 18, 43, 0.9) 0%, rgba(13, 17, 23, 0.95) 100%)' } : {}}>
+                  <div className="card-top">
+                    <div className="card-icon-wrap" style={{ background: 'rgba(192, 132, 252, 0.18)', color: '#c084fc' }}>
+                      {incognitoMode ? <Ghost size={24} /> : <Glasses size={24} />}
+                    </div>
+                    <div className="card-info" style={{ flex: 1 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '4px' }}>
+                        <h3 style={{ margin: 0 }}>
+                          {incognitoMode ? 'Incognito Mode is Currently ACTIVE' : 'Enable Incognito Ephemeral Mode'}
+                        </h3>
+                        <span
+                          style={{
+                            fontSize: '11px',
+                            fontWeight: 'bold',
+                            padding: '2px 8px',
+                            borderRadius: '12px',
+                            background: incognitoMode ? 'rgba(192, 132, 252, 0.25)' : 'rgba(255, 255, 255, 0.08)',
+                            color: incognitoMode ? '#e9d5ff' : 'var(--text-muted)',
+                            border: '1px solid rgba(192, 132, 252, 0.35)',
+                          }}
+                        >
+                          {incognitoMode ? '🕶️ Vanish on Refresh' : '○ Disabled'}
+                        </span>
+                      </div>
+                      <p style={{ margin: 0, color: 'var(--text-secondary)', fontSize: '13px', lineHeight: 1.5 }}>
+                        {incognitoMode
+                          ? 'Zero data is written to disk. Any code edits, added files, and terminal logs will vanish completely the moment you refresh the page or close your browser.'
+                          : 'Standard auto-save is currently enabled. All code files, history snapshots, and configurations are preserved in local browser storage.'}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', gap: '12px', alignItems: 'center', marginTop: '16px', flexWrap: 'wrap' }}>
+                    <button
+                      type="button"
+                      className="btn-done-primary"
+                      onClick={() => handleToggleIncognitoMode()}
+                      style={{
+                        background: incognitoMode ? '#c084fc' : 'var(--accent-cyan)',
+                        color: '#000',
+                        fontWeight: 'bold',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                      }}
+                    >
+                      <Glasses size={16} />
+                      {incognitoMode ? 'Turn OFF Incognito Mode' : 'Turn ON Incognito Mode'}
+                    </button>
+
+                    {incognitoMode && (
+                      <button
+                        type="button"
+                        className="btn-cyber-secondary"
+                        onClick={handleVanishIncognitoData}
+                        style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', color: '#f87171', borderColor: 'rgba(239, 68, 68, 0.4)' }}
+                        title="Reset workspace in memory right now without reloading"
+                      >
+                        <Sparkles size={14} />
+                        Vanish Data & Reset Now
+                      </button>
+                    )}
+
+                    {hasPersistedDataInLocalStorage() && (
+                      <button
+                        type="button"
+                        className="btn-cyber-secondary"
+                        onClick={handleRestoreSavedWorkspace}
+                        style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                        title="Reload previously saved persistent workspace from disk"
+                      >
+                        <RotateCcw size={14} />
+                        Restore Saved Files from Disk
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* 3 Pillars of Incognito Mode */}
+                <div className="feature-card">
+                  <div className="card-top">
+                    <div className="card-icon-wrap" style={{ background: 'rgba(234, 179, 8, 0.15)', color: '#facc15' }}>
+                      <Zap size={20} />
+                    </div>
+                    <div className="card-info">
+                      <h3>Vanish on Refresh Guaranteed</h3>
+                      <p>
+                        Refreshing the page (<kbd>Cmd/Ctrl+R</kbd>) or pressing the browser reload button immediately discards all code, created files, and terminals without leaving anything behind.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="feature-card">
+                  <div className="card-top">
+                    <div className="card-icon-wrap" style={{ background: 'rgba(59, 130, 246, 0.15)', color: '#60a5fa' }}>
+                      <Shield size={20} />
+                    </div>
+                    <div className="card-info">
+                      <h3>Strict Zero Disk Footprint</h3>
+                      <p>
+                        All <code>localStorage</code> writes are strictly intercepted and blocked. No version history, no session tokens, and no cache files are written to your computer.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="feature-card">
+                  <div className="card-top">
+                    <div className="card-icon-wrap" style={{ background: 'rgba(34, 197, 94, 0.15)', color: '#4ade80' }}>
+                      <Code2 size={20} />
+                    </div>
+                    <div className="card-info">
+                      <h3>100% Same Compiler Features</h3>
+                      <p>
+                        Run code across 40+ programming languages, open dual terminals, view PDFs side-by-side, sketch ink annotations, and use AI hints with identical speed and power in temporary RAM.
+                      </p>
                     </div>
                   </div>
                 </div>
