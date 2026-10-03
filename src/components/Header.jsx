@@ -25,6 +25,7 @@ import {
   Sparkles,
   Search,
   ExternalLink,
+  Glasses,
 } from 'lucide-react';
 import LanguageSelector from './LanguageSelector';
 import LanguageIcon from './LanguageIcon';
@@ -42,6 +43,7 @@ export default function Header() {
     handleSaveActiveFile,
     handleDownloadWorkspace,
     handleUpdateConfig,
+    handleToggleIncognitoMode,
     showToast,
   } = useApp();
   const { executionStatus, explorerOpen, activeUser, files, activeFileId, config } = state;
@@ -948,27 +950,24 @@ export default function Header() {
           <span>{isRunning ? 'Running...' : 'Run'}</span>
         </button>
 
-        {/* Incognito Mode Quick Button */}
+        {/* Incognito Mode Small Glass Button */}
         <button
           type="button"
-          className={`btn-header-incognito ${state.incognitoMode ? 'active' : ''}`}
-          onClick={() => {
+          className={`btn-icon-top header-glass-incognito-btn ${state.incognitoMode ? 'active' : ''}`}
+          onClick={() => handleToggleIncognitoMode()}
+          onContextMenu={(e) => {
+            e.preventDefault();
             window.location.hash = '#/settings?tab=incognito';
             dispatch({ type: 'NAVIGATE_PAGE', payload: 'settings' });
           }}
           title={
             state.incognitoMode
-              ? '🕶️ Incognito Mode is ACTIVE: Data vanishes on refresh. Click to configure.'
-              : 'Incognito Mode: Ephemeral workspace that vanishes on refresh. Click to open.'
+              ? '🕶️ Incognito Active: Data vanishes on reload (Click to turn OFF • Right-click for Settings)'
+              : '🕶️ Incognito Mode: Click to turn ON (Zero data saved, vanishes on refresh)'
           }
         >
-          <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>
-            visibility_off
-          </span>
-          <span className="btn-header-incognito-text">
-            {state.incognitoMode ? 'Incognito ON' : 'Incognito'}
-          </span>
-          {state.incognitoMode && <span className="header-incognito-dot" />}
+          <Glasses size={14} />
+          {state.incognitoMode && <span className="glass-incognito-pip" />}
         </button>
 
         {/* Settings Button */}
