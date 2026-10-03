@@ -158,3 +158,47 @@ export function downloadBackupFile() {
   document.body.removeChild(anchor);
   URL.revokeObjectURL(url);
 }
+
+export const INCOGNITO_MODE_KEY = 'fullcode_incognito_mode_active';
+
+/**
+ * Checks whether incognito / ephemeral session is currently active
+ */
+export function isIncognitoActive() {
+  try {
+    if (typeof window === 'undefined') return false;
+    return sessionStorage.getItem(INCOGNITO_MODE_KEY) === 'true';
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Enable or disable incognito session in temporary browser memory
+ */
+export function setIncognitoActive(active) {
+  try {
+    if (typeof window === 'undefined') return;
+    if (active) {
+      sessionStorage.setItem(INCOGNITO_MODE_KEY, 'true');
+    } else {
+      sessionStorage.removeItem(INCOGNITO_MODE_KEY);
+    }
+  } catch (err) {
+    console.warn('Failed to update incognito mode in sessionStorage:', err);
+  }
+}
+
+/**
+ * Check if there is previously saved persistent workspace in localStorage
+ */
+export function hasPersistedDataInLocalStorage() {
+  try {
+    if (typeof window === 'undefined') return false;
+    const raw = localStorage.getItem('fullcode_files_v3');
+    return Boolean(raw && raw !== '[]');
+  } catch {
+    return false;
+  }
+}
+

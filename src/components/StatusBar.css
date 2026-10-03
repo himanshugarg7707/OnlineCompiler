@@ -374,3 +374,41 @@
   background: rgba(255, 255, 255, 0.1);
   color: var(--accent-purple, #adc6ff);
 }
+
+/* ─── Incognito Indicator Pill in Status Bar ─────────────────────────────── */
+.status-incognito-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 1px 7px;
+  background: rgba(192, 132, 252, 0.16);
+  border: 1px solid rgba(192, 132, 252, 0.4);
+  border-radius: 10px;
+  color: #e9d5ff;
+  font-size: 10.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  animation: incognitoPulse 2.5s infinite ease-in-out;
+}
+
+.status-incognito-pill:hover {
+  background: rgba(192, 132, 252, 0.28);
+  border-color: rgba(192, 132, 252, 0.7);
+  color: #ffffff;
+  box-shadow: 0 0 10px rgba(192, 132, 252, 0.3);
+}
+
+.incognito-glasses-icon {
+  color: #c084fc;
+}
+
+@keyframes incognitoPulse {
+  0%, 100% {
+    box-shadow: 0 0 4px rgba(192, 132, 252, 0.15);
+  }
+  50% {
+    box-shadow: 0 0 10px rgba(192, 132, 252, 0.35);
+  }
+}
+

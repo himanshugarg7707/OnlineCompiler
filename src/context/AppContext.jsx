@@ -36,6 +36,11 @@ import {
   clearCustomPaletteOverrides,
 } from '../services/themeService';
 import {
+  isIncognitoActive,
+  setIncognitoActive,
+  hasPersistedDataInLocalStorage,
+} from '../services/storageService';
+import {
   joinCollabRoom,
   leaveCollabRoom,
   broadcastWorkspaceChanges,
@@ -80,6 +85,9 @@ const STORAGE_OPEN_TABS_KEY = 'fullcode_open_tabs_v3';
 const STORAGE_LAST_PAGE_KEY = 'fullcode_last_active_page_v2';
 
 function getInitialPage() {
+  if (isIncognitoActive()) {
+    return 'editor';
+  }
   try {
     if (typeof window !== 'undefined') {
       const hash = window.location.hash || '';
@@ -200,6 +208,16 @@ function normalizeLoadedFiles(files) {
 }
 
 function loadSavedFiles() {
+  if (isIncognitoActive()) {
+    return [
+      {
+        id: 'file-1',
+        name: 'main.py',
+        content: getStarterTemplate(71),
+        language: defaultLang,
+      },
+    ];
+  }
   try {
     const raw = localStorage.getItem(STORAGE_FILES_KEY);
     if (raw) {
@@ -222,6 +240,7 @@ function loadSavedFiles() {
 }
 
 function loadSavedFolders() {
+  if (isIncognitoActive()) return [];
   try {
     const raw = localStorage.getItem(STORAGE_FOLDERS_KEY);
     if (raw) {
@@ -235,6 +254,7 @@ function loadSavedFolders() {
 }
 
 function loadSavedActiveId(files) {
+  if (isIncognitoActive()) return files[0]?.id || 'file-1';
   try {
     const saved = localStorage.getItem(STORAGE_ACTIVE_KEY);
     if (saved && files.some((f) => f.id === saved)) {
@@ -247,6 +267,7 @@ function loadSavedActiveId(files) {
 }
 
 function loadSavedOpenTabs(files, activeId) {
+  if (isIncognitoActive()) return [activeId || files[0]?.id || 'file-1'];
   try {
     const saved = localStorage.getItem(STORAGE_OPEN_TABS_KEY);
     if (saved) {
@@ -411,9 +432,14 @@ const initialState = {
     executionMemory: null,
     stdin: '',
   },
+  incognitoMode: isIncognitoActive(),
 };
 
 function saveStateToStorage(files, activeFileId, stdin, folders, openFileIds) {
+  if (isIncognitoActive()) {
+    // In incognito mode, nothing is saved to persistent disk
+    return;
+  }
   try {
     if (files) localStorage.setItem(STORAGE_FILES_KEY, JSON.stringify(files));
     if (activeFileId) localStorage.setItem(STORAGE_ACTIVE_KEY, activeFileId);
@@ -1223,6 +1249,33 @@ function reducer(state, action) {
     }
     case 'TOGGLE_SETTINGS':
       return { ...state, settingsModalOpen: !state.settingsModalOpen };
+    case 'SET_INCOGNITO_MODE': {
+      const active = Boolean(action.payload);
+      setIncognitoActive(active);
+      return { ...state, incognitoMode: active };
+    }
+    case 'RESET_WORKSPACE_EPHEMERAL': {
+      const resetFiles = action.payload.files;
+      const activeId = action.payload.activeFileId;
+      const targetFile = resetFiles.find((f) => f.id === activeId) || resetFiles[0];
+      const lang = resolveLanguage(targetFile?.language, targetFile?.name);
+      return {
+        ...state,
+        files: resetFiles,
+        activeFileId: activeId,
+        code: targetFile ? targetFile.content : '',
+        detectedLanguage: lang,
+        folders: [],
+        openFileIds: action.payload.openFileIds || [activeId],
+        stdin: '',
+        output: '',
+        stderr: '',
+        compileOutput: '',
+        executionTime: null,
+        executionMemory: null,
+        errorLine: null,
+      };
+    }
     case 'UPDATE_CONFIG':
       return { ...state, config: { ...state.config, ...action.payload } };
     case 'SET_CURSOR':
@@ -2449,6 +2502,74 @@ export function AppProvider({ children }) {
     dispatch({ type: 'TOGGLE_TERMINAL' });
   }, []);
 
+  const handleToggleIncognitoMode = useCallback((enabled) => {
+    const next = enabled !== undefined ? enabled : !isIncognitoActive();
+    setIncognitoActive(next);
+    dispatch({ type: 'SET_INCOGNITO_MODE', payload: next });
+    if (next) {
+      showToast('🕶️ Incognito Mode Activated: Edits will vanish completely on refresh!');
+    } else {
+      saveStateToStorage(state.files, state.activeFileId, state.stdin, state.folders, state.openFileIds);
+      showToast('Standard Mode Restored: Files are now auto-saved to disk 💾');
+    }
+  }, [state.files, state.activeFileId, state.stdin, state.folders, state.openFileIds, showToast]);
+
+  const handleVanishIncognitoData = useCallback(() => {
+    const freshFile = {
+      id: `file-${Date.now()}`,
+      name: 'main.py',
+      content: getStarterTemplate(71),
+      language: defaultLang,
+    };
+    dispatch({
+      type: 'RESET_WORKSPACE_EPHEMERAL',
+      payload: {
+        files: [freshFile],
+        activeFileId: freshFile.id,
+        openFileIds: [freshFile.id],
+      },
+    });
+    showToast('✨ Incognito Session Vanished! Workspace reset to clean slate.');
+  }, [showToast]);
+
+  const handleRestoreSavedWorkspace = useCallback(() => {
+    try {
+      const rawFiles = localStorage.getItem(STORAGE_FILES_KEY);
+      if (!rawFiles) {
+        showToast('No previously saved workspace found in disk memory.');
+        return;
+      }
+      const parsedFiles = normalizeLoadedFiles(JSON.parse(rawFiles));
+      const rawFolders = localStorage.getItem(STORAGE_FOLDERS_KEY);
+      const parsedFolders = rawFolders ? JSON.parse(rawFolders) : [];
+      const savedActive = localStorage.getItem(STORAGE_ACTIVE_KEY) || parsedFiles[0]?.id;
+      const rawTabs = localStorage.getItem(STORAGE_OPEN_TABS_KEY);
+      const parsedTabs = rawTabs ? JSON.parse(rawTabs) : [savedActive];
+      const savedStdin = localStorage.getItem(STORAGE_STDIN_KEY) || '';
+
+      dispatch({
+        type: 'LOAD_WORKSPACE_STATE',
+        payload: {
+          files: parsedFiles,
+          folders: parsedFolders,
+          activeFileId: savedActive,
+          stdin: savedStdin,
+          openFileIds: parsedTabs,
+        },
+      });
+      showToast('Restored your previously saved persistent workspace! 💾');
+    } catch (err) {
+      console.warn('Failed to restore saved workspace:', err);
+      showToast('Could not restore saved workspace.');
+    }
+  }, [showToast]);
+
+  useEffect(() => {
+    if (isIncognitoActive()) {
+      showToast('🕶️ Incognito Active: Fresh session. Data vanishes on refresh.');
+    }
+  }, []);
+
   const handleLoadWorkspaceState = useCallback((workspace) => {
     if (!workspace) return;
     dispatch({ type: 'LOAD_WORKSPACE_STATE', payload: workspace });
@@ -2459,6 +2580,10 @@ export function AppProvider({ children }) {
     collabRoomId: state.collabRoomId,
     collabPeers: state.collabPeers,
     dispatch,
+    handleToggleIncognitoMode,
+    handleVanishIncognitoData,
+    handleRestoreSavedWorkspace,
+    isIncognitoActive: Boolean(state.incognitoMode),
     handleGitPush,
     handleGitPull,
     handleGitSync,

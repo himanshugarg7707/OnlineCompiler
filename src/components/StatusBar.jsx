@@ -1,6 +1,6 @@
 import { useMemo, useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
-import { Activity } from 'lucide-react';
+import { Activity, Glasses } from 'lucide-react';
 import { analyzeComplexity } from '../services/complexityAnalyzer';
 import { getWorkspaceGitStatus } from '../services/gitService';
 import './StatusBar.css';
@@ -135,6 +135,18 @@ export default function StatusBar() {
           >
             <Activity size={11} className="icon-cyan" />
             <span>⏱ {complexity.time} · 💾 {complexity.space}</span>
+          </button>
+        )}
+
+        {state.incognitoMode && (
+          <button
+            type="button"
+            className="status-item status-incognito-pill"
+            onClick={() => dispatch({ type: 'TOGGLE_SETTINGS' })}
+            title="Incognito Ephemeral Mode Active: Zero data is saved to disk and all code will vanish on reload. Click to open Settings."
+          >
+            <Glasses size={12} className="incognito-status-icon" />
+            <span>Incognito (Vanish on Refresh)</span>
           </button>
         )}
       </div>

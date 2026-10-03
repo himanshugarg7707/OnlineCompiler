@@ -844,6 +844,12 @@
   letter-spacing: 0.05em;
 }
 
+.sidebar-workspace-sub.incognito-sub {
+  color: #c084fc;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
 .sidebar-nav-tabs {
   padding: 4px 0;
   display: flex;

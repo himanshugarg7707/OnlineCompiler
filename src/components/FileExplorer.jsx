@@ -797,7 +797,13 @@ export default function FileExplorer() {
       {/* Top Workspace & Project Root header */}
       <div className="sidebar-workspace-header">
         <span className="sidebar-workspace-label">WORKSPACE</span>
-        <span className="sidebar-workspace-sub">PROJECT ROOT</span>
+        {state.incognitoMode ? (
+          <span className="sidebar-workspace-sub incognito-sub" title="Incognito Mode Active: Workspace data will vanish on refresh">
+            🕶️ INCOGNITO (VANISH ON REFRESH)
+          </span>
+        ) : (
+          <span className="sidebar-workspace-sub">PROJECT ROOT</span>
+        )}
       </div>
 
       {/* Side Navigation Tabs (Explorer & Search for files) */}

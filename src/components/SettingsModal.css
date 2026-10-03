@@ -1320,3 +1320,252 @@ input:checked + .slider::before {
   border-top: 1px solid var(--border-primary);
   background: var(--bg-secondary);
 }
+
+/* ─── Incognito Mode Section ─────────────────────────────────────────────── */
+
+.incognito-settings-section {
+  position: relative;
+}
+
+.incognito-accent {
+  color: #c084fc !important;
+}
+
+.incognito-title-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.incognito-status-badge {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: var(--text-muted);
+  transition: all 0.2s ease;
+}
+
+.incognito-status-badge.active {
+  background: rgba(192, 132, 252, 0.18);
+  border-color: rgba(192, 132, 252, 0.45);
+  color: #e9d5ff;
+  box-shadow: 0 0 10px rgba(192, 132, 252, 0.2);
+}
+
+.incognito-card {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-md);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  transition: all 0.25s ease;
+}
+
+.incognito-card.incognito-card-active {
+  background: linear-gradient(145deg, rgba(24, 18, 43, 0.8) 0%, rgba(13, 17, 23, 0.95) 100%);
+  border-color: rgba(192, 132, 252, 0.4);
+  box-shadow: 0 4px 20px rgba(168, 85, 247, 0.15), inset 0 0 12px rgba(192, 132, 252, 0.05);
+}
+
+.incognito-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.incognito-mode-info {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex: 1;
+  min-width: 240px;
+}
+
+.incognito-mode-icon-circle {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: rgba(192, 132, 252, 0.12);
+  border: 1px solid rgba(192, 132, 252, 0.3);
+  color: #c084fc;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: all 0.2s ease;
+}
+
+.incognito-card-active .incognito-mode-icon-circle {
+  background: rgba(192, 132, 252, 0.25);
+  border-color: #c084fc;
+  box-shadow: 0 0 14px rgba(192, 132, 252, 0.35);
+  color: #f3e8ff;
+}
+
+.incognito-mode-heading {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 2px 0;
+}
+
+.incognito-mode-subtext {
+  font-size: 11.5px;
+  color: var(--text-secondary);
+  margin: 0;
+  line-height: 1.4;
+}
+
+.incognito-toggle-wrapper {
+  flex-shrink: 0;
+}
+
+.btn-incognito-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-incognito-toggle:hover {
+  background: rgba(255, 255, 255, 0.14);
+  color: var(--text-primary);
+}
+
+.btn-incognito-toggle .incognito-toggle-knob {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #94a3b8;
+  transition: all 0.2s ease;
+}
+
+.btn-incognito-toggle.active {
+  background: rgba(192, 132, 252, 0.22);
+  border-color: rgba(192, 132, 252, 0.6);
+  color: #f3e8ff;
+  box-shadow: 0 0 12px rgba(192, 132, 252, 0.3);
+}
+
+.btn-incognito-toggle.active .incognito-toggle-knob {
+  background: #c084fc;
+  box-shadow: 0 0 8px #c084fc;
+}
+
+.incognito-active-features {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(192, 132, 252, 0.2);
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+}
+
+.incognito-feature-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 11.5px;
+  color: #cbd5e1;
+  line-height: 1.4;
+}
+
+.incognito-feature-item strong {
+  color: #f3e8ff;
+}
+
+.incognito-feature-item kbd {
+  background: rgba(255, 255, 255, 0.12);
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-size: 10px;
+}
+
+.incognito-actions-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding-top: 6px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.btn-incognito-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 13px;
+  border-radius: var(--radius-sm);
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  border: 1px solid var(--border-primary);
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+.btn-incognito-action:hover {
+  background: var(--bg-elevated);
+}
+
+.btn-incognito-action.activate {
+  color: #c084fc;
+  border-color: rgba(192, 132, 252, 0.35);
+  background: rgba(192, 132, 252, 0.1);
+}
+
+.btn-incognito-action.activate:hover {
+  background: rgba(192, 132, 252, 0.25);
+  color: #ffffff;
+}
+
+.btn-incognito-action.vanish {
+  color: #f87171;
+  border-color: rgba(239, 68, 68, 0.35);
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.btn-incognito-action.vanish:hover {
+  background: rgba(239, 68, 68, 0.25);
+  color: #ffffff;
+}
+
+.btn-incognito-action.save-exit {
+  color: var(--accent-cyan);
+  border-color: rgba(0, 212, 255, 0.35);
+  background: rgba(0, 212, 255, 0.1);
+}
+
+.btn-incognito-action.save-exit:hover {
+  background: var(--accent-cyan);
+  color: #000000;
+}
+
+.btn-incognito-action.restore {
+  color: #94a3b8;
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+.btn-incognito-action.restore:hover {
+  color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.3);
+}
+

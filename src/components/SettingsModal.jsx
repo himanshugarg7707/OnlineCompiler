@@ -27,6 +27,8 @@ import {
   Paintbrush,
   Archive,
   FolderGit2,
+  Glasses,
+  Ghost,
 } from 'lucide-react';
 import { getSupportedLanguages, getLanguageById } from '../services/languageDetector';
 import { resetConfig } from '../services/configService';
@@ -54,6 +56,7 @@ import {
   downloadBackupFile,
   getCookieConsent,
   saveCookieConsent,
+  hasPersistedDataInLocalStorage,
 } from '../services/storageService';
 import { HardDrive, Cookie, Download } from 'lucide-react';
 import './SettingsModal.css';
@@ -152,10 +155,13 @@ export default function SettingsModal() {
     handleSelectLanguage,
     handleSwitchUser,
     handleLogoutUser,
+    handleToggleIncognitoMode,
+    handleVanishIncognitoData,
+    handleRestoreSavedWorkspace,
     showToast,
   } = useApp();
 
-  const { settingsModalOpen, config, detectedLanguage, files, folders, activeUser } = state;
+  const { settingsModalOpen, config, detectedLanguage, files, folders, activeUser, incognitoMode } = state;
   const [localConfig, setLocalConfig] = useState(config);
   const [langSearch, setLangSearch] = useState('');
 
@@ -976,7 +982,129 @@ export default function SettingsModal() {
             </div>
           </div>
 
-          {/* ─── 6. PERMANENT MEMORY, COOKIES & STORAGE ─── */}
+          {/* ─── 6. INCOGNITO MODE (EPHEMERAL WORKSPACE) ─── */}
+          <div className="settings-section incognito-settings-section">
+            <div className="section-title-wrapper">
+              <Glasses size={18} className="section-icon-accent incognito-accent" />
+              <div className="incognito-title-meta">
+                <h3 className="section-title">Incognito Mode (Ephemeral Workspace)</h3>
+                <span className={`incognito-status-badge ${incognitoMode ? 'active' : ''}`}>
+                  {incognitoMode ? '🕶️ Incognito Active • Vanish on Refresh' : '○ Inactive • Standard Auto-Save'}
+                </span>
+              </div>
+            </div>
+
+            <p className="section-desc">
+              When Incognito Mode is enabled, all code, files, terminal executions, split views, and packages work identically in temporary browser memory, but <strong>zero data is saved to disk</strong>. The moment you refresh the page or close your browser, all data vanishes without a trace.
+            </p>
+
+            <div className={`incognito-card ${incognitoMode ? 'incognito-card-active' : ''}`}>
+              <div className="incognito-card-top">
+                <div className="incognito-mode-info">
+                  <div className="incognito-mode-icon-circle">
+                    {incognitoMode ? <Ghost size={22} /> : <Glasses size={22} />}
+                  </div>
+                  <div>
+                    <h4 className="incognito-mode-heading">
+                      {incognitoMode ? 'Incognito Mode is Currently Active' : 'Enable Incognito Ephemeral Mode'}
+                    </h4>
+                    <p className="incognito-mode-subtext">
+                      {incognitoMode
+                        ? '🛡️ Zero disk footprint: All code, created files, and terminal logs will be completely wiped on page refresh or tab close.'
+                        : 'Standard mode is active: files and configurations are automatically saved to local storage.'}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="incognito-toggle-wrapper">
+                  <button
+                    type="button"
+                    className={`btn-incognito-toggle ${incognitoMode ? 'active' : ''}`}
+                    onClick={() => handleToggleIncognitoMode()}
+                    title="Toggle Incognito Ephemeral Mode"
+                  >
+                    <span className="incognito-toggle-knob" />
+                    <span className="incognito-toggle-text">
+                      {incognitoMode ? 'Incognito ON' : 'Turn ON'}
+                    </span>
+                  </button>
+                </div>
+              </div>
+
+              {incognitoMode && (
+                <div className="incognito-active-features">
+                  <div className="incognito-feature-item">
+                    <span className="incognito-bullet">⚡</span>
+                    <div>
+                      <strong>Vanish on Refresh:</strong> Any code, edits, or newly added files will vanish automatically if you reload the page.
+                    </div>
+                  </div>
+                  <div className="incognito-feature-item">
+                    <span className="incognito-bullet">🔒</span>
+                    <div>
+                      <strong>Zero Persistence:</strong> Local storage writes for files, folders, and version snapshots are strictly blocked.
+                    </div>
+                  </div>
+                  <div className="incognito-feature-item">
+                    <span className="incognito-bullet">✨</span>
+                    <div>
+                      <strong>All Features Available:</strong> 40+ compilers, dual terminals, split views, PDF viewer, inking annotations, and AI hints work with zero restrictions.
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div className="incognito-actions-row">
+                {incognitoMode ? (
+                  <>
+                    <button
+                      type="button"
+                      className="btn-incognito-action vanish"
+                      onClick={handleVanishIncognitoData}
+                      title="Clear current memory and reset to clean starter code without reloading"
+                    >
+                      <Sparkles size={13} />
+                      <span>Vanish Data & Reset Now</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      className="btn-incognito-action save-exit"
+                      onClick={() => handleToggleIncognitoMode(false)}
+                      title="Turn off Incognito Mode and keep current code in permanent storage"
+                    >
+                      <HardDrive size={13} />
+                      <span>Save & Exit Incognito</span>
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    type="button"
+                    className="btn-incognito-action activate"
+                    onClick={() => handleToggleIncognitoMode(true)}
+                    title="Switch to ephemeral memory-only session"
+                  >
+                    <Glasses size={13} />
+                    <span>Switch to Incognito Mode</span>
+                  </button>
+                )}
+
+                {hasPersistedDataInLocalStorage() && (
+                  <button
+                    type="button"
+                    className="btn-incognito-action restore"
+                    onClick={handleRestoreSavedWorkspace}
+                    title="Reload the saved files that were saved in persistent storage prior to incognito"
+                  >
+                    <RotateCcw size={13} />
+                    <span>Restore Saved Disk Files</span>
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* ─── 7. PERMANENT MEMORY, COOKIES & STORAGE ─── */}
           <div className="settings-section">
             <div className="section-title-wrapper">
               <HardDrive size={16} className="section-icon-accent" />

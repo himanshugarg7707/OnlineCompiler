@@ -1,4 +1,5 @@
 // Local Version History & Snapshot Restore Service
+import { isIncognitoActive } from './storageService';
 
 const STORAGE_HISTORY_KEY = 'fullcode_version_history_v1';
 const MAX_SNAPSHOTS = 40;
@@ -7,6 +8,9 @@ const MAX_SNAPSHOTS = 40;
  * Load all recorded snapshots from localStorage
  */
 export function getHistorySnapshots() {
+  if (isIncognitoActive()) {
+    return [];
+  }
   try {
     const raw = localStorage.getItem(STORAGE_HISTORY_KEY);
     if (raw) {
@@ -28,6 +32,7 @@ export function getHistorySnapshots() {
  */
 export function recordSnapshot(fileName, content, langName = '', label = 'Code Run') {
   if (!content || !fileName) return;
+  if (isIncognitoActive()) return; // In incognito mode, nothing is persisted to history!
 
   const currentList = getHistorySnapshots();
 
