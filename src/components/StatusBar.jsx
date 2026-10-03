@@ -7,35 +7,6 @@ import './StatusBar.css';
 
 export default function StatusBar() {
   const { state, dispatch, handleGitSync, handleGitPush } = useApp();
-  const [zoomPercent, setZoomPercent] = useState(() => {
-    if (typeof document !== 'undefined') {
-      const z = parseFloat(document.body.style.zoom || '1.0');
-      return Math.round(z * 100);
-    }
-    return 100;
-  });
-
-  useEffect(() => {
-    const handleZoomEvent = (e) => {
-      if (e.detail?.zoom) {
-        setZoomPercent(Math.round(e.detail.zoom * 100));
-      }
-    };
-    const handleNativeZoom = (e) => {
-      if (e.detail?.percent) {
-        setZoomPercent(parseInt(e.detail.percent, 10));
-      }
-    };
-    window.addEventListener('fullcode-ui-zoom', handleZoomEvent);
-    window.addEventListener('fullcode-native-action', (e) => {
-      if (e.detail?.type === 'zoom-change' && e.detail?.percent) {
-        setZoomPercent(parseInt(e.detail.percent, 10));
-      }
-    });
-    return () => {
-      window.removeEventListener('fullcode-ui-zoom', handleZoomEvent);
-    };
-  }, []);
   const {
     detectedLanguage,
     cursorPosition,
@@ -173,61 +144,6 @@ export default function StatusBar() {
           <span className="prettier-indicator-dot" />
           <span>Prettier Active</span>
         </span>
-
-        {/* Zoom Controls for Entire Full Screen / Window */}
-        <div className="status-item status-zoom-controls" title="Screen Zoom: Cmd/Ctrl + Plus / Minus to zoom full screen">
-          <button
-            type="button"
-            className="zoom-sub-btn"
-            onClick={() => {
-              if (window.webkit?.messageHandlers?.nativeHost) {
-                window.webkit.messageHandlers.nativeHost.postMessage({ type: 'zoom_out' });
-              } else {
-                const cur = parseFloat(document.body.style.zoom || '1.0');
-                const next = Math.max(0.6, Math.round((cur - 0.1) * 10) / 10);
-                document.body.style.zoom = next;
-                window.dispatchEvent(new CustomEvent('fullcode-ui-zoom', { detail: { zoom: next } }));
-              }
-            }}
-            title="Zoom Out (Cmd/Ctrl -)"
-          >
-            -
-          </button>
-          <button
-            type="button"
-            className="zoom-reset-btn"
-            onClick={() => {
-              if (window.webkit?.messageHandlers?.nativeHost) {
-                window.webkit.messageHandlers.nativeHost.postMessage({ type: 'zoom_reset' });
-              } else {
-                document.body.style.zoom = '1.0';
-                setZoomPercent(100);
-                window.dispatchEvent(new CustomEvent('fullcode-ui-zoom', { detail: { zoom: 1.0 } }));
-              }
-            }}
-            title="Reset Zoom to 100% (Cmd/Ctrl 0)"
-          >
-            🔍 {zoomPercent}%
-          </button>
-          <button
-            type="button"
-            className="zoom-sub-btn"
-            onClick={() => {
-              if (window.webkit?.messageHandlers?.nativeHost) {
-                window.webkit.messageHandlers.nativeHost.postMessage({ type: 'zoom_in' });
-              } else {
-                const cur = parseFloat(document.body.style.zoom || '1.0');
-                const next = Math.min(2.0, Math.round((cur + 0.1) * 10) / 10);
-                document.body.style.zoom = next;
-                window.dispatchEvent(new CustomEvent('fullcode-ui-zoom', { detail: { zoom: next } }));
-              }
-            }}
-            title="Zoom In (Cmd/Ctrl +)"
-          >
-            +
-          </button>
-        </div>
-
 
         {/* Terminal Toggle Button (hidden in notebook mode since output is inline) */}
         {!isNotebook && (
