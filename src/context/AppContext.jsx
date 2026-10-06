@@ -24,6 +24,11 @@ import {
   loadUserWorkspace,
 } from '../services/authService';
 import {
+  getCurrentWorkspaceMeta,
+  setCurrentWorkspaceMeta,
+  saveActiveWorkspace,
+} from '../services/workspaceService';
+import {
   ensureGitBaselines,
   getCurrentBranch,
   getSyncStatus,
@@ -340,11 +345,20 @@ const shouldShowWelcomeOnArrival = (() => {
   }
 })();
 
-// Note: Allow users to navigate to notebooks or settings freely without forced redirects
 ensureGitBaselines(initialFiles);
+
+const initialWsMeta = getCurrentWorkspaceMeta();
+const defaultWsId = initialWsMeta?.id || 'ws_default';
+const defaultWsName = initialWsMeta?.name || 'Default Workspace';
+if (!initialWsMeta && !isIncognitoActive()) {
+  setCurrentWorkspaceMeta({ id: defaultWsId, name: defaultWsName, subjectId: null });
+}
 
 const initialState = {
   activeUser: initialUser,
+  currentWorkspaceId: initialWsMeta?.id || defaultWsId,
+  currentWorkspaceName: initialWsMeta?.name || defaultWsName,
+  subjectId: initialWsMeta?.subjectId || null,
   authModalOpen: false,
   welcomeModalOpen: shouldShowWelcomeOnArrival,
   workspacesModalOpen: false,
@@ -435,7 +449,7 @@ const initialState = {
   incognitoMode: isIncognitoActive(),
 };
 
-function saveStateToStorage(files, activeFileId, stdin, folders, openFileIds) {
+function saveStateToStorage(files, activeFileId, stdin, folders, openFileIds, currentWorkspaceId, currentWorkspaceName, subjectId) {
   if (isIncognitoActive()) {
     // In incognito mode, nothing is saved to persistent disk
     return;
@@ -446,16 +460,24 @@ function saveStateToStorage(files, activeFileId, stdin, folders, openFileIds) {
     if (stdin !== undefined) localStorage.setItem(STORAGE_STDIN_KEY, stdin);
     if (folders) localStorage.setItem(STORAGE_FOLDERS_KEY, JSON.stringify(folders));
     if (openFileIds) localStorage.setItem(STORAGE_OPEN_TABS_KEY, JSON.stringify(openFileIds));
+
+    // Auto-sync active workspace so switching workspaces or refreshing never loses data
+    const wsId = currentWorkspaceId || getCurrentWorkspaceMeta()?.id || 'ws_default';
+    const wsName = currentWorkspaceName || getCurrentWorkspaceMeta()?.name || 'Default Workspace';
+    const subId = subjectId !== undefined ? subjectId : (getCurrentWorkspaceMeta()?.subjectId || null);
+    if (wsId && files && files.length > 0) {
+      saveActiveWorkspace(wsId, wsName, files, folders, activeFileId, stdin, null, subId);
+    }
   } catch (e) {
     console.warn('Failed to persist state:', e);
   }
 }
 
 let saveStorageTimeout = null;
-function debouncedSaveStateToStorage(files, activeFileId, stdin, folders, openFileIds) {
+function debouncedSaveStateToStorage(files, activeFileId, stdin, folders, openFileIds, currentWorkspaceId, currentWorkspaceName, subjectId) {
   if (saveStorageTimeout) clearTimeout(saveStorageTimeout);
   saveStorageTimeout = setTimeout(() => {
-    saveStateToStorage(files, activeFileId, stdin, folders, openFileIds);
+    saveStateToStorage(files, activeFileId, stdin, folders, openFileIds, currentWorkspaceId, currentWorkspaceName, subjectId);
   }, 250);
 }
 
@@ -473,7 +495,16 @@ function reducer(state, action) {
         return file;
       });
 
-      debouncedSaveStateToStorage(updatedFiles, state.activeFileId, state.stdin, state.folders, state.openFileIds);
+      debouncedSaveStateToStorage(
+        updatedFiles,
+        state.activeFileId,
+        state.stdin,
+        state.folders,
+        state.openFileIds,
+        state.currentWorkspaceId,
+        state.currentWorkspaceName,
+        state.subjectId
+      );
 
       return {
         ...state,
@@ -1018,17 +1049,31 @@ function reducer(state, action) {
       return { ...state, activeTerminalTab: action.payload, terminalHidden: false };
     case 'SET_WELCOME_MODAL':
       return { ...state, welcomeModalOpen: action.payload };
-    case 'CLEAR_SHARED_NOTICE':
-      return { ...state, sharedNotice: false };
+    case 'SET_CURRENT_WORKSPACE_META': {
+      const { id, name, subjectId } = action.payload || {};
+      setCurrentWorkspaceMeta({ id, name, subjectId: subjectId || null });
+      return {
+        ...state,
+        currentWorkspaceId: id,
+        currentWorkspaceName: name,
+        subjectId: subjectId || state.subjectId || null,
+      };
+    }
     case 'LOAD_WORKSPACE_STATE': {
-      const { files, folders, activeFileId, stdin } = action.payload;
+      const { files, folders, activeFileId, stdin, id, name, currentWorkspaceId, currentWorkspaceName, subjectId } = action.payload;
       const validFiles = Array.isArray(files) && files.length > 0 ? normalizeLoadedFiles(files) : state.files;
       const nextActiveId = activeFileId || validFiles[0]?.id;
       const nextActiveFile = validFiles.find((f) => f.id === nextActiveId) || validFiles[0];
       const openIds = validFiles.map((f) => f.id);
-      saveStateToStorage(validFiles, nextActiveId, stdin ?? state.stdin, folders || [], openIds);
+      const nextWsId = currentWorkspaceId || id || state.currentWorkspaceId;
+      const nextWsName = currentWorkspaceName || name || state.currentWorkspaceName;
+      const nextSubjectId = subjectId !== undefined ? subjectId : (action.payload.subjectId || state.subjectId || null);
+      saveStateToStorage(validFiles, nextActiveId, stdin ?? state.stdin, folders || [], openIds, nextWsId, nextWsName, nextSubjectId);
       return {
         ...state,
+        currentWorkspaceId: nextWsId,
+        currentWorkspaceName: nextWsName,
+        subjectId: nextSubjectId,
         files: validFiles,
         folders: folders || [],
         openFileIds: openIds,
@@ -2572,8 +2617,48 @@ export function AppProvider({ children }) {
 
   const handleLoadWorkspaceState = useCallback((workspace) => {
     if (!workspace) return;
-    dispatch({ type: 'LOAD_WORKSPACE_STATE', payload: workspace });
-  }, []);
+
+    if (saveStorageTimeout) {
+      clearTimeout(saveStorageTimeout);
+      saveStorageTimeout = null;
+    }
+
+    // 1. Auto-save outgoing workspace before switching (guarantees previous files/ipynb are never lost)
+    const prevWsId = state.currentWorkspaceId || getCurrentWorkspaceMeta()?.id || `ws_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+    const prevWsName = state.currentWorkspaceName || getCurrentWorkspaceMeta()?.name || 'Workspace';
+    const prevSubjectId = state.subjectId || getCurrentWorkspaceMeta()?.subjectId || null;
+    if (state.files && state.files.length > 0) {
+      saveActiveWorkspace(
+        prevWsId,
+        prevWsName,
+        state.files,
+        state.folders,
+        state.activeFileId,
+        state.stdin,
+        state.detectedLanguage,
+        prevSubjectId
+      );
+    }
+
+    // 2. Set newly active workspace meta
+    const targetWsId = workspace.id || workspace.currentWorkspaceId || `ws_${Date.now()}`;
+    const targetWsName = workspace.name || workspace.currentWorkspaceName || 'Workspace';
+    const targetSubjectId = workspace.subjectId || null;
+    setCurrentWorkspaceMeta({ id: targetWsId, name: targetWsName, subjectId: targetSubjectId });
+
+    // 3. Load target workspace state
+    dispatch({
+      type: 'LOAD_WORKSPACE_STATE',
+      payload: {
+        ...workspace,
+        id: targetWsId,
+        name: targetWsName,
+        currentWorkspaceId: targetWsId,
+        currentWorkspaceName: targetWsName,
+        subjectId: targetSubjectId,
+      },
+    });
+  }, [state.currentWorkspaceId, state.currentWorkspaceName, state.subjectId, state.files, state.folders, state.activeFileId, state.stdin, state.detectedLanguage]);
 
   const value = {
     state,

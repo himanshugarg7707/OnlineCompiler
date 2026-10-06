@@ -639,9 +639,36 @@ export function deleteNotebookMeta(id) {
   return list;
 }
 
-// Initialize a workspace from a subject definition
+// Initialize or resume a workspace from a subject definition
 export function launchSubjectWorkspace(subject, customTitle = null) {
   const title = customTitle || subject.name;
+  const allWorkspaces = getSavedWorkspaces();
+
+  // If this subject workspace already exists, resume it with user's saved edits!
+  const existing = allWorkspaces.find(
+    (w) =>
+      (subject.workspaceId && w.id === subject.workspaceId) ||
+      (subject.id && w.subjectId === subject.id) ||
+      w.name.toLowerCase() === title.toLowerCase()
+  );
+
+  if (existing && Array.isArray(existing.files) && existing.files.length > 0) {
+    // Keep notebook meta updated
+    saveNotebookMeta({
+      id: subject.id,
+      name: existing.name || title,
+      title: existing.name || title,
+      shortCode: subject.shortCode || 'SUB',
+      icon: subject.icon || '📚',
+      badgeColor: subject.badgeColor || '#00d4ff',
+      languageName: subject.languageName || 'Code',
+      workspaceId: existing.id,
+      filesCount: existing.files.length,
+      updatedAt: existing.updatedAt || Date.now(),
+    });
+    return existing;
+  }
+
   const workspaceFiles = subject.files.map((f, idx) => ({
     id: `file_${subject.id}_${idx + 1}_${Date.now()}`,
     name: f.name,
@@ -655,10 +682,49 @@ export function launchSubjectWorkspace(subject, customTitle = null) {
     [],
     workspaceFiles[0]?.id,
     '',
-    subject.files[0]?.language
+    subject.files[0]?.language,
+    null,
+    subject.id
   );
 
   // Also record in subject notebooks
+  saveNotebookMeta({
+    id: subject.id,
+    name: title,
+    title: title,
+    shortCode: subject.shortCode || 'SUB',
+    icon: subject.icon || '📚',
+    badgeColor: subject.badgeColor || '#00d4ff',
+    languageName: subject.languageName || 'Code',
+    workspaceId: workspaceData.id,
+    filesCount: workspaceFiles.length,
+    updatedAt: Date.now(),
+  });
+
+  return workspaceData;
+}
+
+// Explicit factory reset for a subject workspace if user explicitly requests clean slate
+export function resetSubjectWorkspaceToTemplate(subject) {
+  const title = subject.name;
+  const workspaceFiles = subject.files.map((f, idx) => ({
+    id: `file_${subject.id}_${idx + 1}_${Date.now()}`,
+    name: f.name,
+    content: f.content,
+    language: f.language,
+  }));
+
+  const workspaceData = saveNamedWorkspace(
+    title,
+    workspaceFiles,
+    [],
+    workspaceFiles[0]?.id,
+    '',
+    subject.files[0]?.language,
+    subject.workspaceId || null,
+    subject.id
+  );
+
   saveNotebookMeta({
     id: subject.id,
     name: title,

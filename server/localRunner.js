@@ -172,7 +172,7 @@ function runProcess(command, args, options = {}, stdinData = '') {
  * Execute code using local system compilers
  * @param {Object} params - { code, languageId, stdin, filename }
  */
-export async function executeCodeLocally({ code, languageId, stdin = '', filename = '' }) {
+async function _executeCodeLocallyInternal({ code, languageId, stdin = '', filename = '' }) {
   const compilerInfo = await detectLocalCompilers();
   if (!compilerInfo.available) {
     return {
@@ -542,4 +542,20 @@ export async function executeCodeLocally({ code, languageId, stdin = '', filenam
       fs.rmSync(tempDir, { recursive: true, force: true });
     } catch {}
   }
+}
+
+/**
+ * Public export: Executes code locally and guarantees both stdout/output and stderr/error
+ * are consistently populated.
+ */
+export async function executeCodeLocally(params) {
+  const res = await _executeCodeLocallyInternal(params);
+  if (!res || typeof res !== 'object') return res;
+  const stdout = res.stdout ?? res.output ?? '';
+  const stderr = res.stderr ?? res.error ?? '';
+  res.stdout = stdout;
+  res.output = stdout;
+  res.stderr = stderr;
+  res.error = stderr;
+  return res;
 }

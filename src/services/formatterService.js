@@ -79,8 +79,8 @@ export function formatCode(code, langId) {
     formattedLines.push(indentStr.repeat(currentIndent) + trimmed);
 
     // Calculate net brace change
-    const openBraces = (trimmed.match(/[\{\(\[]/g) || []).length;
-    const closeBraces = (trimmed.match(/[\}\)\]]/g) || []).length;
+    const openBraces = (trimmed.match(/[{\([]/g) || []).length;
+    const closeBraces = (trimmed.match(/[}\)\]]/g) || []).length;
     indentLevel = Math.max(0, indentLevel + openBraces - closeBraces);
   }
 

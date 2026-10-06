@@ -27,26 +27,38 @@
 
 /* Horizontal center resizer */
 .split-h-resizer {
-  width: 6px;
+  width: 8px;
   background: transparent;
   cursor: col-resize;
   position: relative;
-  z-index: 10;
+  z-index: 25;
   display: flex;
   align-items: center;
   justify-content: center;
   user-select: none;
+  touch-action: none;
   transition: background 0.15s ease;
-  margin: 0 -3px;
+  margin: 0 -4px;
+}
+
+.split-h-resizer::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -4px;
+  right: -4px;
+  z-index: 1;
 }
 
 .split-h-resizer:hover,
 .split-h-resizer.dragging {
-  background: rgba(99, 102, 241, 0.4);
+  background: rgba(99, 102, 241, 0.5);
+  box-shadow: 0 0 8px rgba(99, 102, 241, 0.4);
 }
 
 .split-h-handle {
-  width: 6px;
+  width: 8px;
   height: 48px;
   display: flex;
   align-items: center;
@@ -57,6 +69,48 @@
   display: flex;
   flex-direction: column;
   gap: 3px;
+}
+
+/* ─── Dragging Overlays & Event Shields (Prevents PDF iframe/Monaco from eating mouse events) ─── */
+body.resizing-split-pane,
+body.resizing-split-pane * {
+  user-select: none !important;
+  -webkit-user-select: none !important;
+  cursor: col-resize !important;
+}
+
+body.resizing-split-pane iframe,
+body.resizing-split-pane object,
+body.resizing-split-pane embed,
+body.resizing-split-pane canvas {
+  pointer-events: none !important;
+}
+
+body.resizing-split-v,
+body.resizing-split-v * {
+  user-select: none !important;
+  -webkit-user-select: none !important;
+  cursor: row-resize !important;
+}
+
+body.resizing-split-v iframe,
+body.resizing-split-v object,
+body.resizing-split-v embed,
+body.resizing-split-v canvas {
+  pointer-events: none !important;
+}
+
+.split-drag-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 99999;
+  cursor: col-resize;
+  user-select: none;
+  background: transparent;
+}
+
+.split-drag-overlay.vertical {
+  cursor: row-resize;
 }
 
 .split-h-dots span {

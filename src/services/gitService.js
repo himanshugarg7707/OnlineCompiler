@@ -110,7 +110,7 @@ export function createBranch(branchName, baseBranch = null, currentFiles = []) {
   const cleanName = branchName
     .trim()
     .replace(/\s+/g, '-')
-    .replace(/[^a-zA-Z0-9_\-\/]/g, '')
+    .replace(/[^a-zA-Z0-9_\-/]/g, '')
     .replace(/\/+/g, '/');
 
   if (!cleanName) {
@@ -214,7 +214,7 @@ export function renameBranch(oldName, newName) {
     throw new Error('New branch name cannot be empty');
   }
 
-  const cleanNewName = newName.trim().replace(/\s+/g, '-').replace(/[^a-zA-Z0-9_\-\/]/g, '');
+  const cleanNewName = newName.trim().replace(/\s+/g, '-').replace(/[^a-zA-Z0-9_\-/]/g, '');
   const repo = getGitRepository();
 
   if (!repo.branches[oldName]) {

@@ -1,6 +1,12 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { useApp } from '../context/AppContext';
 import { executeCode } from '../services/judge0Service';
+import {
+  generateAndEvaluateTestCases,
+  detectInputPattern,
+  getPatternLabel,
+  generateRandomInputForPattern,
+} from '../services/testCaseGeneratorService';
 import {
   FlaskConical,
   Play,
@@ -22,6 +28,7 @@ import {
   ArrowRight,
   Eye,
   FileCheck,
+  Keyboard,
 } from 'lucide-react';
 import './TestCaseSuitePanel.css';
 
@@ -56,58 +63,112 @@ const DEFAULT_TEST_CASES = [
 ];
 
 /**
+ * Normalizes output string for competitive comparison (ignoring trailing whitespace & newlines)
+ */
+export function normalizeOutput(str) {
+  if (str == null) return '';
+  return String(str)
+    .replace(/\r\n/g, '\n')
+    .replace(/\r/g, '\n')
+    .split('\n')
+    .map((line) => line.trimEnd())
+    .join('\n')
+    .trim();
+}
+
+/**
+ * Checks if expected and actual output match using competitive programming rules
+ */
+export function checkOutputMatch(expected, actual) {
+  const normExp = normalizeOutput(expected);
+  const normAct = normalizeOutput(actual);
+
+  // Exact normalized match
+  if (normExp === normAct) return true;
+
+  // Wildcard match
+  if (normExp === '*' || normExp.toLowerCase() === 'any' || normExp.toLowerCase() === 'any output') {
+    return normAct.length > 0;
+  }
+
+  // Token-by-token comparison (e.g. whitespace variations between numbers or array items)
+  const expTokens = normExp.split(/\s+/).filter(Boolean);
+  const actTokens = normAct.split(/\s+/).filter(Boolean);
+  if (expTokens.length > 0 && expTokens.length === actTokens.length) {
+    const allMatch = expTokens.every((t, i) => t === actTokens[i]);
+    if (allMatch) return true;
+  }
+
+  return false;
+}
+
+/**
  * Character-level visual diff generator for Expected vs Actual output
  */
 function computeVisualDiff(expected, actual) {
-  if (expected === actual) {
-    return { isMatch: true, parts: [{ type: 'match', text: actual }] };
-  }
+  const isMatch = checkOutputMatch(expected, actual);
 
-  const expClean = expected ?? '';
-  const actClean = actual ?? '';
+  // Normalize and trim trailing newlines/carriage returns to prevent phantom blank rows
+  const expClean = (expected ?? '').replace(/\r\n/g, '\n').replace(/\r/g, '\n').trimEnd();
+  const actClean = (actual ?? '').replace(/\r\n/g, '\n').replace(/\r/g, '\n').trimEnd();
 
-  // Display whitespace markers for spaces and newlines
+  // Display whitespace markers for spaces and tabs
   const formatVisibleWs = (str) =>
-    str.replace(/ /g, '·').replace(/\t/g, '⇥\t').replace(/\n/g, '↵\n');
+    str.replace(/ /g, '·').replace(/\t/g, '⇥\t');
 
-  const expLines = expClean.split('\n');
-  const actLines = actClean.split('\n');
+  const expLines = expClean ? expClean.split('\n') : [];
+  const actLines = actClean ? actClean.split('\n') : [];
 
   const diffLines = [];
   const maxLines = Math.max(expLines.length, actLines.length);
 
   for (let i = 0; i < maxLines; i++) {
-    const expL = expLines[i] ?? '';
-    const actL = actLines[i] ?? '';
+    const expL = expLines[i] !== undefined ? expLines[i] : null;
+    const actL = actLines[i] !== undefined ? actLines[i] : null;
 
-    if (expL === actL) {
-      diffLines.push({
-        lineNum: i + 1,
-        type: 'match',
-        expected: formatVisibleWs(expL),
-        actual: formatVisibleWs(actL),
-      });
-    } else {
-      diffLines.push({
-        lineNum: i + 1,
-        type: 'diff',
-        expected: formatVisibleWs(expL),
-        actual: formatVisibleWs(actL),
-      });
-    }
+    // If the overall test passes or the lines match, mark as match
+    const lineMatches = isMatch || (expL !== null && actL !== null && expL.trimEnd() === actL.trimEnd());
+
+    diffLines.push({
+      lineNum: i + 1,
+      type: lineMatches ? 'match' : 'diff',
+      expected: expL !== null ? (expL ? formatVisibleWs(expL) : '') : null,
+      actual: actL !== null ? (actL ? formatVisibleWs(actL) : '') : null,
+    });
   }
 
-  return { isMatch: false, diffLines };
+  // Fallback for completely empty output
+  if (diffLines.length === 0) {
+    diffLines.push({
+      lineNum: 1,
+      type: 'match',
+      expected: '',
+      actual: '',
+    });
+  }
+
+  return { isMatch, diffLines };
 }
 
 export default function TestCaseSuitePanel() {
-  const { state, showToast } = useApp();
+  const { state, showToast, dispatch } = useApp();
   const { code, detectedLanguage, files, activeFileId } = state;
+
+  const currentFile = files.find((f) => f.id === activeFileId) || files[0];
+  const fileKey = currentFile?.name || activeFileId || 'default';
+  const storageKey = `fullcode_test_cases_${fileKey}`;
+  const activeCode = currentFile?.content || code || '';
+  const detectedPattern = useMemo(() => detectInputPattern(activeCode), [activeCode]);
+  const patternLabel = useMemo(() => getPatternLabel(detectedPattern.type), [detectedPattern]);
 
   const [testCases, setTestCases] = useState(() => {
     try {
-      const saved = localStorage.getItem('fullcode_test_cases');
-      return saved ? JSON.parse(saved) : DEFAULT_TEST_CASES;
+      const saved = localStorage.getItem(storageKey);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+      return DEFAULT_TEST_CASES;
     } catch {
       return DEFAULT_TEST_CASES;
     }
@@ -117,26 +178,90 @@ export default function TestCaseSuitePanel() {
   const [isRunningAll, setIsRunningAll] = useState(false);
   const [stressModalOpen, setStressModalOpen] = useState(false);
   const [stressCount, setStressCount] = useState(10);
-  const [stressType, setStressType] = useState('array'); // 'array' | 'string' | 'pairs'
+  const [stressType, setStressType] = useState('auto'); // 'auto' | 'string_collection' | 'number_array' | ...
   const [stressMin, setStressMin] = useState(1);
   const [stressMax, setStressMax] = useState(100);
   const [stressLength, setStressLength] = useState(5);
   const [stressResults, setStressResults] = useState([]);
   const [isStressRunning, setIsStressRunning] = useState(false);
+  const [isGeneratingCases, setIsGeneratingCases] = useState(false);
+
+  const autoGeneratedFilesRef = useRef(new Set());
 
   const activeTestCase = useMemo(
     () => testCases.find((tc) => tc.id === activeCaseId) || testCases[0],
     [testCases, activeCaseId]
   );
 
-  const saveCasesToStorage = (updated) => {
+  const saveCasesToStorage = useCallback((updated) => {
     setTestCases(updated);
     try {
-      localStorage.setItem('fullcode_test_cases', JSON.stringify(updated));
+      localStorage.setItem(storageKey, JSON.stringify(updated));
     } catch {
       // ignore
     }
-  };
+  }, [storageKey]);
+
+  // Automatically detect code input patterns and synthesize tailored test cases with real baseline outputs
+  const handleAutoGenerateTestCases = useCallback(async (isUserTriggered = true) => {
+    setIsGeneratingCases(true);
+    if (isUserTriggered && showToast) {
+      showToast('Analyzing code & synthesizing test cases... 🧠');
+    }
+
+    const codeToRun = currentFile?.content || code || '';
+    const languageId = currentFile?.language?.id || detectedLanguage?.id || 71;
+    const filename = currentFile?.name || 'Main';
+
+    try {
+      const synthesized = await generateAndEvaluateTestCases(
+        codeToRun,
+        languageId,
+        files,
+        filename,
+        executeCode
+      );
+
+      if (synthesized && synthesized.length > 0) {
+        saveCasesToStorage(synthesized);
+        setActiveCaseId(synthesized[0].id);
+        if (showToast) {
+          showToast(`✨ Automatically generated ${synthesized.length} smart test cases tailored for ${filename}!`);
+        }
+      }
+    } catch (err) {
+      if (isUserTriggered && showToast) {
+        showToast(`Failed to generate test cases: ${err.message}`);
+      }
+    } finally {
+      setIsGeneratingCases(false);
+    }
+  }, [currentFile, code, detectedLanguage, files, saveCasesToStorage, showToast]);
+
+  // When active file changes, load its stored test cases or auto-generate if none exist
+  useEffect(() => {
+    let loaded = null;
+    try {
+      const saved = localStorage.getItem(storageKey);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          loaded = parsed;
+        }
+      }
+    } catch {}
+
+    if (loaded) {
+      setTestCases(loaded);
+      setActiveCaseId(loaded[0]?.id || '');
+    } else {
+      // No custom cases saved for this file yet: auto-generate automatically!
+      if (!autoGeneratedFilesRef.current.has(fileKey) && activeCode && activeCode.trim()) {
+        autoGeneratedFilesRef.current.add(fileKey);
+        handleAutoGenerateTestCases(false);
+      }
+    }
+  }, [fileKey, storageKey]);
 
   const handleAddTestCase = () => {
     const newCase = {
@@ -151,6 +276,53 @@ export default function TestCaseSuitePanel() {
     const updated = [...testCases, newCase];
     saveCasesToStorage(updated);
     setActiveCaseId(newCase.id);
+  };
+
+  // Import from main Custom Input tab (stdin)
+  const handleImportFromCustomInput = () => {
+    const customStdin = state.stdin || '';
+    const newCase = {
+      id: `tc-${Date.now()}`,
+      name: `Custom Input Case ${testCases.length + 1}`,
+      input: customStdin,
+      expectedOutput: '',
+      actualOutput: '',
+      status: 'idle',
+      executionTime: null,
+    };
+    const updated = [...testCases, newCase];
+    saveCasesToStorage(updated);
+    setActiveCaseId(newCase.id);
+    if (showToast) showToast('Imported stdin from Custom Input tab! 📥');
+  };
+
+  // Copy active test case input to Custom Input tab
+  const handleCopyToCustomInput = (tc) => {
+    const targetTc = tc || activeTestCase;
+    if (!targetTc) return;
+    if (dispatch) {
+      dispatch({ type: 'SET_STDIN', payload: targetTc.input || '' });
+    }
+    if (showToast) showToast(`Copied "${targetTc.name}" input to Custom Input tab! 📋`);
+  };
+
+  // Clear previous execution outputs from test suite
+  const handleClearResults = () => {
+    const updated = testCases.map((tc) => ({
+      ...tc,
+      actualOutput: '',
+      status: 'idle',
+      executionTime: null,
+    }));
+    saveCasesToStorage(updated);
+    if (showToast) showToast('Cleared test suite execution results! 🧹');
+  };
+
+  // Reset to default test cases
+  const handleResetDefaults = () => {
+    saveCasesToStorage(DEFAULT_TEST_CASES);
+    setActiveCaseId(DEFAULT_TEST_CASES[0]?.id || '');
+    if (showToast) showToast('Reset test cases to defaults 🔄');
   };
 
   const handleDeleteTestCase = (id, e) => {
@@ -190,8 +362,9 @@ export default function TestCaseSuitePanel() {
 
   // Run a single test case
   const runSingleTestCase = async (tc) => {
-    const languageId = detectedLanguage?.id || 71;
-    const currentFile = files.find((f) => f.id === activeFileId);
+    const currentFile = files.find((f) => f.id === activeFileId) || files[0];
+    const codeToRun = currentFile?.content || code || '';
+    const languageId = currentFile?.language?.id || detectedLanguage?.id || 71;
     const filename = currentFile?.name || 'Main';
 
     // Mark running
@@ -201,45 +374,51 @@ export default function TestCaseSuitePanel() {
 
     const startTime = performance.now();
     try {
-      const result = await executeCode(code, languageId, tc.input, files, filename);
+      const result = await executeCode(codeToRun, languageId, tc.input || '', files, filename);
       const elapsed = Math.round(performance.now() - startTime);
 
-      const actualOut = (result?.stdout || '').trim();
-      const expectedOut = (tc.expectedOutput || '').trim();
-      const hasError = Boolean(result?.stderr && !result?.stdout);
+      // Extract output and error safely from all possible runner return structures
+      const rawOut = result?.output ?? result?.stdout ?? '';
+      const rawErr = result?.error ?? result?.stderr ?? '';
+      const cleanOutput = rawOut === '(Program finished with no output)' ? '' : rawOut;
+      const isFailedRun = result?.success === false || Boolean(rawErr && !cleanOutput);
+
+      const actualOut = cleanOutput;
+      const expectedOut = tc.expectedOutput ?? '';
 
       let status = 'passed';
-      if (hasError) {
+      if (isFailedRun && !cleanOutput) {
         status = 'error';
-      } else if (expectedOut && actualOut !== expectedOut) {
-        status = 'failed';
-      } else if (!expectedOut) {
-        status = 'passed';
+      } else if (expectedOut !== '') {
+        const isMatched = checkOutputMatch(expectedOut, actualOut);
+        status = isMatched ? 'passed' : 'failed';
+      } else {
+        // No expected output provided: passed if execution succeeded
+        status = isFailedRun ? 'error' : 'passed';
       }
+
+      // Store actual program output or error message
+      const outputToStore = cleanOutput !== '' ? cleanOutput : (rawErr || '(No output)');
 
       setTestCases((prev) => {
         const next = prev.map((c) =>
           c.id === tc.id
             ? {
                 ...c,
-                actualOutput: result?.stdout || result?.stderr || '',
+                actualOutput: outputToStore,
                 status,
                 executionTime: elapsed,
               }
             : c
         );
-        try {
-          localStorage.setItem('fullcode_test_cases', JSON.stringify(next));
-        } catch {
-          // ignore
-        }
+        saveCasesToStorage(next);
         return next;
       });
 
       return { ok: status === 'passed', time: elapsed };
     } catch (err) {
-      setTestCases((prev) =>
-        prev.map((c) =>
+      setTestCases((prev) => {
+        const next = prev.map((c) =>
           c.id === tc.id
             ? {
                 ...c,
@@ -248,13 +427,15 @@ export default function TestCaseSuitePanel() {
                 executionTime: null,
               }
             : c
-        )
-      );
+        );
+        saveCasesToStorage(next);
+        return next;
+      });
       return { ok: false, error: err.message };
     }
   };
 
-  // Run all test cases sequentially or in parallel
+  // Run all test cases sequentially
   const handleRunAllTestCases = async () => {
     if (isRunningAll) return;
     setIsRunningAll(true);
@@ -284,49 +465,35 @@ export default function TestCaseSuitePanel() {
     return { passed, failed, errors, percentage, total: testCases.length };
   }, [testCases]);
 
-  // ─── Stress Tester Generator ───────────────────────────────────────────
-  const generateRandomInput = (type, min, max, len) => {
-    if (type === 'array') {
-      const arr = Array.from({ length: len }, () =>
-        Math.floor(Math.random() * (max - min + 1)) + min
-      );
-      return `${len}\n${arr.join(' ')}`;
-    }
-    if (type === 'string') {
-      const chars = 'abcdefghijklmnopqrstuvwxyz';
-      let str = '';
-      for (let i = 0; i < len; i++) {
-        str += chars.charAt(Math.floor(Math.random() * chars.length));
-      }
-      return `${str}`;
-    }
-    if (type === 'pairs') {
-      const a = Math.floor(Math.random() * (max - min + 1)) + min;
-      const b = Math.floor(Math.random() * (max - min + 1)) + min;
-      return `${a} ${b}`;
-    }
-    return '10\n1 2 3';
-  };
-
   const handleRunStressTest = async () => {
     setIsStressRunning(true);
     const results = [];
-    const languageId = detectedLanguage?.id || 71;
-    const currentFile = files.find((f) => f.id === activeFileId);
+    const codeToRun = currentFile?.content || code || '';
+    const languageId = currentFile?.language?.id || detectedLanguage?.id || 71;
     const filename = currentFile?.name || 'Main';
 
+    const typeToUse = stressType === 'auto' ? detectedPattern.type : stressType;
+
     for (let i = 1; i <= stressCount; i++) {
-      const input = generateRandomInput(stressType, stressMin, stressMax, stressLength);
+      const input = generateRandomInputForPattern(typeToUse, {
+        min: stressMin,
+        max: stressMax,
+        length: stressLength,
+      });
       const start = performance.now();
       try {
-        const res = await executeCode(code, languageId, input, files, filename);
+        const res = await executeCode(codeToRun, languageId, input, files, filename);
         const elapsed = Math.round(performance.now() - start);
-        const hasErr = Boolean(res?.stderr && !res?.stdout);
+
+        const rawOut = res?.output ?? res?.stdout ?? '';
+        const rawErr = res?.error ?? res?.stderr ?? '';
+        const cleanOut = rawOut === '(Program finished with no output)' ? '' : rawOut;
+        const hasErr = res?.success === false || Boolean(rawErr && !cleanOut);
 
         results.push({
           iteration: i,
           input,
-          output: res?.stdout || res?.stderr || '',
+          output: cleanOut || rawErr || '(No output)',
           time: elapsed,
           ok: !hasErr,
         });
@@ -334,7 +501,7 @@ export default function TestCaseSuitePanel() {
         results.push({
           iteration: i,
           input,
-          output: err.message,
+          output: err.message || 'Execution error',
           time: null,
           ok: false,
         });
@@ -375,6 +542,10 @@ export default function TestCaseSuitePanel() {
           <div>
             <div className="test-suite-title-row">
               <h3>Competitive Test Suite & Stress Tester</h3>
+              <span className="test-suite-pattern-pill" title={`Auto-detected pattern from code: ${patternLabel}`}>
+                <Sparkles size={11} />
+                <span>{patternLabel}</span>
+              </span>
               <span className="test-suite-stat-pill">
                 {stats.passed}/{stats.total} Passed ({stats.percentage}%)
               </span>
@@ -387,12 +558,31 @@ export default function TestCaseSuitePanel() {
 
         <div className="test-suite-actions">
           <button
+            className="btn-suite-action btn-clear"
+            onClick={handleClearResults}
+            title="Reset execution outputs and statuses back to idle"
+          >
+            <RotateCcw size={13} />
+            <span>Clear Results</span>
+          </button>
+
+          <button
             className="btn-suite-action btn-stress"
             onClick={() => setStressModalOpen(true)}
             title="Generate randomized test inputs to discover failing edge cases"
           >
             <Dices size={14} />
             <span>Stress Tester</span>
+          </button>
+
+          <button
+            className="btn-suite-action btn-auto-gen"
+            onClick={handleAutoGenerateTestCases}
+            disabled={isGeneratingCases || isRunningAll}
+            title="Automatically detect code structure and generate tailored sample, edge, and scale test cases"
+          >
+            <Sparkles size={14} className={isGeneratingCases ? 'icon-sparkle-spin' : ''} />
+            <span>{isGeneratingCases ? 'Generating...' : 'Auto-Generate Cases'}</span>
           </button>
 
           <button
@@ -636,9 +826,12 @@ export default function TestCaseSuitePanel() {
                 <div className="stress-field">
                   <label>Generator Pattern</label>
                   <select value={stressType} onChange={(e) => setStressType(e.target.value)}>
-                    <option value="array">Random Array (size N, values min..max)</option>
+                    <option value="auto">✨ Auto-Detected ({patternLabel})</option>
+                    <option value="string_collection">Collection of N Strings</option>
+                    <option value="number_array">Random Array (size N, min..max)</option>
                     <option value="string">Random String (characters a-z)</option>
                     <option value="pairs">Two Integers (N, K)</option>
+                    <option value="matrix">2D Matrix / Grid</option>
                   </select>
                 </div>
 
@@ -653,10 +846,10 @@ export default function TestCaseSuitePanel() {
                   />
                 </div>
 
-                {stressType === 'array' && (
+                {(stressType === 'auto' || stressType === 'number_array' || stressType === 'string_collection' || stressType === 'matrix') && (
                   <>
                     <div className="stress-field">
-                      <label>Array Length (N)</label>
+                      <label>Count / Length (N)</label>
                       <input
                         type="number"
                         min="1"
@@ -665,22 +858,24 @@ export default function TestCaseSuitePanel() {
                         onChange={(e) => setStressLength(Number(e.target.value))}
                       />
                     </div>
-                    <div className="stress-field">
-                      <label>Range (Min - Max)</label>
-                      <div className="stress-range-inputs">
-                        <input
-                          type="number"
-                          value={stressMin}
-                          onChange={(e) => setStressMin(Number(e.target.value))}
-                        />
-                        <span>to</span>
-                        <input
-                          type="number"
-                          value={stressMax}
-                          onChange={(e) => setStressMax(Number(e.target.value))}
-                        />
+                    {((stressType === 'auto' && detectedPattern.type !== 'string_collection' && detectedPattern.type !== 'string') || (stressType === 'number_array' || stressType === 'matrix')) && (
+                      <div className="stress-field">
+                        <label>Range (Min - Max)</label>
+                        <div className="stress-range-inputs">
+                          <input
+                            type="number"
+                            value={stressMin}
+                            onChange={(e) => setStressMin(Number(e.target.value))}
+                          />
+                          <span>to</span>
+                          <input
+                            type="number"
+                            value={stressMax}
+                            onChange={(e) => setStressMax(Number(e.target.value))}
+                          />
+                        </div>
                       </div>
-                    </div>
+                    )}
                   </>
                 )}
               </div>

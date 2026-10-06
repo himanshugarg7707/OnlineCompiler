@@ -105,7 +105,7 @@ const LANGUAGE_PATTERNS = [
       /\bconsole\.log\s*\(/,
       /\bconst\s+\w+\s*=/,
       /\blet\s+\w+\s*=/,
-      /\b=>\s*[\{(]/,
+      /\b=>\s*[{(]/,
       /\bfunction\s+\w+\s*\(/,
       /\brequire\s*\(/,
       /\bmodule\.exports/,
@@ -341,11 +341,11 @@ const LANGUAGE_PATTERNS = [
       /\bsub\s+\w+\s*\{/,
       /\bforeach\s+my\b/,
       /\bdie\s+"/,
-      /\b=~\s*[\/sm]/,
-      /\@\w+/,
-      /\%\w+/,
+      /\b=~\s*[/sm]/,
+      /@\w+/,
+      /%\w+/,
       /\bchomp\b/,
-      /\bqw\s*[\(\[]/,
+      /\bqw\s*[(\[]/,
     ],
     weight: 1.1,
   },
@@ -703,7 +703,7 @@ export function parseJavaCellComponents(codeText) {
 
   // 2. Extract methods from remainingCode
   // Matches method signatures: [modifiers] ReturnType methodName(...) [throws ...] {
-  const methodRegex = /(?:^|\n)\s*(?:(public|protected|private|static|final|synchronized)\s+)*([A-Za-z0-9_<>\[\]]+)\s+([A-Za-z0-9_$]+)\s*\(([^)]*)\)\s*(?:throws\s+[A-Za-z0-9_$,\s]+)?\s*\{/g;
+  const methodRegex = /(?:^|\n)\s*(?:(public|protected|private|static|final|synchronized)\s+)*([A-Za-z0-9_<>[\]]+)\s+([A-Za-z0-9_$]+)\s*\(([^)]*)\)\s*(?:throws\s+[A-Za-z0-9_$,\s]+)?\s*\{/g;
   const methods = [];
   const statementChunks = [];
   let methodLastIndex = 0;

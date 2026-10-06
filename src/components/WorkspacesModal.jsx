@@ -24,7 +24,7 @@ import {
 import './WorkspacesModal.css';
 
 export default function WorkspacesModal({ isOpen, onClose }) {
-  const { state, handleLoadWorkspaceState, showToast } = useApp();
+  const { state, dispatch, handleLoadWorkspaceState, showToast } = useApp();
   const { files, folders, activeFileId, stdin, detectedLanguage } = state;
 
   const [workspaces, setWorkspaces] = useState([]);
@@ -50,9 +50,15 @@ export default function WorkspacesModal({ isOpen, onClose }) {
       folders,
       activeFileId,
       stdin,
-      detectedLanguage
+      detectedLanguage,
+      state.currentWorkspaceId,
+      state.subjectId
     );
     setWorkspaces(getSavedWorkspaces());
+    dispatch({
+      type: 'SET_CURRENT_WORKSPACE_META',
+      payload: { id: saved.id, name: saved.name, subjectId: saved.subjectId },
+    });
     showToast(`Workspace "${saved.name}" saved! 💾`);
   };
 
@@ -148,8 +154,12 @@ export default function WorkspacesModal({ isOpen, onClose }) {
                 <span>Save your current workspace above to restore or switch back to it anytime.</span>
               </div>
             ) : (
-              workspaces.map((ws) => (
-                <div key={ws.id} className="workspace-card" onClick={() => handleLoad(ws)}>
+              workspaces.map((ws) => {
+                const isActive =
+                  state.currentWorkspaceId === ws.id ||
+                  (state.currentWorkspaceName && state.currentWorkspaceName.toLowerCase() === ws.name.toLowerCase());
+                return (
+                <div key={ws.id} className={`workspace-card ${isActive ? 'active-ws' : ''}`} onClick={() => handleLoad(ws)}>
                   <div className="workspace-card-top">
                     <div className="workspace-card-title-wrap">
                       <FileCode size={16} className="ws-icon" />
@@ -171,7 +181,10 @@ export default function WorkspacesModal({ isOpen, onClose }) {
                           </button>
                         </div>
                       ) : (
-                        <strong className="workspace-name">{ws.name}</strong>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0, flex: 1 }}>
+                          <strong className="workspace-name">{ws.name}</strong>
+                          {isActive && <span className="active-badge">Active</span>}
+                        </div>
                       )}
                     </div>
 
@@ -215,7 +228,8 @@ export default function WorkspacesModal({ isOpen, onClose }) {
                     </button>
                   </div>
                 </div>
-              ))
+              );
+            })
             )}
           </div>
         </div>

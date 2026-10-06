@@ -126,13 +126,20 @@ function getCellSource(cell) {
 function parseNotebook(rawJson, fileName = '', wsFiles = [], fileLanguage = null) {
   const fLower = (fileName || '').toLowerCase();
   const getFallback = () => {
-    // 1. Check filename
+    // 1. Check fileLanguage
+    const nbLang = fileLanguage?.notebookLanguage || fileLanguage?.kernel;
+    if (nbLang === 'java') return JSON.parse(createDefaultNotebookJson('java'));
+    if (nbLang === 'cpp') return JSON.parse(createDefaultNotebookJson('cpp'));
+    if (nbLang === 'javascript' || nbLang === 'js') return JSON.parse(createDefaultNotebookJson('javascript'));
+    if (nbLang === 'python') return JSON.parse(createDefaultNotebookJson('python'));
+
+    // 2. Check filename
     if (fLower.includes('java')) return JSON.parse(createDefaultNotebookJson('java'));
     if (fLower.includes('cpp') || fLower.includes('c++')) return JSON.parse(createDefaultNotebookJson('cpp'));
     if (fLower.includes('js') || fLower.includes('javascript')) return JSON.parse(createDefaultNotebookJson('javascript'));
     if (fLower.includes('python') || fLower.includes('py_')) return JSON.parse(createDefaultNotebookJson('python'));
 
-    // 2. Check workspace files: In Java section, default is Java!
+    // 3. Check workspace files
     if (Array.isArray(wsFiles) && wsFiles.length > 0) {
       if (wsFiles.some((f) => f.name?.endsWith('.java') || f.name?.includes('Main.java') || f.language?.id === 62 || f.language?.monacoLanguage === 'java')) {
         return JSON.parse(createDefaultNotebookJson('java'));
@@ -145,14 +152,7 @@ function parseNotebook(rawJson, fileName = '', wsFiles = [], fileLanguage = null
       }
     }
 
-    // 3. Check fileLanguage
-    const nbLang = fileLanguage?.notebookLanguage || fileLanguage?.kernel;
-    if (nbLang === 'java') return JSON.parse(createDefaultNotebookJson('java'));
-    if (nbLang === 'cpp') return JSON.parse(createDefaultNotebookJson('cpp'));
-    if (nbLang === 'javascript' || nbLang === 'js') return JSON.parse(createDefaultNotebookJson('javascript'));
-    if (nbLang === 'python') return JSON.parse(createDefaultNotebookJson('python'));
-
-    return JSON.parse(createDefaultNotebookJson('java'));
+    return JSON.parse(createDefaultNotebookJson('python'));
   };
 
   try {
@@ -160,89 +160,8 @@ function parseNotebook(rawJson, fileName = '', wsFiles = [], fileLanguage = null
       return getFallback();
     }
     const data = JSON.parse(rawJson);
-    if (data && Array.isArray(data.cells)) {
-      const allCellCode = data.cells
-        .filter((c) => c.cell_type === 'code')
-        .map(getCellSource)
-        .join('\n');
-
-      const wsHasJava =
-        Array.isArray(wsFiles) &&
-        wsFiles.some((f) => f.name?.endsWith('.java') || f.name?.includes('Main.java') || f.language?.id === 62 || f.language?.monacoLanguage === 'java');
-      const wsHasCpp =
-        Array.isArray(wsFiles) &&
-        wsFiles.some((f) => f.name?.endsWith('.cpp') || f.name?.endsWith('.cc') || f.language?.id === 54 || f.language?.monacoLanguage === 'cpp');
-      const wsHasJs =
-        Array.isArray(wsFiles) &&
-        wsFiles.some((f) => (f.name?.endsWith('.js') && !f.name?.endsWith('.ipynb')) || f.language?.id === 63 || f.language?.monacoLanguage === 'javascript');
-
-      const hasJavaCells =
-        /System\.(out|err|in)\b|(?:public|private|protected)?\s*(?:class|interface|enum|record)\s+\w+|public\s+static\s+void\s+main|Scanner\s+\w+|import\s+java\.|List<\w+>|ArrayList<\w+>|Map<\w+|HashMap<\w+|Set<\w+|\/\/.*(?:Java|JShell)/i.test(
-          allCellCode
-        );
-
-      const isDefaultPythonBoilerplate =
-        rawJson.includes('Jupyter Notebook (Python 3)') ||
-        rawJson.includes('Pyodide WebAssembly') ||
-        (rawJson.includes('import numpy as np') && rawJson.includes('import pandas as pd') && rawJson.includes('Popularity'));
-
-      // If workspace is Java or cells have Java code, and file doesn't explicitly declare itself python in filename:
-      if ((wsHasJava || hasJavaCells) && !fLower.includes('python') && !fLower.includes('py_')) {
-        if (isDefaultPythonBoilerplate) {
-          return JSON.parse(createDefaultNotebookJson('java'));
-        }
-        data.metadata = {
-          ...data.metadata,
-          language_info: { name: 'java', version: '17' },
-          kernelspec: {
-            display_name: 'Java (OpenJDK / JShell Engine)',
-            language: 'java',
-            name: 'java',
-          },
-        };
-        return data;
-      }
-
-      // If workspace is C++, and file doesn't declare python:
-      if (wsHasCpp && !fLower.includes('python') && !fLower.includes('py_')) {
-        if (isDefaultPythonBoilerplate) {
-          return JSON.parse(createDefaultNotebookJson('cpp'));
-        }
-        const kLang = data.metadata?.kernelspec?.language;
-        if (!kLang || kLang.toLowerCase() !== 'cpp') {
-          data.metadata = {
-            ...data.metadata,
-            language_info: { name: 'cpp', version: '20' },
-            kernelspec: {
-              display_name: 'C++ (GCC / Clang C++20)',
-              language: 'cpp',
-              name: 'cpp',
-            },
-          };
-        }
-        return data;
-      }
-
-      // If workspace is JS, and file doesn't declare python:
-      if (wsHasJs && !fLower.includes('python') && !fLower.includes('py_')) {
-        if (isDefaultPythonBoilerplate) {
-          return JSON.parse(createDefaultNotebookJson('javascript'));
-        }
-        const kLang = data.metadata?.kernelspec?.language;
-        if (!kLang || kLang.toLowerCase() !== 'javascript') {
-          data.metadata = {
-            ...data.metadata,
-            language_info: { name: 'javascript', version: 'ES2022' },
-            kernelspec: {
-              display_name: 'JavaScript (Browser V8)',
-              language: 'javascript',
-              name: 'javascript',
-            },
-          };
-        }
-        return data;
-      }
-
+    if (data && Array.isArray(data.cells) && data.cells.length > 0) {
+      // Preserve user notebook cells and data integrity completely
       return data;
     }
     return getFallback();
@@ -324,7 +243,27 @@ export default function JupyterNotebookEditor({ file, onContentChange }) {
       return 'javascript';
     }
 
-    // 2. Check workspace files: In a Java workspace (Java section), notebook is ALWAYS Java!
+    // 2. Metadata kernelspec fallback (ground truth saved in the .ipynb)
+    const metaLang =
+      notebook?.metadata?.kernelspec?.language ||
+      notebook?.metadata?.language_info?.name;
+    if (metaLang) {
+      const l = String(metaLang).toLowerCase();
+      if (l.includes('java')) return 'java';
+      if (l.includes('cpp') || l.includes('c++')) return 'cpp';
+      if (l.includes('javascript') || l === 'js') return 'javascript';
+      if (l.includes('python')) return 'python';
+    }
+
+    // 3. Explicit file.language notebookLanguage or kernel tag
+    if (file?.language?.notebookLanguage && file.language.notebookLanguage !== 'python') {
+      return file.language.notebookLanguage;
+    }
+    if (file?.language?.kernel && file.language.kernel !== 'python') {
+      return file.language.kernel;
+    }
+
+    // 4. Check workspace files if notebook has no explicit language specified
     const wsFiles = appState?.files || [];
     const wsHasJava = wsFiles.some(
       (f) => f.name?.endsWith('.java') || f.name?.includes('Main.java') || f.language?.id === 62 || f.language?.monacoLanguage === 'java'
@@ -344,26 +283,6 @@ export default function JupyterNotebookEditor({ file, onContentChange }) {
     }
     if (wsHasJs) {
       return 'javascript';
-    }
-
-    // 3. Metadata kernelspec fallback
-    const metaLang =
-      notebook?.metadata?.kernelspec?.language ||
-      notebook?.metadata?.language_info?.name;
-    if (metaLang) {
-      const l = String(metaLang).toLowerCase();
-      if (l.includes('java')) return 'java';
-      if (l.includes('cpp') || l.includes('c++')) return 'cpp';
-      if (l.includes('javascript') || l === 'js') return 'javascript';
-      if (l.includes('python')) return 'python';
-    }
-
-    // 4. Explicit file.language notebookLanguage or kernel tag (if not conflicting with workspace)
-    if (file?.language?.notebookLanguage && file.language.notebookLanguage !== 'python') {
-      return file.language.notebookLanguage;
-    }
-    if (file?.language?.kernel && file.language.kernel !== 'python') {
-      return file.language.kernel;
     }
 
     return 'python';
@@ -489,19 +408,7 @@ export default function JupyterNotebookEditor({ file, onContentChange }) {
     }
     const parsed = parseNotebook(file?.content, file?.name, appState?.files, file?.language);
     setNotebook(parsed);
-
-    // Auto-persist if parsed was upgraded from default Python boilerplate to Java notebook
-    const raw = file?.content || '';
-    const isOldBoilerplate =
-      raw.includes('Jupyter Notebook (Python 3)') ||
-      raw.includes('Pyodide WebAssembly') ||
-      (raw.includes('import numpy as np') && raw.includes('Popularity'));
-
-    if (isOldBoilerplate && parsed?.metadata?.kernelspec?.language === 'java') {
-      const newJson = JSON.stringify(parsed, null, 2);
-      onContentChange?.(newJson);
-    }
-  }, [file?.id, file?.content, file?.name, file?.language, appState?.files, onContentChange]);
+  }, [file?.id, file?.content, file?.name, file?.language]);
 
   // Keep file.language aligned with active notebookLanguage in AppContext
   useEffect(() => {

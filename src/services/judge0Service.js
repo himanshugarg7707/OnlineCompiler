@@ -175,6 +175,14 @@ export async function executeCode(code, languageId, stdin = '', allFiles = [], f
 
   const withCompilerMeta = (res) => {
     if (!res || typeof res !== 'object') return res;
+    // Standardize stdout/output and stderr/error across all execution engines
+    const rawOut = res.output ?? res.stdout ?? '';
+    const rawErr = res.error ?? res.stderr ?? '';
+    res.output = rawOut;
+    res.stdout = rawOut;
+    res.error = rawErr;
+    res.stderr = rawErr;
+
     if (!res.compilerInfo) {
       res.compilerInfo = getCompilationIdentifier(getLanguageById(languageId), filename);
     }

@@ -135,7 +135,7 @@ function mockExplainCode(code, language) {
       const hasQueue = /Queue|LinkedList|ArrayDeque/i.test(safeCode);
       const hasStack = /Stack|pop\(\)|push\(\)/i.test(safeCode);
       const hasLoop = /for\s*\(|while\s*\(|for\s+\w+\s+in|\.forEach/i.test(safeCode);
-      const hasRecursion = /def\s+(\w+).*?\1\(|(\w+)\s*\([^)]*\)\s*\{[^\}]*?\2\(/s.test(safeCode);
+      const hasRecursion = /def\s+(\w+).*?\1\(|(\w+)\s*\([^)]*\)\s*\{[^}]*?\2\(/s.test(safeCode);
       const hasScanner = /Scanner|cin|input\(|readline/i.test(safeCode);
       const hasCondition = /if\s*\(|if\s+/i.test(safeCode);
       const hasArray = /\[\]|vector|ArrayList|list\(/i.test(safeCode);

@@ -6,7 +6,7 @@ import {
   launchSubjectWorkspace,
   deleteNotebookMeta,
 } from '../services/notebooksService';
-import { getSavedWorkspaces } from '../services/workspaceService';
+import { getSavedWorkspaces, saveActiveWorkspace, getCurrentWorkspaceMeta } from '../services/workspaceService';
 import { createDefaultNotebookJson } from '../services/languageDetector';
 import {
   BookOpen,
@@ -62,6 +62,23 @@ export default function NotebookSetupPage() {
   };
 
   const handleLaunchPreset = (subject) => {
+    // Auto-save outgoing workspace before launching target subject
+    const prevWsId = state.currentWorkspaceId || getCurrentWorkspaceMeta()?.id || `ws_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+    const prevWsName = state.currentWorkspaceName || getCurrentWorkspaceMeta()?.name || 'Workspace';
+    const prevSubjectId = state.subjectId || getCurrentWorkspaceMeta()?.subjectId || null;
+    if (state.files && state.files.length > 0) {
+      saveActiveWorkspace(
+        prevWsId,
+        prevWsName,
+        state.files,
+        state.folders,
+        state.activeFileId,
+        state.stdin,
+        state.detectedLanguage,
+        prevSubjectId
+      );
+    }
+
     const ws = launchSubjectWorkspace(subject);
     if (handleLoadWorkspaceState) {
       handleLoadWorkspaceState(ws);
