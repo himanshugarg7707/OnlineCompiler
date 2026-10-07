@@ -17,8 +17,24 @@ class InMemoryDatabase {
     const cleanName = tableName.toLowerCase();
     this.tables[cleanName] = {
       name: tableName,
+      type: 'table',
       columns: columnDefs, // array of { name, type, isPk, notNull, default }
       rows: [],
+      autoIncrementSeq: 1,
+    };
+    return this.tables[cleanName];
+  }
+
+  createView(viewName, query, columnDefs, rows, ddl) {
+    const cleanName = viewName.toLowerCase();
+    this.tables[cleanName] = {
+      name: viewName,
+      type: 'view',
+      isView: true,
+      query: query,
+      columns: columnDefs,
+      rows: rows || [],
+      sql: ddl || `CREATE VIEW ${viewName} AS ${query};`,
       autoIncrementSeq: 1,
     };
     return this.tables[cleanName];
@@ -369,6 +385,279 @@ export function transpileSqlForSqlite(sql) {
 }
 
 /**
+ * Evaluates a single SELECT statement against the specified database
+ */
+export function executeSelectStatement(selectStmt, activeDb, currentActiveDbName = 'main_db', isRecursive = false) {
+  const cleanStmt = (selectStmt || '').trim().replace(/;+$/, '');
+  const selectMatch = cleanStmt.match(/^SELECT\s+([\s\S]+?)\s+FROM\s+([a-zA-Z0-9_"-]+)([\s\S]*)/i);
+  if (!selectMatch) {
+    return {
+      success: false,
+      error: `Syntax error in SELECT statement: "${cleanStmt}"`,
+      columns: [],
+      rows: [],
+      rowCount: 0,
+    };
+  }
+
+  const columnsClause = selectMatch[1].trim();
+  const rawTableName = selectMatch[2].replace(/["']/g, '');
+  const tableName = rawTableName.toLowerCase();
+  const restClause = selectMatch[3].trim();
+
+  // Handle virtual system tables: sqlite_master / sqlite_schema
+  if (tableName === 'sqlite_master' || tableName === 'sqlite_schema') {
+    const allTables = Object.values(activeDb?.tables || {});
+    let masterRows = allTables.map((t, idx) => ({
+      type: t.isView || t.type === 'view' ? 'view' : 'table',
+      name: t.name,
+      tbl_name: t.name,
+      rootpage: idx + 2,
+      sql: t.isView || t.type === 'view'
+        ? (t.sql || `CREATE VIEW ${t.name} AS ${t.query || 'SELECT 1'};`)
+        : generateTableDdl(t),
+    }));
+
+    // Handle simple WHERE clause on sqlite_master
+    const whereMatch = restClause.match(/WHERE\s+([\s\S]+?)(?=(?:\s+(?:ORDER|GROUP|LIMIT)\b)|$)/i);
+    if (whereMatch) {
+      const condition = whereMatch[1].trim();
+      const eqMatch = condition.match(/([a-zA-Z0-9_]+)\s*(=|!=|LIKE)\s*(.+)/i);
+      if (eqMatch) {
+        const field = eqMatch[1].trim().toLowerCase();
+        const op = eqMatch[2].trim().toUpperCase();
+        const targetVal = parseLiteral(eqMatch[3].trim());
+
+        masterRows = masterRows.filter((r) => {
+          const actual = String(r[field] ?? '');
+          if (op === '=') return actual.toLowerCase() === String(targetVal).toLowerCase();
+          if (op === '!=') return actual.toLowerCase() !== String(targetVal).toLowerCase();
+          if (op === 'LIKE') {
+            const pat = String(targetVal).replace(/%/g, '.*').replace(/_/g, '.');
+            return new RegExp(`^${pat}$`, 'i').test(actual);
+          }
+          return true;
+        });
+      }
+    }
+
+    let outCols = [];
+    if (columnsClause === '*') {
+      outCols = ['type', 'name', 'tbl_name', 'rootpage', 'sql'];
+    } else {
+      outCols = columnsClause.split(',').map((c) => c.trim().replace(/["'`]/g, ''));
+    }
+
+    const projectedRows = masterRows.map((r) => {
+      const rowObj = {};
+      outCols.forEach((c) => {
+        rowObj[c] = r[c] !== undefined ? r[c] : null;
+      });
+      return rowObj;
+    });
+
+    return {
+      success: true,
+      columns: outCols,
+      rows: projectedRows,
+      rowCount: projectedRows.length,
+      type: 'SELECT',
+    };
+  }
+
+  let table = activeDb?.getTable(tableName);
+  if (!table) {
+    const altDb = findDatabaseForTableInBrowser(tableName);
+    if (altDb) {
+      activeDb = inMemoryDatabases.get(altDb);
+      table = activeDb?.getTable(tableName);
+    }
+  }
+
+  if (!table) {
+    return {
+      success: false,
+      error: `Table or view '${rawTableName}' does not exist in database '${activeDb?.name || currentActiveDbName}'.`,
+      columns: [],
+      rows: [],
+      rowCount: 0,
+    };
+  }
+
+  // If table is a view, dynamically re-evaluate underlying query to ensure fresh results
+  if ((table.isView || table.type === 'view') && table.query && !isRecursive) {
+    try {
+      const freshRes = executeSelectStatement(table.query, activeDb, currentActiveDbName, true);
+      if (freshRes && freshRes.success) {
+        table.rows = freshRes.rows;
+        table.columns = freshRes.columns.map((c) => ({
+          name: c,
+          type: typeof freshRes.rows[0]?.[c] === 'number' ? 'NUMERIC' : 'TEXT',
+          isPk: false,
+          notNull: false,
+        }));
+      }
+    } catch (e) {
+      console.warn('Failed to dynamically evaluate view query:', e);
+    }
+  }
+
+  let resultRows = (table.rows || []).map((r) => ({ ...r }));
+
+  // Check for simple JOIN in restClause e.g. JOIN table2 [alias2] ON t1.id = t2.id
+  let workingRest = restClause;
+  const joinMatch = restClause.match(/^(?:\s+(?:AS\s+)?([a-zA-Z0-9_"-]+))?\s+(?:(?:INNER|LEFT(?:\s+OUTER)?)\s+)?JOIN\s+([a-zA-Z0-9_"-]+)(?:\s+(?:AS\s+)?([a-zA-Z0-9_"-]+))?\s+ON\s+([a-zA-Z0-9_.]+)\s*=\s*([a-zA-Z0-9_.]+)([\s\S]*)/i);
+  if (joinMatch) {
+    const table2Name = joinMatch[2].replace(/["']/g, '').toLowerCase();
+    const joinKey1 = joinMatch[4].split('.').pop().trim();
+    const joinKey2 = joinMatch[5].split('.').pop().trim();
+    workingRest = (joinMatch[6] || '').trim();
+
+    const table2 = activeDb?.getTable(table2Name);
+    if (table2 && table2.rows) {
+      const joined = [];
+      resultRows.forEach((r1) => {
+        const matches = table2.rows.filter((r2) => String(r1[joinKey1]) === String(r2[joinKey2]) || String(r1[joinKey2]) === String(r2[joinKey1]));
+        if (matches.length > 0) {
+          matches.forEach((r2) => {
+            joined.push({ ...r1, ...r2 });
+          });
+        }
+      });
+      if (joined.length > 0) {
+        resultRows = joined;
+      }
+    }
+  }
+
+  // Handle simple WHERE clause
+  const whereMatch = workingRest.match(/WHERE\s+([\s\S]+?)(?=(?:\s+(?:ORDER|GROUP|LIMIT)\b)|$)/i);
+  if (whereMatch) {
+    const condition = whereMatch[1].trim();
+    const eqMatch = condition.match(/([a-zA-Z0-9_.]+)\s*(=|!=|>|<|>=|<=|LIKE)\s*(.+)/i);
+    if (eqMatch) {
+      const field = eqMatch[1].trim().split('.').pop();
+      const op = eqMatch[2].trim().toUpperCase();
+      const targetVal = parseLiteral(eqMatch[3].trim());
+
+      resultRows = resultRows.filter((r) => {
+        const actual = r[field];
+        if (op === '=') return String(actual).toLowerCase() === String(targetVal).toLowerCase();
+        if (op === '!=') return String(actual).toLowerCase() !== String(targetVal).toLowerCase();
+        if (op === '>') return Number(actual) > Number(targetVal);
+        if (op === '<') return Number(actual) < Number(targetVal);
+        if (op === '>=') return Number(actual) >= Number(targetVal);
+        if (op === '<=') return Number(actual) <= Number(targetVal);
+        if (op === 'LIKE') {
+          const pat = String(targetVal).replace(/%/g, '.*').replace(/_/g, '.');
+          return new RegExp(`^${pat}$`, 'i').test(String(actual ?? ''));
+        }
+        return true;
+      });
+    }
+  }
+
+  // Check for aggregates like sum(col), count(*), count(col), avg(col), min(col), max(col)
+  const aggMatch = columnsClause.match(/^(SUM|COUNT|AVG|MIN|MAX)\s*\(([^)]+)\)$/i);
+  if (aggMatch) {
+    const func = aggMatch[1].toUpperCase();
+    const arg = aggMatch[2].trim().replace(/["'`]/g, '');
+
+    let aggVal = 0;
+    if (func === 'COUNT') {
+      aggVal = resultRows.length;
+    } else if (func === 'SUM') {
+      aggVal = resultRows.reduce((acc, r) => acc + (Number(r[arg]) || 0), 0);
+    } else if (func === 'AVG') {
+      const total = resultRows.reduce((acc, r) => acc + (Number(r[arg]) || 0), 0);
+      aggVal = resultRows.length ? Number((total / resultRows.length).toFixed(2)) : 0;
+    } else if (func === 'MIN') {
+      const nums = resultRows.map((r) => Number(r[arg])).filter((n) => !isNaN(n));
+      aggVal = nums.length ? Math.min(...nums) : 0;
+    } else if (func === 'MAX') {
+      const nums = resultRows.map((r) => Number(r[arg])).filter((n) => !isNaN(n));
+      aggVal = nums.length ? Math.max(...nums) : 0;
+    }
+
+    return {
+      success: true,
+      columns: [columnsClause],
+      rows: [{ [columnsClause]: aggVal }],
+      rowCount: 1,
+      type: 'SELECT',
+    };
+  }
+
+  // Handle ORDER BY
+  const orderMatch = workingRest.match(/ORDER\s+BY\s+([a-zA-Z0-9_.]+)(?:\s+(ASC|DESC))?/i);
+  if (orderMatch) {
+    const orderCol = orderMatch[1].trim().split('.').pop();
+    const isDesc = (orderMatch[2] || 'ASC').toUpperCase() === 'DESC';
+    resultRows.sort((a, b) => {
+      const valA = a[orderCol];
+      const valB = b[orderCol];
+      if (valA === valB) return 0;
+      if (valA === null || valA === undefined) return 1;
+      if (valB === null || valB === undefined) return -1;
+      if (typeof valA === 'number' && typeof valB === 'number') {
+        return isDesc ? valB - valA : valA - valB;
+      }
+      return isDesc
+        ? String(valB).localeCompare(String(valA))
+        : String(valA).localeCompare(String(valB));
+    });
+  }
+
+  // Handle LIMIT
+  const limitMatch = workingRest.match(/LIMIT\s+(\d+)(?:\s+OFFSET\s+(\d+))?/i);
+  if (limitMatch) {
+    const limit = parseInt(limitMatch[1], 10);
+    const offset = parseInt(limitMatch[2] || '0', 10);
+    resultRows = resultRows.slice(offset, offset + limit);
+  }
+
+  // Determine output columns and project rows
+  let outColumns = [];
+  let projectedRows = resultRows;
+
+  if (columnsClause === '*') {
+    outColumns = (table.columns || []).map((c) => c.name);
+    if (outColumns.length === 0 && resultRows[0]) {
+      outColumns = Object.keys(resultRows[0]);
+    }
+  } else {
+    const colExpressions = columnsClause.split(',').map((c) => {
+      const aliasMatch = c.trim().match(/^(.+?)\s+AS\s+(.+)$/i);
+      if (aliasMatch) {
+        return {
+          source: aliasMatch[1].trim().split('.').pop().replace(/["'`]/g, ''),
+          alias: aliasMatch[2].trim().replace(/["'`]/g, ''),
+        };
+      }
+      const cleanCol = c.trim().split('.').pop().replace(/["'`]/g, '');
+      return { source: cleanCol, alias: cleanCol };
+    });
+
+    outColumns = colExpressions.map((e) => e.alias);
+    projectedRows = resultRows.map((r) => {
+      const obj = {};
+      colExpressions.forEach((e) => {
+        obj[e.alias] = r[e.source] !== undefined ? r[e.source] : (r[e.alias] !== undefined ? r[e.alias] : null);
+      });
+      return obj;
+    });
+  }
+
+  return {
+    success: true,
+    columns: outColumns,
+    rows: projectedRows,
+    rowCount: projectedRows.length,
+    type: 'SELECT',
+  };
+}
+
+/**
  * Main in-browser SQL Execution Engine
  */
 export async function executeSqlInBrowser(sqlQuery) {
@@ -561,18 +850,97 @@ export async function executeSqlInBrowser(sqlQuery) {
       continue;
     }
 
-    // 1h. CREATE VIEW
-    const createViewMatch = stmt.match(/^CREATE\s+(?:OR\s+REPLACE\s+)?VIEW\s+(?:IF\s+NOT\s+EXISTS\s+)?([a-zA-Z0-9_"-]+)/i);
+    // 1h. CREATE VIEW [IF NOT EXISTS] view_name [(col1, col2, ...)] AS select_query
+    const createViewMatch = stmt.match(/^CREATE\s+(?:OR\s+REPLACE\s+)?VIEW\s+(?:IF\s+NOT\s+EXISTS\s+)?([a-zA-Z0-9_"-]+)(?:\s*\(([^)]+)\))?\s+AS\s+([\s\S]+)/i);
     if (createViewMatch) {
       const activeDb = inMemoryDatabases.get(currentActiveDbName) || inMemoryDatabases.get('main_db');
       const viewName = createViewMatch[1].replace(/["'`]/g, '');
-      activeDb.createTable(viewName, [{ name: 'view_result', type: 'TEXT' }]);
+      const explicitCols = createViewMatch[2]
+        ? createViewMatch[2].split(',').map((c) => c.trim().replace(/["'`]/g, ''))
+        : null;
+      const selectQuery = createViewMatch[3].trim().replace(/;+$/, '');
+
+      // Evaluate the view's query to verify and populate columns & rows
+      let viewCols = [];
+      let viewRows = [];
+      const selResult = executeSelectStatement(selectQuery, activeDb, currentActiveDbName);
+      if (selResult && selResult.success) {
+        viewCols = selResult.columns;
+        viewRows = selResult.rows;
+      }
+
+      // Remap columns if custom alias list was provided
+      if (explicitCols && explicitCols.length > 0) {
+        viewRows = viewRows.map((r) => {
+          const remapped = {};
+          explicitCols.forEach((alias, idx) => {
+            const orig = viewCols[idx];
+            remapped[alias] = orig !== undefined ? r[orig] : null;
+          });
+          return remapped;
+        });
+        viewCols = explicitCols;
+      }
+
+      const columnDefs = viewCols.length > 0
+        ? viewCols.map((col) => ({
+            name: col,
+            type: typeof viewRows[0]?.[col] === 'number' ? 'NUMERIC' : 'TEXT',
+            isPk: false,
+            notNull: false,
+          }))
+        : [{ name: 'view_result', type: 'TEXT' }];
+
+      activeDb.createView(viewName, selectQuery, columnDefs, viewRows, stmt);
+      persistDatabases();
+      executionLogs.push(`✅ View '${viewName}' created in '${activeDb.name}' (${viewRows.length} rows compiled).`);
+      finalResult = {
+        success: true,
+        columns: ['status', 'view_name', 'rows_compiled', 'message'],
+        rows: [{
+          status: 'OK',
+          view_name: viewName,
+          rows_compiled: viewRows.length,
+          message: `View '${viewName}' created successfully.`,
+        }],
+        rowCount: 1,
+        type: 'DDL',
+        previewTable: viewName,
+      };
+      continue;
+    }
+
+    // Fallback simple CREATE VIEW
+    const fallbackCreateViewMatch = stmt.match(/^CREATE\s+(?:OR\s+REPLACE\s+)?VIEW\s+(?:IF\s+NOT\s+EXISTS\s+)?([a-zA-Z0-9_"-]+)/i);
+    if (fallbackCreateViewMatch) {
+      const activeDb = inMemoryDatabases.get(currentActiveDbName) || inMemoryDatabases.get('main_db');
+      const viewName = fallbackCreateViewMatch[1].replace(/["'`]/g, '');
+      activeDb.createView(viewName, 'SELECT 1;', [{ name: 'view_result', type: 'TEXT' }], [], stmt);
       persistDatabases();
       executionLogs.push(`✅ View '${viewName}' created in '${activeDb.name}'.`);
       finalResult = {
         success: true,
         columns: ['status', 'message'],
         rows: [{ status: 'OK', message: `View '${viewName}' created successfully.` }],
+        rowCount: 1,
+        type: 'DDL',
+        previewTable: viewName,
+      };
+      continue;
+    }
+
+    // 1i. DROP VIEW [IF EXISTS] view_name
+    const dropViewMatch = stmt.match(/^DROP\s+VIEW\s+(?:IF\s+EXISTS\s+)?([a-zA-Z0-9_"-]+)/i);
+    if (dropViewMatch) {
+      const activeDb = inMemoryDatabases.get(currentActiveDbName);
+      const viewName = dropViewMatch[1].replace(/["'`]/g, '');
+      activeDb?.dropTable(viewName);
+      persistDatabases();
+      executionLogs.push(`🗑️ View '${viewName}' dropped from '${activeDb?.name || currentActiveDbName}'.`);
+      finalResult = {
+        success: true,
+        columns: ['status', 'message'],
+        rows: [{ status: 'OK', message: `View '${viewName}' dropped successfully.` }],
         rowCount: 1,
         type: 'DDL',
       };
@@ -658,21 +1026,23 @@ export async function executeSqlInBrowser(sqlQuery) {
             statusCode: 1,
           };
         }
-        const ddl = generateTableDdl(tbl);
+        const isView = tbl.isView || tbl.type === 'view';
+        const ddl = isView ? (tbl.sql || `CREATE VIEW ${tbl.name} AS ${tbl.query || 'SELECT 1'};`) : generateTableDdl(tbl);
         executionLogs.push(`${ddl}`);
         finalResult = {
           success: true,
           columns: ['type', 'name', 'tbl_name', 'sql'],
-          rows: [{ type: 'table', name: tbl.name, tbl_name: tbl.name, sql: ddl }],
+          rows: [{ type: isView ? 'view' : 'table', name: tbl.name, tbl_name: tbl.name, sql: ddl }],
           rowCount: 1,
           type: 'SELECT',
         };
       } else {
         const allTables = Object.values(activeDb?.tables || {});
         const schemaRows = allTables.map((t) => {
-          const ddl = generateTableDdl(t);
+          const isView = t.isView || t.type === 'view';
+          const ddl = isView ? (t.sql || `CREATE VIEW ${t.name} AS ${t.query || 'SELECT 1'};`) : generateTableDdl(t);
           executionLogs.push(`${ddl}`);
-          return { type: 'table', name: t.name, tbl_name: t.name, sql: ddl };
+          return { type: isView ? 'view' : 'table', name: t.name, tbl_name: t.name, sql: ddl };
         });
         finalResult = {
           success: true,
@@ -706,19 +1076,20 @@ export async function executeSqlInBrowser(sqlQuery) {
         return {
           success: false,
           output: '',
-          error: `Table '${targetTable}' does not exist in database '${currentActiveDbName}'.`,
+          error: `Table or view '${targetTable}' does not exist in database '${currentActiveDbName}'.`,
           time: '0.001',
           memory: 1024,
           statusCode: 1,
         };
       }
 
-      const ddl = generateTableDdl(tbl);
+      const isView = tbl.isView || tbl.type === 'view';
+      const ddl = isView ? (tbl.sql || `CREATE VIEW ${tbl.name} AS ${tbl.query || 'SELECT 1'};`) : generateTableDdl(tbl);
       executionLogs.push(`${ddl}`);
       finalResult = {
         success: true,
-        columns: ['Table', 'Create Table'],
-        rows: [{ Table: tbl.name, 'Create Table': ddl }],
+        columns: isView ? ['View', 'Create View'] : ['Table', 'Create Table'],
+        rows: [isView ? { View: tbl.name, 'Create View': ddl } : { Table: tbl.name, 'Create Table': ddl }],
         rowCount: 1,
         type: 'SELECT',
       };
@@ -746,7 +1117,7 @@ export async function executeSqlInBrowser(sqlQuery) {
         return {
           success: false,
           output: '',
-          error: `Table '${targetTable}' does not exist in database '${currentActiveDbName}'.`,
+          error: `Table or view '${targetTable}' does not exist in database '${currentActiveDbName}'.`,
           time: '0.001',
           memory: 1024,
           statusCode: 1,
@@ -787,7 +1158,7 @@ export async function executeSqlInBrowser(sqlQuery) {
         rows: tables.map((t) => ({
           schema: 'main',
           name: t.name,
-          type: 'table',
+          type: t.isView || t.type === 'view' ? 'view' : 'table',
           ncol: t.columns.length,
           wr: 0,
           strict: 0,
@@ -1181,174 +1552,20 @@ export async function executeSqlInBrowser(sqlQuery) {
     }
 
     // 11. SELECT
-    const selectMatch = stmt.match(/^SELECT\s+([\s\S]+?)\s+FROM\s+([a-zA-Z0-9_"-]+)([\s\S]*)/i);
-    if (selectMatch) {
+    if (/^SELECT\b/i.test(stmt)) {
       let activeDb = inMemoryDatabases.get(currentActiveDbName);
-      const columnsClause = selectMatch[1].trim();
-      const tableName = selectMatch[2].replace(/["']/g, '').toLowerCase();
-      const restClause = selectMatch[3].trim();
-
-      // Handle virtual system tables: sqlite_master / sqlite_schema
-      if (tableName === 'sqlite_master' || tableName === 'sqlite_schema') {
-        const allTables = Object.values(activeDb?.tables || {});
-        let masterRows = allTables.map((t, idx) => ({
-          type: 'table',
-          name: t.name,
-          tbl_name: t.name,
-          rootpage: idx + 2,
-          sql: generateTableDdl(t),
-        }));
-
-        // Handle simple WHERE clause on sqlite_master
-        const whereMatch = restClause.match(/WHERE\s+([\s\S]+?)(?=(?:\s+(?:ORDER|GROUP|LIMIT)\b)|$)/i);
-        if (whereMatch) {
-          const condition = whereMatch[1].trim();
-          const eqMatch = condition.match(/([a-zA-Z0-9_]+)\s*(=|!=|LIKE)\s*(.+)/i);
-          if (eqMatch) {
-            const field = eqMatch[1].trim().toLowerCase();
-            const op = eqMatch[2].trim().toUpperCase();
-            const targetVal = parseLiteral(eqMatch[3].trim());
-
-            masterRows = masterRows.filter((r) => {
-              const actual = String(r[field] ?? '');
-              if (op === '=') return actual.toLowerCase() === String(targetVal).toLowerCase();
-              if (op === '!=') return actual.toLowerCase() !== String(targetVal).toLowerCase();
-              if (op === 'LIKE') {
-                const pat = String(targetVal).replace(/%/g, '.*').replace(/_/g, '.');
-                return new RegExp(`^${pat}$`, 'i').test(actual);
-              }
-              return true;
-            });
-          }
-        }
-
-        let outCols = [];
-        if (columnsClause === '*') {
-          outCols = ['type', 'name', 'tbl_name', 'rootpage', 'sql'];
-        } else {
-          outCols = columnsClause.split(',').map((c) => c.trim().replace(/["'`]/g, ''));
-        }
-
-        const projectedRows = masterRows.map((r) => {
-          const rowObj = {};
-          outCols.forEach((c) => {
-            rowObj[c] = r[c] !== undefined ? r[c] : null;
-          });
-          return rowObj;
-        });
-
-        finalResult = {
-          success: true,
-          columns: outCols,
-          rows: projectedRows,
-          rowCount: projectedRows.length,
-          type: 'SELECT',
-        };
-        continue;
-      }
-
-      let table = activeDb?.getTable(tableName);
-      if (!table) {
-        const altDb = findDatabaseForTableInBrowser(tableName);
-        if (altDb) {
-          currentActiveDbName = altDb;
-          activeDb = inMemoryDatabases.get(altDb);
-          table = activeDb?.getTable(tableName);
-          executionLogs.push(`🔄 Context switched to database '${currentActiveDbName}' (contains '${tableName}').`);
-        }
-      }
-
-      if (!table) {
+      const selResult = executeSelectStatement(stmt, activeDb, currentActiveDbName);
+      if (!selResult.success) {
         return {
           success: false,
           output: '',
-          error: `Table '${tableName}' does not exist in database '${currentActiveDbName}'.`,
+          error: selResult.error,
           time: '0.001',
           memory: 1024,
           statusCode: 1,
         };
       }
-
-      let resultRows = [...table.rows];
-
-      // Handle simple WHERE clause
-      const whereMatch = restClause.match(/WHERE\s+([\s\S]+?)(?=(?:\s+(?:ORDER|GROUP|LIMIT)\b)|$)/i);
-      if (whereMatch) {
-        const condition = whereMatch[1].trim();
-        const eqMatch = condition.match(/([a-zA-Z0-9_]+)\s*(=|!=|>|<|>=|<=)\s*(.+)/);
-        if (eqMatch) {
-          const field = eqMatch[1].trim();
-          const op = eqMatch[2].trim();
-          const targetVal = parseLiteral(eqMatch[3].trim());
-
-          resultRows = resultRows.filter((r) => {
-            const actual = r[field];
-            if (op === '=') return String(actual) === String(targetVal);
-            if (op === '!=') return String(actual) !== String(targetVal);
-            if (op === '>') return Number(actual) > Number(targetVal);
-            if (op === '<') return Number(actual) < Number(targetVal);
-            if (op === '>=') return Number(actual) >= Number(targetVal);
-            if (op === '<=') return Number(actual) <= Number(targetVal);
-            return true;
-          });
-        }
-      }
-
-      // Check for aggregates like sum(col), count(*), count(col), avg(col), min(col), max(col)
-      const aggMatch = columnsClause.match(/^(SUM|COUNT|AVG|MIN|MAX)\s*\(([^)]+)\)$/i);
-      if (aggMatch) {
-        const func = aggMatch[1].toUpperCase();
-        const arg = aggMatch[2].trim().replace(/["'`]/g, '');
-
-        let aggVal = 0;
-        if (func === 'COUNT') {
-          aggVal = resultRows.length;
-        } else if (func === 'SUM') {
-          aggVal = resultRows.reduce((acc, r) => acc + (Number(r[arg]) || 0), 0);
-        } else if (func === 'AVG') {
-          const total = resultRows.reduce((acc, r) => acc + (Number(r[arg]) || 0), 0);
-          aggVal = resultRows.length ? Number((total / resultRows.length).toFixed(2)) : 0;
-        } else if (func === 'MIN') {
-          const nums = resultRows.map((r) => Number(r[arg])).filter((n) => !isNaN(n));
-          aggVal = nums.length ? Math.min(...nums) : 0;
-        } else if (func === 'MAX') {
-          const nums = resultRows.map((r) => Number(r[arg])).filter((n) => !isNaN(n));
-          aggVal = nums.length ? Math.max(...nums) : 0;
-        }
-
-        finalResult = {
-          success: true,
-          columns: [columnsClause],
-          rows: [{ [columnsClause]: aggVal }],
-          rowCount: 1,
-          type: 'SELECT',
-        };
-        continue;
-      }
-
-      // Handle LIMIT
-      const limitMatch = restClause.match(/LIMIT\s+(\d+)(?:\s+OFFSET\s+(\d+))?/i);
-      if (limitMatch) {
-        const limit = parseInt(limitMatch[1], 10);
-        const offset = parseInt(limitMatch[2] || '0', 10);
-        resultRows = resultRows.slice(offset, offset + limit);
-      }
-
-      // Determine output columns
-      let outColumns = [];
-      if (columnsClause === '*') {
-        outColumns = table.columns.map((c) => c.name);
-      } else {
-        outColumns = columnsClause.split(',').map((c) => c.trim().replace(/["'`]/g, ''));
-      }
-
-      finalResult = {
-        success: true,
-        columns: outColumns,
-        rows: resultRows,
-        rowCount: resultRows.length,
-        type: 'SELECT',
-      };
+      finalResult = selResult;
       continue;
     }
 

@@ -209,6 +209,7 @@ SELECT * FROM ${selectedTable || 'customers'} LIMIT 10;`;
   };
 
   const currentTableSchema = schema?.tables?.find((t) => t.tableName === selectedTable);
+  const isCurrentView = currentTableSchema?.type === 'view' || Boolean(currentTableSchema?.isView);
   const currentTableDdl = currentTableSchema?.sql || '';
 
   const handleCopyDdl = () => {
@@ -304,6 +305,7 @@ SELECT * FROM ${selectedTable || 'customers'} LIMIT 10;`;
             schema.tables.map((table) => {
               const isSelected = selectedTable === table.tableName;
               const isExpanded = expandedTables[table.tableName];
+              const isView = table.type === 'view' || Boolean(table.isView);
 
               return (
                 <div key={table.tableName} className="table-tree-node">
@@ -324,7 +326,11 @@ SELECT * FROM ${selectedTable || 'customers'} LIMIT 10;`;
                       {isExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
                     </button>
 
-                    <TableIcon size={14} className="table-icon" />
+                    {isView ? (
+                      <span className="table-view-badge" title="SQL View">VIEW</span>
+                    ) : (
+                      <TableIcon size={14} className="table-icon" />
+                    )}
                     <span className="table-name">{table.tableName}</span>
                     <span className="table-badge">{table.rowCount} rows</span>
                   </div>
@@ -372,6 +378,7 @@ SELECT * FROM ${selectedTable || 'customers'} LIMIT 10;`;
               <div className="toolbar-left">
                 <span className="table-title">
                   <strong>{selectedDb}</strong> / {selectedTable}
+                  {isCurrentView && <span className="view-pill-indicator">SQL VIEW</span>}
                 </span>
                 <div className="view-mode-toggle">
                   <button
@@ -472,17 +479,34 @@ SELECT * FROM ${selectedTable || 'customers'} LIMIT 10;`;
                   </table>
                 ) : (
                   <div className="table-empty-notice">
-                    <span>Table "{selectedTable}" is empty.</span>
-                    <button
-                      className="btn-insert-sample"
-                      onClick={() =>
-                        handleOpenQueryInEditor(
-                          `INSERT INTO ${selectedTable} DEFAULT VALUES;`
-                        )
-                      }
-                    >
-                      Insert Row
-                    </button>
+                    <span>
+                      {isCurrentView
+                        ? `View "${selectedTable}" has 0 rows matching its query.`
+                        : `Table "${selectedTable}" is empty.`}
+                    </span>
+                    {isCurrentView ? (
+                      <button
+                        className="btn-insert-sample"
+                        onClick={() =>
+                          handleOpenQueryInEditor(
+                            currentTableDdl || `SELECT * FROM ${selectedTable};`
+                          )
+                        }
+                      >
+                        Inspect View DDL
+                      </button>
+                    ) : (
+                      <button
+                        className="btn-insert-sample"
+                        onClick={() =>
+                          handleOpenQueryInEditor(
+                            `INSERT INTO ${selectedTable} DEFAULT VALUES;`
+                          )
+                        }
+                      >
+                        Insert Row
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
@@ -494,7 +518,7 @@ SELECT * FROM ${selectedTable || 'customers'} LIMIT 10;`;
                   <div className="schema-card-header">
                     <div className="schema-card-title">
                       <FileCode size={14} className="accent-icon" />
-                      <span>SQLite Table DDL (CREATE TABLE)</span>
+                      <span>{isCurrentView ? 'SQLite View DDL (CREATE VIEW)' : 'SQLite Table DDL (CREATE TABLE)'}</span>
                     </div>
                     <div className="schema-card-actions">
                       <button className="btn-ddl-action" onClick={handleCopyDdl}>
@@ -577,7 +601,16 @@ SELECT * FROM ${selectedTable || 'customers'} LIMIT 10;`;
 
                 {/* Interactive Quick Schema Query Runner Chips */}
                 <div className="schema-queries-bar">
-                  <span className="queries-bar-label">Run SQLite Schema Queries:</span>
+                  <span className="queries-bar-label">Run SQLite Queries:</span>
+                  <button
+                    className="btn-query-chip"
+                    onClick={() =>
+                      handleOpenQueryInEditor(`SELECT * FROM ${selectedTable};`)
+                    }
+                  >
+                    <Terminal size={12} />
+                    <span>SELECT *</span>
+                  </button>
                   <button
                     className="btn-query-chip"
                     onClick={() =>
@@ -600,10 +633,16 @@ SELECT * FROM ${selectedTable || 'customers'} LIMIT 10;`;
                   </button>
                   <button
                     className="btn-query-chip"
-                    onClick={() => handleOpenQueryInEditor(`SHOW CREATE TABLE ${selectedTable};`)}
+                    onClick={() =>
+                      handleOpenQueryInEditor(
+                        isCurrentView
+                          ? `SHOW CREATE VIEW ${selectedTable};`
+                          : `SHOW CREATE TABLE ${selectedTable};`
+                      )
+                    }
                   >
                     <FileCode size={12} />
-                    <span>SHOW CREATE TABLE</span>
+                    <span>{isCurrentView ? 'SHOW CREATE VIEW' : 'SHOW CREATE TABLE'}</span>
                   </button>
                 </div>
               </div>

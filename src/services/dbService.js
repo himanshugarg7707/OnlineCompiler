@@ -157,6 +157,7 @@ export async function getDatabaseSchema(database) {
   const dbData = getLocalDbData(database);
   if (dbData && dbData.tables) {
     const tables = Object.entries(dbData.tables).map(([tblName, tbl]) => {
+      const isView = tbl.type === 'view' || Boolean(tbl.isView) || Boolean(tbl.query);
       const tableObj = {
         name: tbl.name || tblName,
         columns: (tbl.columns || []).map((c) => ({
@@ -169,9 +170,11 @@ export async function getDatabaseSchema(database) {
       };
       return {
         tableName: tbl.name || tblName,
-        type: 'table',
+        type: isView ? 'view' : 'table',
+        isView,
+        query: tbl.query || null,
         rowCount: tbl.rows ? tbl.rows.length : 0,
-        sql: tbl.sql || generateTableDdl(tableObj),
+        sql: tbl.sql || (isView ? `CREATE VIEW ${tbl.name || tblName} AS ${tbl.query || 'SELECT 1'};` : generateTableDdl(tableObj)),
         columns: (tbl.columns || []).map((c) => ({
           name: c.name,
           type: c.type || 'TEXT',
