@@ -237,6 +237,8 @@ body.resizing-horizontal .horizontal-resizer {
   min-height: 120px;
   overflow: hidden;
   position: relative;
+  min-width: 0;
+  max-width: 100%;
 }
 
 /* Output Section */
@@ -244,6 +246,8 @@ body.resizing-horizontal .horizontal-resizer {
   min-height: 80px;
   overflow: hidden;
   position: relative;
+  min-width: 0;
+  max-width: 100%;
 }
 
 /* ─── Draggable Vertical Split Resizer (Editor vs Output) ─────────────── */

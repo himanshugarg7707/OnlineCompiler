@@ -4,6 +4,9 @@
   height: 100%;
   position: relative;
   overflow: hidden;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
   background: var(--bg-primary, #0d1117);
 }
 
@@ -13,14 +16,19 @@
   position: relative;
   display: flex;
   flex-direction: column;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .split-left-pane {
-  min-width: 250px;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .split-right-pane {
-  min-width: 250px;
+  min-width: 0;
+  max-width: 100%;
   background: var(--bg-primary, #0b0f19);
   border-left: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
 }
@@ -184,6 +192,8 @@ body.resizing-split-v canvas {
   flex-direction: column;
   height: 100%;
   width: 100%;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .split-right-header {
@@ -197,6 +207,8 @@ body.resizing-split-v canvas {
   gap: 8px;
   user-select: none;
   flex-shrink: 0;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .split-right-header-left {

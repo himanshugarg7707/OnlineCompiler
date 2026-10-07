@@ -509,7 +509,7 @@ export default function SplitPdfViewer() {
             title="Toggle Drawing / Annotation Mode (or tap with 4 fingers on screen)"
           >
             <Pencil size={12} className={isDrawingMode ? 'pulse-anim' : ''} />
-            <span>{isDrawingMode ? 'Drawing Active' : 'Drawing Mode'}</span>
+            <span className="split-pdf-btn-label">{isDrawingMode ? 'Drawing Active' : 'Drawing Mode'}</span>
             <span
               className="draw-color-pip"
               style={{ backgroundColor: isDrawingMode ? inkColor : '#64748b' }}
@@ -523,7 +523,7 @@ export default function SplitPdfViewer() {
             title="Upload or Open a PDF from device"
           >
             <Upload size={12} />
-            <span>Upload PDF</span>
+            <span className="split-pdf-btn-label">Upload PDF</span>
           </button>
 
           {!pdfData && (
@@ -534,7 +534,7 @@ export default function SplitPdfViewer() {
               title="Open Sample DSA Question Paper"
             >
               <Sparkles size={12} />
-              <span>Sample Question</span>
+              <span className="split-pdf-btn-label">Sample Question</span>
             </button>
           )}
 
@@ -546,7 +546,7 @@ export default function SplitPdfViewer() {
               title="Download this PDF"
             >
               <Download size={12} />
-              <span>Download</span>
+              <span className="split-pdf-btn-label">Download</span>
             </a>
           )}
 
@@ -557,7 +557,7 @@ export default function SplitPdfViewer() {
             title="Switch back to second code file"
           >
             <Code2 size={12} />
-            <span>Code File</span>
+            <span className="split-pdf-btn-label">Code File</span>
           </button>
 
           <button
