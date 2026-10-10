@@ -4,7 +4,8 @@
   display: flex;
   flex-direction: column;
   height: 100vh;
-  width: 100vw;
+  width: 100%;
+  max-width: 100%;
   overflow: hidden;
   background: var(--bg-primary);
 }
@@ -15,6 +16,8 @@
   overflow: hidden;
   position: relative;
   z-index: 10;
+  min-width: 0;
+  max-width: 100%;
 }
 
 /* ─── Left File Explorer Sidebar Container ────────────────────────────── */
@@ -481,8 +484,8 @@ body.resizing-vertical * {
 .app-container.focus-mode-active.notebook-active .editor-section {
   height: 100vh !important;
   max-height: 100vh !important;
-  width: 100vw !important;
-  max-width: 100vw !important;
+  width: 100% !important;
+  max-width: 100% !important;
   flex: 1 1 100% !important;
 }
 
@@ -494,13 +497,13 @@ body.resizing-vertical * {
 
 /* For simple files (without notebooks) in focus mode: terminal is necessary and MUST NOT be hidden */
 .app-container.focus-mode-active.simple-file-active .editor-section {
-  width: 100vw !important;
-  max-width: 100vw !important;
+  width: 100% !important;
+  max-width: 100% !important;
 }
 
 .app-container.focus-mode-active.simple-file-active .output-section {
-  width: 100vw !important;
-  max-width: 100vw !important;
+  width: 100% !important;
+  max-width: 100% !important;
   display: flex !important;
 }
 
@@ -511,14 +514,14 @@ body.resizing-vertical * {
 .app-container.focus-mode-active .app-body {
   height: 100vh !important;
   max-height: 100vh !important;
-  width: 100vw !important;
-  max-width: 100vw !important;
+  width: 100% !important;
+  max-width: 100% !important;
   flex: 1 1 100vh !important;
 }
 
 .app-container.focus-mode-active .main-content {
-  width: 100vw !important;
-  max-width: 100vw !important;
+  width: 100% !important;
+  max-width: 100% !important;
   height: 100vh !important;
   max-height: 100vh !important;
   flex: 1 1 100% !important;

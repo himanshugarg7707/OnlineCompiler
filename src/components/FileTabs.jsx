@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { useApp } from '../context/AppContext';
 import {
   Plus,
@@ -12,6 +12,8 @@ import {
   ZoomOut,
   Columns2,
   FileText,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import { isItemProtected, isItemUnlocked } from '../services/securityService';
 import PasswordPromptModal from './PasswordPromptModal';
@@ -83,6 +85,64 @@ export default function FileTabs() {
 
   const addInputRef = useRef(null);
   const editInputRef = useRef(null);
+  const tabsScrollRef = useRef(null);
+  const activeTabRef = useRef(null);
+
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(false);
+
+  const updateScrollButtons = useCallback(() => {
+    const el = tabsScrollRef.current;
+    if (!el) return;
+    const hasOverflow = el.scrollWidth > el.clientWidth + 1;
+    setCanScrollLeft(hasOverflow && el.scrollLeft > 2);
+    setCanScrollRight(hasOverflow && el.scrollLeft < el.scrollWidth - el.clientWidth - 2);
+  }, []);
+
+  const scrollTabs = (direction) => {
+    const el = tabsScrollRef.current;
+    if (!el) return;
+    const amount = 220;
+    el.scrollBy({
+      left: direction === 'left' ? -amount : amount,
+      behavior: 'smooth',
+    });
+  };
+
+  const handleTabsWheel = (e) => {
+    const el = tabsScrollRef.current;
+    if (!el) return;
+    if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
+      el.scrollLeft += e.deltaY;
+    }
+  };
+
+  useEffect(() => {
+    const el = tabsScrollRef.current;
+    if (!el) return;
+    updateScrollButtons();
+    el.addEventListener('scroll', updateScrollButtons, { passive: true });
+    let ro = null;
+    if (typeof ResizeObserver !== 'undefined') {
+      ro = new ResizeObserver(() => updateScrollButtons());
+      ro.observe(el);
+    }
+    return () => {
+      el.removeEventListener('scroll', updateScrollButtons);
+      ro?.disconnect();
+    };
+  }, [openFiles.length, updateScrollButtons]);
+
+  useEffect(() => {
+    if (activeTabRef.current) {
+      activeTabRef.current.scrollIntoView({
+        behavior: 'smooth',
+        block: 'nearest',
+        inline: 'nearest',
+      });
+    }
+    updateScrollButtons();
+  }, [activeFileId, openFiles.length, updateScrollButtons]);
 
   useEffect(() => {
     if (isAdding) {
@@ -208,135 +268,166 @@ export default function FileTabs() {
 
   return (
     <div className="file-tabs-bar">
-      <div className="file-tabs-scroll">
-        {openFiles.map((file) => {
-          const isActive = file.id === activeFileId && !state.activeDiffFile;
-          const isEditing = editingId === file.id;
-          const isFileLocked = isItemProtected(file.name) && !isItemUnlocked(file.name);
-          const isDragging = draggedTabId === file.id;
-          const isDragOver = dragOverTabId === file.id;
+      <div className="file-tabs-scroll-wrapper">
+        {canScrollLeft && (
+          <button
+            type="button"
+            className="tabs-scroll-btn left"
+            onClick={() => scrollTabs('left')}
+            title="Scroll tabs left"
+            aria-label="Scroll tabs left"
+          >
+            <ChevronLeft size={13} />
+          </button>
+        )}
 
-          return (
-            <div
-              key={file.id}
-              className={`file-tab ${isActive ? 'active' : ''} ${isDragging ? 'is-dragging' : ''} ${isDragOver ? 'is-drag-over' : ''}`}
-              onClick={() => handleTabClick(file)}
-              onDoubleClick={(e) => handleOpenTabOptions(e, file)}
-              onContextMenu={(e) => handleOpenTabOptions(e, file)}
-              draggable={!isEditing}
-              onDragStart={(e) => handleDragStart(e, file.id)}
-              onDragOver={(e) => handleDragOver(e, file.id)}
-              onDragLeave={(e) => handleDragLeave(e, file.id)}
-              onDrop={(e) => handleDrop(e, file.id)}
-              onDragEnd={handleDragEnd}
-              title={`${file.name || 'File'} (${file.language?.name || 'Code'}) — Double-click or right-click for options`}
-            >
-              <span className="file-tab-icon">
-                <LanguageIcon language={file.language} filename={file.name} workspaceFiles={openFiles} size={14} />
-              </span>
+        <div
+          ref={tabsScrollRef}
+          onWheel={handleTabsWheel}
+          className={`file-tabs-scroll ${canScrollLeft ? 'has-overflow-left' : ''} ${canScrollRight ? 'has-overflow-right' : ''}`}
+        >
+          {openFiles.map((file) => {
+            const isActive = file.id === activeFileId && !state.activeDiffFile;
+            const isEditing = editingId === file.id;
+            const isFileLocked = isItemProtected(file.name) && !isItemUnlocked(file.name);
+            const isDragging = draggedTabId === file.id;
+            const isDragOver = dragOverTabId === file.id;
 
-              {isEditing ? (
-                <input
-                  ref={editInputRef}
-                  type="text"
-                  value={editingName}
-                  onChange={(e) => setEditingName(e.target.value)}
-                  onBlur={() => handleFinishEdit(file.id)}
-                  onKeyDown={(e) => handleEditKeyDown(e, file.id)}
-                  className="file-tab-rename-input"
-                  onClick={(e) => e.stopPropagation()}
-                />
-              ) : (
-                <span className="file-tab-name">{file.name.includes('/') ? file.name.split('/').pop() : file.name}</span>
-              )}
-
-              {isFileLocked && (
-                <span className="tab-lock-icon" title="Password Protected">
-                  <Lock size={10} color="#ef4444" />
+            return (
+              <div
+                key={file.id}
+                ref={isActive ? activeTabRef : null}
+                className={`file-tab ${isActive ? 'active' : ''} ${isDragging ? 'is-dragging' : ''} ${isDragOver ? 'is-drag-over' : ''}`}
+                onClick={() => handleTabClick(file)}
+                onDoubleClick={(e) => handleOpenTabOptions(e, file)}
+                onContextMenu={(e) => handleOpenTabOptions(e, file)}
+                draggable={!isEditing}
+                onDragStart={(e) => handleDragStart(e, file.id)}
+                onDragOver={(e) => handleDragOver(e, file.id)}
+                onDragLeave={(e) => handleDragLeave(e, file.id)}
+                onDrop={(e) => handleDrop(e, file.id)}
+                onDragEnd={handleDragEnd}
+                title={`${file.name || 'File'} (${file.language?.name || 'Code'}) — Double-click or right-click for options`}
+              >
+                <span className="file-tab-icon">
+                  <LanguageIcon language={file.language} filename={file.name} workspaceFiles={openFiles} size={14} />
                 </span>
-              )}
 
-              <div className="file-tab-actions">
-                <button
-                  className="file-tab-btn rename"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleSaveActiveFile(file);
-                  }}
-                  title="Save As (Cmd+S / Ctrl+S)"
-                >
-                  <Download size={11} />
-                </button>
-
-                {!isFileLocked && (
-                  <button
-                    className="file-tab-btn rename"
-                    onClick={(e) => handleStartEdit(e, file)}
-                    title="Rename file"
-                  >
-                    <Edit2 size={11} />
-                  </button>
+                {isEditing ? (
+                  <input
+                    ref={editInputRef}
+                    type="text"
+                    value={editingName}
+                    onChange={(e) => setEditingName(e.target.value)}
+                    onBlur={() => handleFinishEdit(file.id)}
+                    onKeyDown={(e) => handleEditKeyDown(e, file.id)}
+                    className="file-tab-rename-input"
+                    onClick={(e) => e.stopPropagation()}
+                  />
+                ) : (
+                  <span className="file-tab-name">{file.name.includes('/') ? file.name.split('/').pop() : file.name}</span>
                 )}
 
+                {isFileLocked && (
+                  <span className="tab-lock-icon" title="Password Protected">
+                    <Lock size={10} color="#ef4444" />
+                  </span>
+                )}
+
+                <div className="file-tab-actions">
+                  <button
+                    className="file-tab-btn rename"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleSaveActiveFile(file);
+                    }}
+                    title="Save As (Cmd+S / Ctrl+S)"
+                  >
+                    <Download size={11} />
+                  </button>
+
+                  {!isFileLocked && (
+                    <button
+                      className="file-tab-btn rename"
+                      onClick={(e) => handleStartEdit(e, file)}
+                      title="Rename file"
+                    >
+                      <Edit2 size={11} />
+                    </button>
+                  )}
+
+                  <button
+                    className="file-tab-btn close"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleCloseTab(file.id);
+                    }}
+                    title="Close tab"
+                  >
+                    <X size={12} />
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+
+          {state.activeDiffFile && (
+            <div
+              className="file-tab active diff-tab"
+              style={{ borderBottom: '2px solid #adc6ff', background: 'rgba(173, 198, 255, 0.12)' }}
+            >
+              <span className="file-tab-icon">
+                <span className="material-symbols-outlined text-[15px] text-tertiary">vertical_split</span>
+              </span>
+              <span className="file-tab-name font-semibold" style={{ color: '#dae2fd' }}>
+                Diff: {state.activeDiffFile.file?.name?.split('/').pop() || 'file'}
+              </span>
+              <span style={{ fontSize: '9px', padding: '1px 4px', borderRadius: '3px', background: 'rgba(78, 222, 163, 0.2)', color: '#4edea3', fontWeight: 'bold', marginLeft: '4px' }}>
+                Git
+              </span>
+              <div className="tab-actions">
                 <button
-                  className="file-tab-btn close"
+                  type="button"
+                  className="tab-close-btn"
                   onClick={(e) => {
                     e.stopPropagation();
-                    handleCloseTab(file.id);
+                    dispatch({ type: 'CLOSE_GIT_DIFF' });
                   }}
-                  title="Close tab"
+                  title="Close Diff"
                 >
                   <X size={12} />
                 </button>
               </div>
             </div>
-          );
-        })}
+          )}
 
-        {state.activeDiffFile && (
-          <div
-            className="file-tab active diff-tab"
-            style={{ borderBottom: '2px solid #adc6ff', background: 'rgba(173, 198, 255, 0.12)' }}
-          >
-            <span className="file-tab-icon">
-              <span className="material-symbols-outlined text-[15px] text-tertiary">vertical_split</span>
-            </span>
-            <span className="file-tab-name font-semibold" style={{ color: '#dae2fd' }}>
-              Diff: {state.activeDiffFile.file?.name?.split('/').pop() || 'file'}
-            </span>
-            <span style={{ fontSize: '9px', padding: '1px 4px', borderRadius: '3px', background: 'rgba(78, 222, 163, 0.2)', color: '#4edea3', fontWeight: 'bold', marginLeft: '4px' }}>
-              Git
-            </span>
-            <div className="tab-actions">
-              <button
-                type="button"
-                className="tab-close-btn"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  dispatch({ type: 'CLOSE_GIT_DIFF' });
-                }}
-                title="Close Diff"
-              >
-                <X size={12} />
-              </button>
+          {isAdding && (
+            <div className="file-tab adding">
+              <FileCode size={14} className="adding-icon" />
+              <input
+                ref={addInputRef}
+                type="text"
+                placeholder="filename.ext (e.g. app.js)"
+                value={newFileName}
+                onChange={(e) => setNewFileName(e.target.value)}
+                onBlur={handleFinishAdd}
+                onKeyDown={handleAddKeyDown}
+                className="file-tab-add-input"
+              />
             </div>
-          </div>
-        )}
+          )}
+        </div>
 
-        {isAdding && (
-          <div className="file-tab adding">
-            <FileCode size={14} className="adding-icon" />
-            <input
-              ref={addInputRef}
-              type="text"
-              placeholder="filename.ext (e.g. app.js)"
-              value={newFileName}
-              onChange={(e) => setNewFileName(e.target.value)}
-              onBlur={handleFinishAdd}
-              onKeyDown={handleAddKeyDown}
-              className="file-tab-add-input"
-            />
-          </div>
+        {canScrollRight && (
+          <button
+            type="button"
+            className="tabs-scroll-btn right"
+            onClick={() => scrollTabs('right')}
+            title="Scroll tabs right"
+            aria-label="Scroll tabs right"
+          >
+            <ChevronRight size={13} />
+          </button>
         )}
       </div>
 
@@ -347,7 +438,7 @@ export default function FileTabs() {
           title="Save active file (Cmd+S / Ctrl+S)"
         >
           <Download size={13} />
-          <span>Save</span>
+          <span className="tab-action-label">Save</span>
         </button>
 
         <button
@@ -363,7 +454,7 @@ export default function FileTabs() {
           title="Split View: Edit two files side-by-side (Alt+\)"
         >
           <Columns2 size={13} />
-          <span>Split</span>
+          <span className="tab-action-label">Split</span>
         </button>
 
         <button
@@ -379,7 +470,7 @@ export default function FileTabs() {
           title="Open PDF Viewer in Split View (Read notes/questions while coding)"
         >
           <FileText size={13} />
-          <span>PDF</span>
+          <span className="tab-action-label">PDF</span>
         </button>
 
         <button
@@ -388,7 +479,7 @@ export default function FileTabs() {
           title="Saved Workspaces Manager (Save & Load Projects)"
         >
           <FolderKanban size={13} />
-          <span>Workspaces</span>
+          <span className="tab-action-label">Workspaces</span>
         </button>
 
         <button
@@ -397,7 +488,7 @@ export default function FileTabs() {
           title="Add new file (Enter file name)"
         >
           <Plus size={14} />
-          <span>New File</span>
+          <span className="tab-action-label">New File</span>
         </button>
       </div>
 

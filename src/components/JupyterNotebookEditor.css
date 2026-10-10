@@ -5,11 +5,17 @@
   flex-direction: column;
   height: 100%;
   width: 100%;
+  max-width: 100%;
+  min-width: 0;
   background: var(--bg-primary, #0d1117);
   color: var(--text-primary, #e6edf3);
   overflow-y: auto;
+  overflow-x: hidden;
   font-family: var(--font-ui, 'Inter', -apple-system, BlinkMacSystemFont, sans-serif);
   position: relative;
+  box-sizing: border-box;
+  container-type: inline-size;
+  container-name: notebook;
 }
 
 .jupyter-container::-webkit-scrollbar {
@@ -42,8 +48,12 @@
   position: sticky;
   top: 0;
   z-index: 20;
-  gap: 14px;
+  gap: 12px;
   flex-wrap: wrap;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 /* Minimized Ultra-Slim Notebook Toolbar (26px) */
@@ -51,9 +61,19 @@
   padding: 3px 12px !important;
   gap: 8px !important;
   min-height: 26px !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  box-sizing: border-box !important;
+  overflow-x: auto !important;
+  scrollbar-width: none !important;
   background: rgba(18, 22, 30, 0.92) !important;
   border-bottom: 1px solid var(--border-primary) !important;
   animation: slideDownMin 0.15s ease-out;
+}
+
+.jupyter-toolbar-minimized::-webkit-scrollbar {
+  display: none !important;
 }
 
 .jupyter-toolbar-min-left {
@@ -84,6 +104,42 @@
   display: flex;
   align-items: center;
   gap: 5px;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+@container notebook (max-width: 640px) {
+  .jupyter-header-toolbar {
+    padding: 6px 10px;
+    gap: 8px;
+  }
+  .jupyter-toolbar-actions .jupyter-btn-action span {
+    display: none;
+  }
+  .jupyter-toolbar-actions .jupyter-btn-action {
+    padding: 4px 6px;
+  }
+  .jupyter-toolbar-min-actions .jupyter-min-btn span,
+  .jupyter-toolbar-min-actions .jupyter-min-btn-expand span {
+    display: none;
+  }
+  .jupyter-toolbar-min-actions .jupyter-min-btn,
+  .jupyter-toolbar-min-actions .jupyter-min-btn-expand {
+    padding: 2px 6px;
+  }
+  .min-cells-badge {
+    display: none;
+  }
+}
+
+@container notebook (max-width: 440px) {
+  .min-kernel-pill {
+    padding: 1px 5px;
+    font-size: 10px;
+  }
+  .jupyter-toolbar-min-actions {
+    gap: 3px;
+  }
 }
 
 .jupyter-min-btn {

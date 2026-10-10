@@ -4,12 +4,27 @@
   justify-content: space-between;
   height: 36px;
   min-height: 36px;
+  width: 100%;
+  max-width: 100%;
   background: var(--bg-secondary);
   border-bottom: 1px solid var(--border-primary, #424754);
   padding: 0;
   user-select: none;
   overflow: hidden;
   font-family: 'JetBrains Mono', monospace;
+  box-sizing: border-box;
+  position: relative;
+  min-width: 0;
+}
+
+.file-tabs-scroll-wrapper {
+  display: flex;
+  align-items: center;
+  flex: 1 1 0%;
+  min-width: 0;
+  height: 100%;
+  position: relative;
+  overflow: hidden;
 }
 
 .file-tabs-scroll {
@@ -17,13 +32,44 @@
   align-items: center;
   gap: 0;
   overflow-x: auto;
+  overflow-y: hidden;
   scrollbar-width: none;
   height: 100%;
-  flex: 1;
+  flex: 1 1 0%;
+  min-width: 0;
+  max-width: 100%;
+  scroll-behavior: smooth;
 }
 
 .file-tabs-scroll::-webkit-scrollbar {
   display: none;
+}
+
+.tabs-scroll-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 28px;
+  background: var(--bg-secondary);
+  border: none;
+  border-right: 1px solid var(--border-primary, #424754);
+  color: var(--text-secondary, #c2c6d6);
+  cursor: pointer;
+  flex-shrink: 0;
+  padding: 0;
+  z-index: 5;
+  transition: all 0.15s ease;
+}
+
+.tabs-scroll-btn.right {
+  border-right: none;
+  border-left: 1px solid var(--border-primary, #424754);
+}
+
+.tabs-scroll-btn:hover {
+  background: var(--bg-tertiary);
+  color: var(--accent-cyan);
 }
 
 .file-tab {
@@ -169,9 +215,14 @@
 .file-tabs-right-actions {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
   flex-shrink: 0;
-  margin-left: 8px;
+  margin-left: auto;
+  padding: 0 8px;
+  height: 100%;
+  background: var(--bg-secondary);
+  border-left: 1px solid var(--border-primary, #424754);
+  z-index: 4;
 }
 
 .btn-tab-action,
@@ -180,6 +231,7 @@
   align-items: center;
   gap: 4px;
   padding: 4px 8px;
+  height: 24px;
   background: transparent;
   border: 1px solid var(--border-primary);
   border-radius: var(--radius-sm);
@@ -188,12 +240,19 @@
   cursor: pointer;
   transition: all var(--transition-fast);
   flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .btn-tab-action:hover {
   background: rgba(0, 212, 255, 0.1);
   border-color: var(--accent-cyan);
   color: var(--accent-cyan);
+}
+
+.btn-tab-action.active {
+  background: rgba(173, 198, 255, 0.15);
+  border-color: var(--accent-purple, #adc6ff);
+  color: var(--accent-purple, #adc6ff);
 }
 
 .btn-focus-toggle {
@@ -219,18 +278,54 @@
   color: var(--accent-cyan);
 }
 
-/* Responsive */
-@media (max-width: 900px) {
-  .btn-tab-action span {
+/* ─── Container Queries (Adapts to pane width in Split View & Sidebars) ─ */
+@container editor (max-width: 840px) {
+  .file-tabs-right-actions .tab-action-label {
     display: none;
   }
-  .btn-tab-action {
+  .file-tabs-right-actions .btn-tab-action,
+  .file-tabs-right-actions .btn-new-file {
+    padding: 4px 6px;
+  }
+  .file-tab {
+    max-width: 160px;
+  }
+}
+
+@container editor (max-width: 540px) {
+  .file-tab {
+    max-width: 120px;
+    padding: 0 8px;
+  }
+  .file-tabs-right-actions {
+    gap: 3px;
+    padding: 0 4px;
+  }
+}
+
+@container editor (max-width: 400px) {
+  .file-tab {
+    max-width: 95px;
+    font-size: 11px;
+    padding: 0 5px;
+  }
+  .file-tabs-right-actions .btn-tab-action:not(.active) {
+    display: none;
+  }
+}
+
+/* ─── Window Viewport Media Queries (Fallback) ────────────────────────── */
+@media (max-width: 900px) {
+  .file-tabs-right-actions .tab-action-label {
+    display: none;
+  }
+  .file-tabs-right-actions .btn-tab-action {
     padding: 4px 6px;
   }
 }
 
 @media (max-width: 640px) {
-  .btn-new-file span {
+  .btn-new-file .tab-action-label {
     display: none;
   }
   .btn-new-file {
@@ -240,19 +335,13 @@
     max-width: 130px;
     padding: 0 8px;
   }
-  .tab-actions {
-    gap: 3px;
-  }
 }
 
 @media (max-width: 440px) {
   .file-tab {
-    max-width: 100px;
+    max-width: 95px;
     font-size: 11px;
-    padding: 0 6px;
-  }
-  .tab-actions .btn-tab-action:not(.btn-focus-toggle) {
-    display: none;
+    padding: 0 5px;
   }
 }
 

@@ -13,9 +13,10 @@
   z-index: 500;
   gap: var(--sp-3);
   width: 100%;
+  max-width: 100%;
   box-sizing: border-box;
   flex-wrap: nowrap;
-  overflow: visible;
+  overflow: hidden;
 }
 
 /* Logo & Brand */
@@ -1405,6 +1406,9 @@
   align-items: center;
   gap: 5px;
   transition: all 0.15s ease;
+  max-width: 240px;
+  min-width: 0;
+  flex-shrink: 1;
 }
 
 .workspace-badge-pill:hover {
@@ -1415,11 +1419,30 @@
 
 .workspace-badge-prefix {
   color: var(--text-muted, #8c909f);
+  flex-shrink: 0;
 }
 
 .workspace-badge-name {
   color: var(--text-primary, #dae2fd);
   font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 1180px) {
+  .workspace-badge-prefix {
+    display: none;
+  }
+  .workspace-badge-pill {
+    max-width: 150px;
+  }
+}
+
+@media (max-width: 990px) {
+  .workspace-badge-pill {
+    display: none;
+  }
 }
 
 /* Run Button */

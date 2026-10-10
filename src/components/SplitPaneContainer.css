@@ -139,19 +139,28 @@ body.resizing-split-v canvas {
   flex-direction: column;
   height: 100%;
   width: 100%;
+  max-width: 100%;
+  min-width: 0;
   overflow: hidden;
+  box-sizing: border-box;
 }
 
 .split-pane-top {
   width: 100%;
+  max-width: 100%;
+  min-width: 0;
   overflow: hidden;
   position: relative;
+  box-sizing: border-box;
 }
 
 .split-pane-bottom {
   width: 100%;
+  max-width: 100%;
+  min-width: 0;
   overflow: hidden;
   position: relative;
+  box-sizing: border-box;
   border-top: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
 }
 
