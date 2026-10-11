@@ -2006,4 +2006,3 @@ export function convertJavaFilesToNotebook(javaFiles, notebookTitle = 'Java_Note
     language: { id: 710, name: 'Jupyter', monacoLanguage: 'json' }
   };
 }
-

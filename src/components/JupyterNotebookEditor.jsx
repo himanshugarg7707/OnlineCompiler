@@ -35,6 +35,7 @@ import {
   Image as ImageIcon,
   MapPin,
   HelpCircle,
+  Sparkles,
 } from 'lucide-react';
 import { JupyterIcon } from './LanguageIcon';
 import { executePythonInBrowser } from '../services/pythonRunner';
@@ -50,6 +51,13 @@ import {
   exportNotebookAsSplitZip,
   extractNotebookToWorkspace,
 } from '../services/notebookExportService';
+import {
+  checkIfCodeReadsInput,
+  detectInputPattern,
+  getPatternLabel,
+  generateSmartInputForCode,
+  generateRandomInputForPattern,
+} from '../services/testCaseGeneratorService';
 import './JupyterNotebookEditor.css';
 
 export const KERNEL_CONFIGS = {
@@ -198,6 +206,7 @@ export default function JupyterNotebookEditor({ file, onContentChange }) {
   const cellEditorsRef = useRef({});
   const snippetsRegisteredRef = useRef(false);
   const [cellHeights, setCellHeights] = useState({});
+  const [openInputCellIndices, setOpenInputCellIndices] = useState({});
 
   const cellEditorOptions = useMemo(() => getMonacoEditorOptions(config, true), [config]);
 
@@ -584,6 +593,103 @@ export default function JupyterNotebookEditor({ file, onContentChange }) {
     updateNotebook({ ...notebook, cells: updatedCells });
   };
 
+  // Toggle Stdin drawer for a specific cell
+  const toggleCellInput = useCallback((idx) => {
+    setOpenInputCellIndices((prev) => ({ ...prev, [idx]: !prev[idx] }));
+  }, []);
+
+  // Synthesize realistic smart input for a specific cell
+  const handleAutoGenerateCellStdin = useCallback(
+    (idx) => {
+      const c = notebook.cells[idx];
+      if (!c) return;
+      const sourceCode = getCellSource(c);
+      const smartInput = generateSmartInputForCode(sourceCode);
+      const finalInput = smartInput || generateRandomInputForPattern('generic', { code: sourceCode });
+      updateCell(idx, {
+        stdin: finalInput,
+        metadata: {
+          ...(c.metadata || {}),
+          stdin: finalInput,
+        },
+      });
+      setOpenInputCellIndices((prev) => ({ ...prev, [idx]: true }));
+      showToast?.('🎲 Auto-generated test input for this cell!');
+    },
+    [notebook.cells, updateCell, showToast]
+  );
+
+  // Apply quick input preset to a cell
+  const handleApplyPresetInput = useCallback(
+    (idx, presetType) => {
+      const c = notebook.cells[idx];
+      if (!c) return;
+      const sourceCode = getCellSource(c);
+      let presetVal = '';
+      if (presetType === 'numbers') {
+        presetVal = generateRandomInputForPattern('array', { length: 5, min: 10, max: 99, code: sourceCode });
+      } else if (presetType === 'strings') {
+        presetVal = generateRandomInputForPattern('string_collection', { length: 4 });
+      } else if (presetType === 'matrix') {
+        presetVal = generateRandomInputForPattern('matrix', { rows: 3, cols: 3 });
+      } else if (presetType === 'pairs') {
+        presetVal = generateRandomInputForPattern('pairs', { min: 1, max: 100 });
+      } else if (presetType === 'single') {
+        presetVal = generateRandomInputForPattern('integer', { min: 1, max: 100 });
+      } else if (presetType === 'clear') {
+        presetVal = '';
+      }
+      updateCell(idx, {
+        stdin: presetVal,
+        metadata: {
+          ...(c.metadata || {}),
+          stdin: presetVal,
+        },
+      });
+      setOpenInputCellIndices((prev) => ({ ...prev, [idx]: true }));
+      if (presetType === 'clear') {
+        showToast?.('Input cleared');
+      } else {
+        showToast?.(`Applied ${presetType} preset!`);
+      }
+    },
+    [notebook.cells, updateCell, showToast]
+  );
+
+  // Auto-generate inputs for all cells across the notebook
+  const handleAutoGenerateAllCellInputs = useCallback(() => {
+    let count = 0;
+    const newOpenMap = { ...openInputCellIndices };
+    const updatedCells = notebook.cells.map((c, i) => {
+      if (c.cell_type !== 'code') return c;
+      const sourceCode = getCellSource(c);
+      if (checkIfCodeReadsInput(sourceCode)) {
+        const smartInput = generateSmartInputForCode(sourceCode);
+        if (smartInput) {
+          count++;
+          newOpenMap[i] = true;
+          return {
+            ...c,
+            stdin: smartInput,
+            metadata: {
+              ...(c.metadata || {}),
+              stdin: smartInput,
+            },
+          };
+        }
+      }
+      return c;
+    });
+
+    if (count > 0) {
+      setOpenInputCellIndices(newOpenMap);
+      updateNotebook({ ...notebook, cells: updatedCells });
+      showToast?.(`✨ Auto-generated smart inputs for ${count} code cell${count > 1 ? 's' : ''}!`);
+    } else {
+      showToast?.('No cells detected that read standard input (Scanner, input(), cin, etc.)');
+    }
+  }, [notebook, openInputCellIndices, updateNotebook, showToast]);
+
   // Execute a single code cell
   const runCell = useCallback(async (index) => {
     const cell = notebook.cells[index];
@@ -612,7 +718,26 @@ export default function JupyterNotebookEditor({ file, onContentChange }) {
           (/System\.(out|err|in)\b|(?:public|private|protected)?\s*(?:class|interface|enum|record)\s+\w+|public\s+static\s+void\s+main|Scanner\s+\w+|import\s+java\.|List<\w+>|ArrayList<\w+>|Map<\w+|HashMap<\w+|Set<\w+|\/\/.*(?:Java|JShell)/i.test(code) ||
            appState?.files?.some((f) => f.name?.endsWith('.java') || f.language?.id === 62)));
 
-      const effectiveStdin = appState?.stdin || '';
+      const cellStdin = (cell.stdin ?? cell.metadata?.stdin ?? '');
+      let effectiveStdin = cellStdin || notebook.metadata?.stdin || appState?.stdin || '';
+
+      // Auto-generate input if code reads stdin and no input was provided yet
+      const readsInput = checkIfCodeReadsInput(code);
+      if (readsInput && !effectiveStdin.trim()) {
+        const autoInput = generateSmartInputForCode(code);
+        if (autoInput) {
+          effectiveStdin = autoInput;
+          updateCell(index, {
+            stdin: autoInput,
+            metadata: {
+              ...(cell.metadata || {}),
+              stdin: autoInput,
+            },
+          });
+          setOpenInputCellIndices((prev) => ({ ...prev, [index]: true }));
+          showToast?.('🎲 Auto-generated inputs applied for this cell execution!');
+        }
+      }
 
       if (isJavaExecution) {
         const prepared = prepareJavaNotebookCellCode(notebook.cells, index);
@@ -654,7 +779,9 @@ export default function JupyterNotebookEditor({ file, onContentChange }) {
       if (result.error) {
         let errMessage = result.error;
         if (/NoSuchElementException/i.test(errMessage) && /Scanner|System\.in/i.test(code)) {
-          errMessage += '\n\n💡 Tip: Your code is waiting for user input via Scanner/System.in. Please enter your input in the "Input" tab below before running the cell.';
+          errMessage += '\n\n💡 Tip: Your code expected more input via Scanner/System.in. Click the "Input" button above this cell to view or auto-generate inputs.';
+        } else if (/EOFError/i.test(errMessage) && /input\s*\(/i.test(code)) {
+          errMessage += '\n\n💡 Tip: Reached End-Of-File waiting for python input(). Click the "Input" button above this cell to view or auto-generate inputs.';
         }
         outputs.push({
           output_type: 'error',
@@ -720,7 +847,7 @@ export default function JupyterNotebookEditor({ file, onContentChange }) {
     } finally {
       setRunningCellIndex(null);
     }
-  }, [notebook.cells, executionCounter, notebookLanguage, updateCell]);
+  }, [notebook.cells, notebook.metadata, appState?.stdin, executionCounter, notebookLanguage, updateCell, showToast]);
 
   // Listen for Header Run button event & notebook shortcut
   useEffect(() => {
@@ -1075,6 +1202,15 @@ export default function JupyterNotebookEditor({ file, onContentChange }) {
             <span>Restart & Clear</span>
           </button>
 
+          <button
+            className="jupyter-btn-action jupyter-btn-auto-inputs"
+            onClick={handleAutoGenerateAllCellInputs}
+            title="Automatically detect code patterns and generate smart inputs for all cells in the notebook"
+          >
+            <Sparkles size={14} />
+            <span>Auto Inputs</span>
+          </button>
+
           <div className="jupyter-action-divider" />
 
           {/* Export Button Group with Dropdown */}
@@ -1248,6 +1384,11 @@ export default function JupyterNotebookEditor({ file, onContentChange }) {
               const source = getCellSource(cell);
               const lines = source.split('\n');
               const lineCount = Math.max(1, lines.length);
+              const readsInput = isCode && checkIfCodeReadsInput(source);
+              const pattern = isCode ? detectInputPattern(source) : { type: 'no_input' };
+              const patternLabel = getPatternLabel(pattern.type);
+              const cellStdin = cell.stdin ?? cell.metadata?.stdin ?? '';
+              const isInputOpen = Boolean(openInputCellIndices[idx]);
 
               return (
                 <div key={idx} className="jupyter-cell-block">
@@ -1307,6 +1448,30 @@ export default function JupyterNotebookEditor({ file, onContentChange }) {
                               : '🐍 Python 3'
                             : 'Markdown'}
                         </span>
+
+                        {isCode && (
+                          <button
+                            className={`cell-action-btn cell-action-stdin-btn ${isInputOpen ? 'active' : ''} ${readsInput ? 'needs-input' : ''}`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleCellInput(idx);
+                            }}
+                            title={
+                              readsInput
+                                ? `Reads input (${patternLabel}). Click to configure stdin.`
+                                : 'Configure Standard Input (stdin)'
+                            }
+                          >
+                            <Terminal size={13} />
+                            <span className="cell-action-text">Input</span>
+                            {readsInput && (
+                              <span
+                                className={`cell-input-status-dot ${cellStdin.trim() ? 'configured' : 'needed'}`}
+                                title={cellStdin.trim() ? 'Input configured' : 'Will auto-generate on run'}
+                              />
+                            )}
+                          </button>
+                        )}
 
                         <button
                           className="cell-action-btn"
@@ -1368,32 +1533,169 @@ export default function JupyterNotebookEditor({ file, onContentChange }) {
 
                       {/* Monaco Code Editor with Full Syntax Highlighting & Auto Closing Brackets */}
                       {isCode ? (
-                        <div className="jupyter-code-editor-box">
-                          <Editor
-                            height={
-                              cellHeights[idx] ||
-                              Math.max(68, ((source || '').split('\n').length) * 20 + 20)
-                            }
-                            language={
-                              notebookLanguage === 'c++'
-                                ? 'cpp'
-                                : notebookLanguage === 'js'
-                                ? 'javascript'
-                                : notebookLanguage || 'python'
-                            }
-                            value={source}
-                            theme={activeMonacoTheme}
-                            options={cellEditorOptions}
-                            onChange={(val) => updateCell(idx, { source: val ?? '' })}
-                            onMount={(editor, monaco) => handleCellMount(idx, editor, monaco)}
-                            loading={
-                              <div className="jupyter-monaco-loading">
-                                <Loader2 size={16} className="spin" />
-                                <span>Loading Editor...</span>
+                        <>
+                          <div className="jupyter-code-editor-box">
+                            <Editor
+                              height={
+                                cellHeights[idx] ||
+                                Math.max(68, ((source || '').split('\n').length) * 20 + 20)
+                              }
+                              language={
+                                notebookLanguage === 'c++'
+                                  ? 'cpp'
+                                  : notebookLanguage === 'js'
+                                  ? 'javascript'
+                                  : notebookLanguage || 'python'
+                              }
+                              value={source}
+                              theme={activeMonacoTheme}
+                              options={cellEditorOptions}
+                              onChange={(val) => updateCell(idx, { source: val ?? '' })}
+                              onMount={(editor, monaco) => handleCellMount(idx, editor, monaco)}
+                              loading={
+                                <div className="jupyter-monaco-loading">
+                                  <Loader2 size={16} className="spin" />
+                                  <span>Loading Editor...</span>
+                                </div>
+                              }
+                            />
+                          </div>
+
+                          {/* Standard Input (Stdin) Drawer */}
+                          <div className={`jupyter-cell-stdin-container ${isInputOpen ? 'open' : ''}`}>
+                            {readsInput && !isInputOpen && (
+                              <div
+                                className="jupyter-cell-stdin-preview-bar"
+                                onClick={() => toggleCellInput(idx)}
+                                title="Click to view or edit standard input for this cell"
+                              >
+                                <div className="stdin-preview-left">
+                                  <span className={`stdin-preview-dot ${cellStdin.trim() ? 'configured' : 'pulse'}`} />
+                                  <span className="stdin-preview-label">Standard Input:</span>
+                                  <span className="stdin-preview-val">
+                                    {cellStdin.trim()
+                                      ? cellStdin.replace(/\n/g, ' ↵ ').slice(0, 48) + (cellStdin.length > 48 ? '...' : '')
+                                      : '(Will auto-generate on run)'}
+                                  </span>
+                                </div>
+                                <div className="stdin-preview-right">
+                                  <span className="stdin-preview-badge">{patternLabel}</span>
+                                  <span className="stdin-preview-action">Configure 📥</span>
+                                </div>
                               </div>
-                            }
-                          />
-                        </div>
+                            )}
+
+                            {isInputOpen && (
+                              <div className="jupyter-cell-stdin-drawer">
+                                <div className="jupyter-stdin-header">
+                                  <div className="jupyter-stdin-title-row">
+                                    <span className="jupyter-stdin-icon">📥</span>
+                                    <span className="jupyter-stdin-heading">Standard Input (Stdin)</span>
+                                    {readsInput ? (
+                                      <span className="jupyter-stdin-badge required">Input Needed</span>
+                                    ) : (
+                                      <span className="jupyter-stdin-badge optional">Optional</span>
+                                    )}
+                                    <span className="jupyter-stdin-pattern-tag" title="Inferred input schema from code">
+                                      {patternLabel}
+                                    </span>
+                                  </div>
+
+                                  <div className="jupyter-stdin-actions">
+                                    <button
+                                      type="button"
+                                      className="stdin-quick-btn auto-btn"
+                                      onClick={() => handleAutoGenerateCellStdin(idx)}
+                                      title="Automatically synthesize realistic inputs matching types & loops"
+                                    >
+                                      <Sparkles size={12} />
+                                      <span>Auto-Generate</span>
+                                    </button>
+                                    <div className="stdin-presets-group">
+                                      <button
+                                        type="button"
+                                        className="stdin-quick-btn"
+                                        onClick={() => handleApplyPresetInput(idx, 'numbers')}
+                                        title="Array of numbers (Count + elements)"
+                                      >
+                                        🔢 Array
+                                      </button>
+                                      <button
+                                        type="button"
+                                        className="stdin-quick-btn"
+                                        onClick={() => handleApplyPresetInput(idx, 'strings')}
+                                        title="Strings / words"
+                                      >
+                                        🔤 Words
+                                      </button>
+                                      <button
+                                        type="button"
+                                        className="stdin-quick-btn"
+                                        onClick={() => handleApplyPresetInput(idx, 'matrix')}
+                                        title="2D Matrix (Rows, Cols, Grid)"
+                                      >
+                                        ▦ Matrix
+                                      </button>
+                                      <button
+                                        type="button"
+                                        className="stdin-quick-btn"
+                                        onClick={() => handleApplyPresetInput(idx, 'pairs')}
+                                        title="Two inputs (A and B)"
+                                      >
+                                        🎯 Pair
+                                      </button>
+                                      {cellStdin.trim() && (
+                                        <button
+                                          type="button"
+                                          className="stdin-quick-btn clear"
+                                          onClick={() => handleApplyPresetInput(idx, 'clear')}
+                                          title="Clear input"
+                                        >
+                                          🧹 Clear
+                                        </button>
+                                      )}
+                                    </div>
+                                    <button
+                                      type="button"
+                                      className="stdin-close-btn"
+                                      onClick={() => toggleCellInput(idx)}
+                                      title="Close Input Drawer"
+                                    >
+                                      ✕
+                                    </button>
+                                  </div>
+                                </div>
+
+                                <textarea
+                                  className="jupyter-cell-stdin-textarea"
+                                  value={cellStdin}
+                                  onChange={(e) => {
+                                    const val = e.target.value;
+                                    updateCell(idx, {
+                                      stdin: val,
+                                      metadata: {
+                                        ...(cell.metadata || {}),
+                                        stdin: val,
+                                      },
+                                    });
+                                  }}
+                                  placeholder={`Enter standard input for this cell (e.g. for Scanner, input(), cin)...\nLeave empty to automatically synthesize matching inputs on run.`}
+                                  rows={Math.min(6, Math.max(2, (cellStdin.split('\n').length || 1) + 1))}
+                                />
+                                <div className="jupyter-stdin-footer">
+                                  <span className="stdin-footer-hint">
+                                    💡 Inputs are piped to standard input (<code>Scanner</code>, <code>input()</code>, <code>cin</code>, <code>scanf</code>) when this cell runs.
+                                  </span>
+                                  {cellStdin.trim() && (
+                                    <span className="stdin-line-count">
+                                      {cellStdin.trim().split('\n').length} line{cellStdin.trim().split('\n').length !== 1 ? 's' : ''}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </>
                       ) : (
                         /* Markdown Cell: Rendered View or WYSIWYG Editor */
                         <div className="jupyter-md-box">

@@ -7,13 +7,26 @@
  * @param {string} code - Source code
  * @returns {object} Pattern details { type, count, hasLoop, isString, isNumeric }
  */
+/**
+ * Quickly checks if code reads from standard input across any programming language
+ */
+export function checkIfCodeReadsInput(code = '') {
+  if (!code || typeof code !== 'string') return false;
+  return /Scanner|System\.in|sc\.(next|nextInt|nextLine|nextDouble|nextLong)|cin\s*>>|scanf|input\s*\(|sys\.stdin|readline|readLine|fmt\.Scan|prompt\(|<STDIN>|IO\.readln\b|BufferedReader|InputStreamReader/i.test(code);
+}
+
+/**
+ * Infer the input schema and pattern from source code
+ * @param {string} code - Source code
+ * @returns {object} Pattern details { type, count, hasLoop, isString, isNumeric }
+ */
 export function detectInputPattern(code = '') {
   if (!code || typeof code !== 'string') {
     return { type: 'unknown' };
   }
 
-  // Check if code even reads stdin
-  const readsInput = /Scanner|System\.in|sc\.(next|nextInt|nextLine|nextDouble|nextLong)|cin\s*>>|scanf|input\(|sys\.stdin|readline|readLine|fmt\.Scan|prompt\(|<STDIN>/i.test(code);
+  // Check if code reads stdin
+  const readsInput = checkIfCodeReadsInput(code);
 
   if (!readsInput) {
     return { type: 'no_input' };
@@ -22,7 +35,7 @@ export function detectInputPattern(code = '') {
   // 1. Matrix / 2D Grid pattern (nested loops reading input)
   const isMatrix =
     /matrix|grid|board|2d|2D|\[\s*\]\s*\[/.test(code) ||
-    (/for\s*\(.*?\)\s*\{?[^}]*for\s*\(.*?\)/s.test(code) && /next|scanf|cin|read/i.test(code));
+    (/for\s*\(.*?\)\s*\{?[^}]*for\s*\(.*?\)/s.test(code) && /next|scanf|cin|read|input/i.test(code));
   if (isMatrix) {
     return { type: 'matrix' };
   }
@@ -37,35 +50,45 @@ export function detectInputPattern(code = '') {
     return { type: 'string_collection' };
   }
 
-  // 3. Array / Collection of Integers
+  // 3. Array / Linked List / Collection of Integers
+  const isNodesOrLinkedList =
+    /(?:Node|ListNode|TreeNode|Tree|Graph|LinkedList)\b/i.test(code) &&
+    (/for\s*\(|while\s*\(/.test(code));
+
+  const isNumberLoop =
+    /(?:for|while)\s*\(?.*?\)?:?\{?[^}]*(?:nextInt|cin\s*>>|scanf|int\s*\(\s*input|Integer\.parseInt)/s.test(code);
+
   const isNumberCollection =
+    isNodesOrLinkedList ||
+    isNumberLoop ||
     /(?:List|ArrayList|LinkedList|Vector)<\s*(?:Integer|Long|Double|int)\s*>/.test(code) ||
     /(?:int|long|double)\s*\[\s*\]\s*\w+\s*=\s*new\s+(?:int|long|double)\s*\[/i.test(code) ||
     /vector<\s*int\s*>/.test(code) ||
     (/for\s*\(.*?\)\s*\{?[^}]*(?:\.add|push_back|\[\w+\])\s*=\s*[^;]*(?:nextInt|cin|scanf|int\(input)/s.test(code)) ||
-    /list\(map\(int,\s*input\(\)\.split\(\)\)\)/.test(code);
+    /list\s*\(\s*map\s*\(\s*int,\s*input\(\)\.split\(\)\s*\)\s*\)/.test(code);
 
   if (isNumberCollection) {
-    return { type: 'number_array' };
+    return { type: 'number_array', isNodes: isNodesOrLinkedList };
   }
 
   // 4. Single or Multiple Strings
   const isStringOnly =
     /(?:String|char\s*\*|str|std::string)\s+\w+\s*=\s*(?:sc\.(?:next|nextLine)\(\)|input\(\)|getline)/i.test(code) ||
-    (/(?:sc\.next\(\)|sc\.nextLine\(\)|input\(\))/.test(code) && !/nextInt|nextDouble|int\(input\)/.test(code));
+    (/(?:sc\.next\(\)|sc\.nextLine\(\)|input\(\))/.test(code) && !/nextInt|nextDouble|int\s*\(\s*input/i.test(code));
 
   if (isStringOnly) {
     return { type: 'string' };
   }
 
   // 5. Two or Three Integers (e.g. N K, A B, X Y)
-  const inputCount = (code.match(/nextInt|nextDouble|scanf|cin\s*>>|int\(input\(\)\)/g) || []).length;
+  const inputCount = (code.match(/nextInt|nextDouble|scanf|>>\s*[A-Za-z0-9_]+|int\s*\(\s*input/g) || []).length;
   if (inputCount === 2) {
     return { type: 'pairs' };
   }
   if (inputCount === 3) {
     return { type: 'triplet' };
   }
+
 
   // 6. Generic single integer
   if (/nextInt|int\(input\(\)\)|scanf\("%d"|cin\s*>>\s*[A-Za-z0-9_]+/i.test(code)) {
@@ -120,11 +143,15 @@ export function generateRandomInputForPattern(patternType = 'generic', options =
     }
 
     case 'number_array': {
-      const count = Math.min(Math.max(length, 1), 20);
+      const count = Math.min(Math.max(length, 1), 5);
       const arr = Array.from({ length: count }, () =>
         Math.floor(Math.random() * (max - min + 1)) + min
       );
-      return `${count}\n${arr.join(' ')}`;
+      const isSplit = options.code && /split\s*\(/.test(options.code);
+      if (isSplit) {
+        return `${count}\n${arr.join(' ')}`;
+      }
+      return `${count}\n${arr.join('\n')}`;
     }
 
     case 'matrix': {
@@ -148,14 +175,14 @@ export function generateRandomInputForPattern(patternType = 'generic', options =
     case 'pairs': {
       const a = Math.floor(Math.random() * (max - min + 1)) + min;
       const b = Math.floor(Math.random() * (max - min + 1)) + min;
-      return `${a} ${b}`;
+      return `${a}\n${b}`;
     }
 
     case 'triplet': {
       const a = Math.floor(Math.random() * (max - min + 1)) + min;
       const b = Math.floor(Math.random() * (max - min + 1)) + min;
       const c = Math.floor(Math.random() * (max - min + 1)) + min;
-      return `${a} ${b} ${c}`;
+      return `${a}\n${b}\n${c}`;
     }
 
     case 'integer': {
@@ -168,14 +195,28 @@ export function generateRandomInputForPattern(patternType = 'generic', options =
     }
 
     default: {
-      const count = Math.min(Math.max(length, 1), 10);
+      const count = Math.min(Math.max(length, 1), 5);
       const arr = Array.from({ length: count }, () =>
         Math.floor(Math.random() * (max - min + 1)) + min
       );
-      return `${count}\n${arr.join(' ')}`;
+      return `${count}\n${arr.join('\n')}`;
     }
   }
 }
+
+/**
+ * Automatically synthesizes realistic, matching standard input for arbitrary source code
+ * @param {string} code - Source code in any language (Python, Java, C++, JS, etc.)
+ * @param {object} options - Generation options
+ * @returns {string} Formatted standard input ready for stdin execution
+ */
+export function generateSmartInputForCode(code = '', options = {}) {
+  if (!code || typeof code !== 'string') return '';
+  const pattern = detectInputPattern(code);
+  if (pattern.type === 'no_input') return '';
+  return generateRandomInputForPattern(pattern.type, { ...options, code });
+}
+
 
 /**
  * Generate a smart set of test cases based on the detected code pattern
