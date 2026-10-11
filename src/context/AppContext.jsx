@@ -2155,16 +2155,8 @@ export function AppProvider({ children }) {
       const hasSelection = Boolean(state.selectedCode && state.selectedCode.trim());
       const codeToRun = hasSelection ? state.selectedCode.trim() : activeFile.content;
 
-      // Preprocess Java if needed
-      let processedCode = codeToRun;
-      if (state.detectedLanguage?.id === 62) {
-        processedCode = codeToRun
-          .replace(/\bpublic\s+class\b/g, 'class')
-          .replace(/^\s*package\s+[\w.]+;\s*$/gm, '// package stripped');
-      }
-
       const result = await executeCode(
-        processedCode,
+        codeToRun,
         state.detectedLanguage?.id,
         newInput,
         state.files,
