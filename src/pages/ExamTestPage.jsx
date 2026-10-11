@@ -852,7 +852,7 @@ public class Solution {
         { id: 'custom', input: customInput, expectedOutput: '', isHidden: false },
       ]);
       const result = evalData.results?.[0];
-      setCustomOutput(result?.actualOutput || result?.error || '(No output produced)');
+      setCustomOutput(result?.actualOutput ?? result?.actual ?? result?.error ?? '(No output produced)');
     } catch (err) {
       setCustomOutput(`Error running code: ${err.message}`);
     } finally {
@@ -2498,7 +2498,7 @@ public class Solution {
                                   curTcResult.passed ? 'output-passed' : 'output-failed'
                                 }`}
                               >
-                                {curTcResult.actualOutput || curTcResult.error || '(no output)'}
+                                {curTcResult.actualOutput ?? curTcResult.actual ?? curTcResult.error ?? '(no output)'}
                               </pre>
                             </div>
                           )}

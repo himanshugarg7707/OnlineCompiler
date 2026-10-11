@@ -1,5 +1,5 @@
 // Test Case Evaluator Engine for Practice Questions
-import { executeCode } from './judge0Service';
+import { executeCode } from './judge0Service.js';
 
 /**
  * Normalizes output string for fuzzy comparison (ignoring trailing whitespace/newlines & prompt strings)
@@ -67,14 +67,16 @@ export async function evaluateTestCases(code, language, testCases = []) {
       const elapsed = Math.round(performance.now() - startTime);
 
       if (runResult.status === 'error' || runResult.stderr || runResult.compile_output) {
+        const errorText = runResult.stderr || runResult.compile_output || 'Runtime Error';
         results.push({
           testIndex: i + 1,
           input,
           expected,
-          actual: runResult.stderr || runResult.compile_output || 'Runtime Error',
+          actual: errorText,
+          actualOutput: errorText,
           passed: false,
           executionTime: elapsed,
-          error: runResult.stderr || runResult.compile_output || 'Runtime Error',
+          error: errorText,
         });
       } else {
         const actualOutput = runResult.output || '';
@@ -96,20 +98,23 @@ export async function evaluateTestCases(code, language, testCases = []) {
           input,
           expected: expected || 'Any valid output',
           actual: actualOutput.trim(),
+          actualOutput: actualOutput.trim(),
           passed: isPassed,
           executionTime: elapsed,
           error: null,
         });
       }
     } catch (err) {
+      const errText = err.message || 'Execution failed';
       results.push({
         testIndex: i + 1,
         input,
         expected,
-        actual: err.message || 'Execution failed',
+        actual: errText,
+        actualOutput: errText,
         passed: false,
         executionTime: 0,
-        error: err.message || 'Execution failed',
+        error: errText,
       });
     }
   }

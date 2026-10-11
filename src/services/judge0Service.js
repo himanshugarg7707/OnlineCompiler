@@ -9,6 +9,8 @@ import { executePythonInBrowser } from './pythonRunner.js';
 import { executeJavaScriptInBrowser } from './jsRunner.js';
 import { executeSqlInBrowser } from './sqlRunner.js';
 import { prepareJavaCellCode, prepareCppCellCode, prepareCCellCode, normalizeJavaMainMethod, getCompilationIdentifier, getLanguageById } from './languageDetector.js';
+import { prepareJavaForExecution, replaceJavaIdentifierSafely } from './javaPreprocessor.js';
+
 
 // ─── Godbolt Compiler Explorer — Primary Execution Engine ─────────────────────
 // Free, no API key, actively maintained, supports execution with stdin
@@ -202,11 +204,16 @@ export async function executeCode(code, languageId, stdin = '', allFiles = [], f
     return withCompilerMeta(await mockExecute(code, languageId, stdin));
   }
 
+  let processedCode = code;
+  if (languageId === 62) {
+    processedCode = prepareJavaForExecution(code);
+  }
+
   // 0. Try Fast Local Native Backend Runner (Only on local machine with native compilers)
   const isCloudForced = typeof localStorage !== 'undefined' && localStorage.getItem('fullcode_engine_mode') === 'cloud';
   if (isLocalEnvironment() && !isCloudForced && languageId !== 0 && languageId !== 1 && languageId !== 710) {
     try {
-      const localRes = await tryLocalExecution(code, languageId, stdin, filename);
+      const localRes = await tryLocalExecution(processedCode, languageId, stdin, filename);
       if (localRes && (localRes.isLocal || localRes.engine === 'local' || localRes.engine === 'sqlite')) {
         return withCompilerMeta(localRes);
       }
@@ -365,165 +372,13 @@ export async function executeCode(code, languageId, stdin = '', allFiles = [], f
   }
 
   // 6. Cloud Compiled Languages — Judge0 CE (fast primary) → Godbolt (secondary) → Wandbox (tertiary)
-  let processedCode = code;
-  if (languageId === 62) {
-    processedCode = prepareJavaForExecution(code);
-  }
 
   const result = await cloudExecuteWithFallback(processedCode, languageId, stdin);
   return withCompilerMeta(result);
 }
 
-/**
- * Preprocesses Java code to ensure 100% reliable execution in the sandbox:
- * 1. Automatically wraps bare statements without class/method into standard Main
-/**
- * Safely replaces whole-word identifier tokens in source code while preserving
- * string literals, character literals, single-line comments, and multi-line comments.
- */
-function replaceJavaIdentifierSafely(source, fromIdent, toIdent) {
-  if (!source || !fromIdent || fromIdent === toIdent) return source;
-  const tokens = [];
-  const placeholderPrefix = `__JAVA_LITERAL_${Date.now()}_`;
-  
-  // Mask strings and comments so their contents are never altered
-  const masked = source.replace(/("(?:\\[\s\S]|[^"\\])*"|'(?:\\[\s\S]|[^'\\])*'|\/\/[^\n]*|\/\*[\s\S]*?\*\/)/g, (match) => {
-    const idx = tokens.length;
-    tokens.push(match);
-    return `${placeholderPrefix}${idx}__`;
-  });
+export { prepareJavaForExecution, replaceJavaIdentifierSafely };
 
-  const regex = new RegExp(`\\b${fromIdent}\\b`, 'g');
-  const replaced = masked.replace(regex, toIdent);
-
-  // Restore masked strings and comments
-  return replaced.replace(new RegExp(`${placeholderPrefix}(\\d+)__`, 'g'), (_, idx) => {
-    return tokens[parseInt(idx, 10)] ?? '';
-  });
-}
-
-/**
- * Preprocesses Java code to ensure 100% reliable execution in online and cloud sandboxes (Judge0 CE, Godbolt, Wandbox, Piston):
- * 1. Strips package headers (sandboxes compile in a flat directory).
- * 2. Wraps bare statements or classes without boilerplate into a canonical Main class.
- * 3. Demotes public classes to package-private to avoid filename mismatch errors.
- * 4. Safely renames the class containing main() to 'Main' and updates constructors/references while preserving strings & comments.
- * 5. Guarantees a canonical `public static void main(String[] args)` JVM entry point (including bridge for Java 21-26 instance `void main()`).
- * 6. Injects fallback `class IO` for standard input/output when `IO.print`/`IO.println`/`IO.readln` are used.
- */
-export function prepareJavaForExecution(code) {
-  if (!code || typeof code !== 'string') return code;
-
-  // 1. Strip package declaration (sandbox has flat directory structure)
-  let clean = code.replace(/^\s*package\s+[\w.]+;\s*$/gm, '// package stripped');
-  clean = clean.replace(/\bpublic\s*public\b/g, 'public');
-
-  // 2. Bare statements check (e.g. System.out.println("hello") or void main() without class)
-  if (!/\b(?:class|record|enum|interface)\s+([A-Za-z0-9_$]+)/.test(clean)) {
-    const lines = clean.split('\n');
-    const imports = [];
-    const body = [];
-    for (const l of lines) {
-      if (/^\s*import\s+[\w.*]+;\s*$/.test(l)) {
-        imports.push(l.trim());
-      } else {
-        body.push(l);
-      }
-    }
-    const impSet = new Set(['import java.util.*;', 'import java.io.*;', ...imports]);
-    const bodyStr = body.join('\n');
-    const hasVoidMain = /\bvoid\s+main\s*\(\s*\)/.test(bodyStr);
-
-    let wrappedCode = '';
-    if (hasVoidMain) {
-      wrappedCode = `${Array.from(impSet).join('\n')}\n\nclass Main {\n${bodyStr}\n\n    public static void main(String[] args) throws Throwable {\n        new Main().main();\n    }\n}`;
-    } else {
-      wrappedCode = `${Array.from(impSet).join('\n')}\n\nclass Main {\n    public static void main(String[] args) throws Throwable {\n${bodyStr}\n    }\n}`;
-    }
-
-    if (/\bIO\.(print|println|readln)\b/.test(wrappedCode) && !/\bclass\s+IO\b/.test(wrappedCode)) {
-      wrappedCode += `\n\nclass IO {\n    public static void print(Object o) { System.out.print(o); }\n    public static void println(Object o) { System.out.println(o); }\n    public static void println() { System.out.println(); }\n    public static String readln(String prompt) {\n        if (prompt != null) System.out.print(prompt);\n        try { return new java.util.Scanner(System.in).nextLine(); } catch (Exception e) { return ""; }\n    }\n}`;
-    }
-    return wrappedCode;
-  }
-
-  // 3. Demote all public class / record / enum / interface to package-private so javac never complains about filename mismatch
-  clean = clean.replace(
-    /\bpublic\s+(final\s+|abstract\s+)?(class|record|enum|interface)\s+([A-Za-z0-9_$]+)/g,
-    (m, mod, type, name) => `${mod || ''}${type} ${name}`
-  );
-
-  // 4. Find all classes
-  const classRegex = /\b(?:final\s+|abstract\s+)?(class|record|enum)\s+([A-Za-z0-9_$]+)/g;
-  const classes = [];
-  let match;
-  while ((match = classRegex.exec(clean)) !== null) {
-    classes.push({ name: match[2], index: match.index });
-  }
-
-  // 5. Find which class contains the main method (supports static main and instance void main)
-  const mainMatch = clean.match(/\b(?:public\s+)?(?:static\s+)?void\s+main\s*\(/);
-  let classWithMain = null;
-  if (mainMatch) {
-    const mainIndex = mainMatch.index;
-    const preceding = classes.filter((c) => c.index < mainIndex);
-    if (preceding.length > 0) {
-      classWithMain = preceding[preceding.length - 1].name;
-    }
-  }
-
-  // If no main method was found, default to the first class
-  if (!classWithMain && classes.length > 0) {
-    classWithMain = classes[0].name;
-  }
-
-  // 6. If target class is not Main, safely rename all identifier occurrences to Main
-  if (classWithMain && classWithMain !== 'Main') {
-    const existingMain = classes.find((c) => c.name === 'Main');
-    if (existingMain) {
-      clean = clean.replace(/\bclass\s+Main\b/g, 'class OldMain');
-    }
-    clean = replaceJavaIdentifierSafely(clean, classWithMain, 'Main');
-  }
-
-  // 7. Ensure class Main contains the canonical JVM entry point: public static void main(String[] args)
-  const hasCanonicalStaticMain = /\bpublic\s+static\s+void\s+main\s*\(\s*String\s*\[\s*\]\s*args\s*\)/.test(clean);
-  const hasAnyStaticMain = /\b(?:public\s+)?static\s+void\s+main\s*\(/.test(clean);
-  const hasInstanceVoidMain = /\bvoid\s+main\s*\(\s*\)/.test(clean);
-  const hasInstanceVoidMainWithArgs = /\bvoid\s+main\s*\(\s*String\s*\[\s*\]\s*args\s*\)/.test(clean);
-
-  if (!hasCanonicalStaticMain) {
-    if (hasAnyStaticMain) {
-      clean = clean.replace(
-        /\b(?:private|protected|public)?\s*static\s+void\s+main\s*\([^)]*\)/,
-        'public static void main(String[] args)'
-      );
-    } else if (hasInstanceVoidMain) {
-      // Bridge Java 21-26 instance void main() for runtimes that require static main entry point
-      clean = clean.replace(
-        /(\bclass\s+Main\b[^{]*\{)/,
-        `$1\n    public static void main(String[] args) throws Throwable {\n        new Main().main();\n    }`
-      );
-    } else if (hasInstanceVoidMainWithArgs) {
-      clean = clean.replace(
-        /(\bclass\s+Main\b[^{]*\{)/,
-        `$1\n    public static void main(String[] args) throws Throwable {\n        new Main().main(args);\n    }`
-      );
-    } else {
-      clean = clean.replace(
-        /(\bclass\s+Main\b[^{]*\{)/,
-        `$1\n    public static void main(String[] args) throws Throwable {\n        // Code compiled successfully\n    }`
-      );
-    }
-  }
-
-  // 8. Add fallback IO class for older sandbox runtimes if IO.print/println/readln is used
-  if (/\bIO\.(print|println|readln)\b/.test(clean) && !/\bclass\s+IO\b/.test(clean)) {
-    clean += `\n\nclass IO {\n    public static void print(Object o) { System.out.print(o); }\n    public static void println(Object o) { System.out.println(o); }\n    public static void println() { System.out.println(); }\n    public static String readln(String prompt) {\n        if (prompt != null) System.out.print(prompt);\n        try { return new java.util.Scanner(System.in).nextLine(); } catch (Exception e) { return ""; }\n    }\n}`;
-  }
-
-  return clean;
-}
 
 // Judge0 CE Language IDs (ultra-fast containerized execution)
 const JUDGE0_CE_LANGUAGES = {
