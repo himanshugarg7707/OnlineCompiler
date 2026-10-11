@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { useApp } from '../context/AppContext';
 import {
@@ -60,36 +60,87 @@ export default function FileOptionsMenu({
     };
   }, [onClose]);
 
+  // Compute smart position cleanly clear of sidebar / dividers and viewport boundaries
+  const computePosition = useCallback((measuredWidth, measuredHeight) => {
+    const menuW = measuredWidth || 275;
+    const menuH = measuredHeight || 500;
+    const vpW = typeof window !== 'undefined' ? window.innerWidth : 1200;
+    const vpH = typeof window !== 'undefined' ? window.innerHeight : 800;
+
+    let targetX = 150;
+    let targetY = 150;
+
+    if (rect) {
+      if (isTab) {
+        // Tab anchor: try positioning right below the tab
+        targetX = Math.max(12, Math.min(rect.left, vpW - menuW - 16));
+        const candidateY = rect.bottom + 6;
+        if (candidateY + menuH > vpH - 16) {
+          // If it overflows the bottom, place it as high as needed so all options fit
+          targetY = Math.max(12, vpH - menuH - 16);
+        } else {
+          targetY = candidateY;
+        }
+      } else {
+        // File explorer item anchor: position to the right or left
+        if (rect.right + menuW + 16 <= vpW) {
+          targetX = rect.right + 10;
+        } else {
+          targetX = Math.max(12, rect.left - menuW - 10);
+        }
+
+        // Vertical positioning: try aligning near top of file item
+        const candidateY = rect.top - 4;
+        if (candidateY + menuH > vpH - 16) {
+          // Shift upwards so the bottom of the menu stays within viewport
+          targetY = Math.max(12, vpH - menuH - 16);
+        } else {
+          targetY = Math.max(12, candidateY);
+        }
+      }
+    } else if (position) {
+      targetX = Math.max(12, Math.min(position.x + 8, vpW - menuW - 16));
+      if (position.y + menuH > vpH - 16) {
+        targetY = Math.max(12, vpH - menuH - 16);
+      } else {
+        targetY = Math.max(12, position.y);
+      }
+    }
+
+    // Strict boundary clamping so options NEVER go below bottom status bar or screen edge
+    targetX = Math.max(12, Math.min(targetX, vpW - menuW - 16));
+    targetY = Math.max(12, Math.min(targetY, vpH - menuH - 16));
+
+    return { x: targetX, y: targetY };
+  }, [rect, position, isTab]);
+
+  const [coords, setCoords] = useState(() => computePosition(275, 500));
+
+  // Measure actual rendered size and refine position immediately
+  useLayoutEffect(() => {
+    if (!menuRef.current) return;
+    const actualWidth = menuRef.current.offsetWidth || 275;
+    const actualHeight = menuRef.current.offsetHeight || 500;
+    const updated = computePosition(actualWidth, actualHeight);
+    setCoords(updated);
+  }, [computePosition]);
+
+  // Adjust on window resize
+  useEffect(() => {
+    function handleResize() {
+      if (!menuRef.current) return;
+      const actualWidth = menuRef.current.offsetWidth || 275;
+      const actualHeight = menuRef.current.offsetHeight || 500;
+      setCoords(computePosition(actualWidth, actualHeight));
+    }
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [computePosition]);
+
   if (!file) return null;
 
   const baseName = file.name.includes('/') ? file.name.split('/').pop() : file.name;
   const duplicatePreviewName = baseName.replace(/\.([^.]+)$/, '_copy.$1');
-
-  // Compute smart position cleanly clear of sidebar / dividers
-  const menuWidth = 275;
-  const menuHeight = 360;
-
-  let safeX = 150;
-  let safeY = 150;
-
-  if (rect) {
-    if (isTab) {
-      // Anchored below tab
-      safeX = Math.max(12, Math.min(rect.left, window.innerWidth - menuWidth - 16));
-      safeY = Math.max(12, Math.min(rect.bottom + 6, window.innerHeight - menuHeight - 16));
-    } else {
-      // Anchored to the right of file explorer item (in editor canvas)
-      if (rect.right + menuWidth + 16 <= window.innerWidth) {
-        safeX = rect.right + 10;
-      } else {
-        safeX = Math.max(12, rect.left - menuWidth - 10);
-      }
-      safeY = Math.max(12, Math.min(rect.top - 6, window.innerHeight - menuHeight - 16));
-    }
-  } else if (position) {
-    safeX = Math.max(12, Math.min(position.x + 8, window.innerWidth - menuWidth - 16));
-    safeY = Math.max(12, Math.min(position.y, window.innerHeight - menuHeight - 16));
-  }
 
   const menuContent = (
     <div
@@ -103,7 +154,7 @@ export default function FileOptionsMenu({
       <div
         className="file-options-menu"
         ref={menuRef}
-        style={{ top: `${safeY}px`, left: `${safeX}px` }}
+        style={{ top: `${coords.y}px`, left: `${coords.x}px` }}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header with filename & language icon */}

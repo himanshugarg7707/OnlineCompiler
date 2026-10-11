@@ -16,7 +16,7 @@
   max-width: 100%;
   box-sizing: border-box;
   flex-wrap: nowrap;
-  overflow: hidden;
+  overflow: visible;
 }
 
 /* Logo & Brand */
@@ -1142,6 +1142,8 @@
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
   padding: 4px 0;
   z-index: 1000;
+  max-height: calc(100vh - 60px);
+  overflow-y: auto;
 }
 
 .dropdown-entry {

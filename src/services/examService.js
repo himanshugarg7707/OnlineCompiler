@@ -1,9 +1,11 @@
 // PDF Exam & Test Case Generation Service
 // Extracts text from uploaded PDF question papers, synthesizes test cases, progressive hints, and manages exam sessions
 import { getConfig } from './configService.js';
+import LZString from 'lz-string';
 
 const EXAM_STORAGE_KEY = 'fullcode_active_exam_session';
 const EXAM_HISTORY_KEY = 'fullcode_exam_history';
+const CREATED_EXAMS_STORAGE_KEY = 'fullcode_created_exams_v1';
 
 // ─── Browser PDF Text Extraction Engine ─────────────────────────────────────
 
@@ -1275,4 +1277,282 @@ Sample Output:
 1 2`,
     },
   ];
+}
+
+/**
+ * Generates a unique 6-character random test unlock code
+ */
+export function generateRandomTestCode() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let token = 'TEST-';
+  for (let i = 0; i < 4; i++) {
+    token += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return token;
+}
+
+/**
+ * Encodes and compresses exam data into a shareable URL hash
+ */
+export function generateExamShareUrl(examData) {
+  try {
+    const payload = {
+      v: 1,
+      exam: examData,
+      generatedAt: Date.now(),
+    };
+    const jsonStr = JSON.stringify(payload);
+    const compressed = LZString.compressToEncodedURIComponent(jsonStr);
+    const baseUrl = typeof window !== 'undefined'
+      ? `${window.location.origin}${window.location.pathname}`
+      : '';
+    return `${baseUrl}#exam-share=${compressed}`;
+  } catch (err) {
+    console.error('Failed to generate exam share URL:', err);
+    return '';
+  }
+}
+
+/**
+ * Decodes exam data from URL hash or query string
+ */
+export function decodeExamShareUrl(hashString) {
+  try {
+    const hash = hashString || (typeof window !== 'undefined' ? window.location.hash : '');
+    if (!hash) return null;
+    let match = hash.match(/#exam-share=([^&]+)/);
+    if (!match) {
+      match = hash.match(/#exam=([^&]+)/);
+    }
+    if (!match && typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const queryPayload = params.get('exam-share') || params.get('exam');
+      if (queryPayload) {
+        match = [null, queryPayload];
+      }
+    }
+    if (!match || !match[1]) return null;
+
+    const decompressed = LZString.decompressFromEncodedURIComponent(match[1]);
+    if (!decompressed) return null;
+    const parsed = JSON.parse(decompressed);
+    return parsed.exam || parsed;
+  } catch (err) {
+    console.warn('Failed to decode exam share URL:', err);
+    return null;
+  }
+}
+
+/**
+ * Compresses an uploaded image file down to max 800px JPEG to fit inside share URLs
+ * @param {File} file
+ * @param {number} maxWidth
+ * @param {number} quality
+ * @returns {Promise<string>} base64 data url
+ */
+export function compressImageFile(file, maxWidth = 800, quality = 0.72) {
+  return new Promise((resolve, reject) => {
+    if (!file) return reject(new Error('No file provided'));
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = (event) => {
+      const img = new Image();
+      img.src = event.target.result;
+      img.onload = () => {
+        let width = img.width;
+        let height = img.height;
+        if (width > maxWidth) {
+          height = Math.round((height * maxWidth) / width);
+          width = maxWidth;
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+        const dataUrl = canvas.toDataURL('image/jpeg', quality);
+        resolve(dataUrl);
+      };
+      img.onerror = () => reject(new Error('Failed to load image for processing'));
+    };
+    reader.onerror = () => reject(new Error('Failed to read image file'));
+  });
+}
+
+/**
+ * Calculate 1-indexed line range that is locked in code
+ */
+export function getLockedLineRange(code, explicitLockedRange) {
+  if (explicitLockedRange && explicitLockedRange.start && explicitLockedRange.end) {
+    return {
+      startLine: Number(explicitLockedRange.start),
+      endLine: Number(explicitLockedRange.end),
+    };
+  }
+  if (!code || typeof code !== 'string') return null;
+
+  const lines = code.split('\n');
+  let startLine = null;
+  let endLine = null;
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (/LOCKED_START|LOCKED_REGION_START/.test(line)) {
+      startLine = i + 1;
+    }
+    if (/LOCKED_END|LOCKED_REGION_END/.test(line)) {
+      endLine = i + 1;
+    }
+  }
+
+  if (startLine && endLine && endLine >= startLine) {
+    return { startLine, endLine };
+  }
+  return null;
+}
+
+/**
+ * Saves created exam to localStorage
+ */
+export function saveCreatedExam(examData) {
+  try {
+    const existing = getSavedCreatedExams();
+    const idx = existing.findIndex((e) => e.id === examData.id);
+    if (idx >= 0) {
+      existing[idx] = { ...examData, updatedAt: Date.now() };
+    } else {
+      existing.unshift({ ...examData, createdAt: Date.now(), updatedAt: Date.now() });
+    }
+    localStorage.setItem(CREATED_EXAMS_STORAGE_KEY, JSON.stringify(existing));
+    return true;
+  } catch (e) {
+    console.error('Error saving created exam:', e);
+    return false;
+  }
+}
+
+/**
+ * Loads list of creator's saved exams
+ */
+export function getSavedCreatedExams() {
+  try {
+    const raw = localStorage.getItem(CREATED_EXAMS_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Deletes created exam by id
+ */
+export function deleteCreatedExam(examId) {
+  try {
+    const existing = getSavedCreatedExams().filter((e) => e.id !== examId);
+    localStorage.setItem(CREATED_EXAMS_STORAGE_KEY, JSON.stringify(existing));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Returns a complete ready-to-test sample exam with both MCQ and Coding (with locked lines and diagrams)
+ */
+export function getSampleFullExam() {
+  return {
+    id: 'exam_' + Date.now(),
+    title: 'Computer Science Practical & MCQ Examination',
+    durationMinutes: 45,
+    unlockCode: 'TEST-2026',
+    strictnessLimit: 3,
+    questions: [
+      {
+        id: 'q_1',
+        num: '1',
+        type: 'mcq',
+        title: 'Java 26 Language Architecture',
+        description: 'Which method signature is the valid instance main entry point introduced in modern OpenJDK (JEP 477/495)?',
+        imageUrl: '',
+        options: [
+          { id: 'A', text: 'void main()' },
+          { id: 'B', text: 'public static int main(String[] args)' },
+          { id: 'C', text: 'main() -> void' },
+          { id: 'D', text: 'static main(String args)' },
+        ],
+        correctAnswer: 'A',
+        explanation: 'In Java 21-26, instance main methods allow parameterless void main() without requiring public static modifiers or String[] args.',
+      },
+      {
+        id: 'q_2',
+        num: '2',
+        type: 'coding',
+        title: 'Modern Java IO Output (Locked Imports)',
+        description: 'Write a solution that prints "hello world" using `IO.print` or `System.out.print`.\n\n⚠️ **Note**: Lines 1 to 4 are locked by the examiner. You must NOT modify the imports or class declaration.',
+        imageUrl: '',
+        language: 'java',
+        lockedLines: { start: 1, end: 4 },
+        starterCode: `// === LOCKED REGION START (Do not modify) ===
+import java.util.*;
+public class Solution {
+// === LOCKED REGION END ===
+    void main() {
+        // Write your code here:
+        IO.print("hello world");
+    }
+}`,
+        testCases: [
+          { id: 1, input: '', expectedOutput: 'hello world', isHidden: false },
+        ],
+      },
+      {
+        id: 'q_3',
+        num: '3',
+        type: 'mcq',
+        title: 'Time Complexity Analysis',
+        description: 'What is the worst-case time complexity of finding an element in a balanced Binary Search Tree (BST) with N nodes?',
+        imageUrl: '',
+        options: [
+          { id: 'A', text: 'O(1)' },
+          { id: 'B', text: 'O(log N)' },
+          { id: 'C', text: 'O(N)' },
+          { id: 'D', text: 'O(N log N)' },
+        ],
+        correctAnswer: 'B',
+        explanation: 'In a balanced BST, tree height is log2(N), leading to O(log N) search operations in the worst case.',
+      },
+      {
+        id: 'q_4',
+        num: '4',
+        type: 'coding',
+        title: 'Two Sum Integer Pair',
+        description: 'Given space-separated integers and a target sum, output the two numbers that add up to the target.\n\nLines 1-3 are locked and contain required package scaffolding.',
+        imageUrl: '',
+        language: 'python',
+        lockedLines: { start: 1, end: 3 },
+        starterCode: `# === LOCKED REGION START ===
+import sys
+# === LOCKED REGION END ===
+
+def solve():
+    data = sys.stdin.read().split()
+    if not data: return
+    target = int(data[-1])
+    nums = [int(x) for x in data[:-1]]
+    seen = {}
+    for n in nums:
+        diff = target - n
+        if diff in seen:
+            print(f"{diff} {n}")
+            return
+        seen[n] = True
+
+solve()`,
+        testCases: [
+          { id: 1, input: '2 7 11 15 9', expectedOutput: '2 7', isHidden: false },
+          { id: 2, input: '3 2 4 6', expectedOutput: '2 4', isHidden: false },
+        ],
+      },
+    ],
+  };
 }

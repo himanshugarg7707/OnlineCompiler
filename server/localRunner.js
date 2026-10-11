@@ -53,11 +53,24 @@ export async function detectLocalCompilers() {
     })
   );
 
+  let javaVersionString = 'openjdk version "26.0.2.1" 2026-08-18';
+  if (found.java) {
+    try {
+      const { stderr, stdout } = await execAsync(`"${found.java}" -version 2>&1`);
+      const output = (stderr || stdout || '').trim();
+      const firstLine = output.split('\n')[0]?.trim();
+      if (firstLine) {
+        javaVersionString = firstLine;
+      }
+    } catch {}
+  }
+
   cachedCompilers = {
     available: Object.keys(found).length > 0,
     isLocal: true,
     platform: process.platform,
     compilers: found,
+    javaVersion: javaVersionString,
   };
 
   return cachedCompilers;
@@ -349,6 +362,8 @@ async function _executeCodeLocallyInternal({ code, languageId, stdin = '', filen
         return { canExecuteLocally: false, reason: 'Java compiler (javac/java) not found' };
       }
 
+      const javaCompilerVersion = cachedCompilers?.javaVersion || 'openjdk version "26.0.2.1" 2026-08-18';
+
       // Detect package name (e.g., "package HashMap;")
       const pkgMatch = code.match(/^\s*package\s+([A-Za-z0-9_$.]+)\s*;/m);
       const packageName = pkgMatch ? pkgMatch[1] : null;
@@ -358,7 +373,8 @@ async function _executeCodeLocallyInternal({ code, languageId, stdin = '', filen
         ? cleanFilename.replace(/\.java$/, '')
         : 'Main';
 
-      const mainRegex = /\b(?:public\s+)?class\s+([A-Za-z0-9_$]+)\b[^{]*\{[^}]*?\b(?:public\s+)?static\s+void\s+main\b/s;
+      // Support classic static void main, instance void main() (Java 21-26), and package-private mains
+      const mainRegex = /\b(?:public\s+)?class\s+([A-Za-z0-9_$]+)\b[^{]*\{[^}]*?\b(?:public\s+)?(?:static\s+)?void\s+main\b/s;
       const classWithMainMatch = code.match(mainRegex);
       if (classWithMainMatch) {
         className = classWithMainMatch[1];
@@ -398,7 +414,7 @@ async function _executeCodeLocallyInternal({ code, languageId, stdin = '', filen
           statusCode: 1,
           isLocal: true,
           engine: 'local',
-          compiler: 'OpenJDK (javac 21)',
+          compiler: javaCompilerVersion,
           compilerCommand: `javac ${className}.java`,
         };
       }
@@ -415,7 +431,7 @@ async function _executeCodeLocallyInternal({ code, languageId, stdin = '', filen
         statusCode: execRes.exitCode,
         isLocal: true,
         engine: 'local',
-        compiler: 'OpenJDK (javac / java 21)',
+        compiler: javaCompilerVersion,
         compilerCommand: `javac ${className}.java && java ${runClass}`,
       };
     }

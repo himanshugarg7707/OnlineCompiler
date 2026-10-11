@@ -120,10 +120,14 @@ export function sanitizeFilenameIdentifier(fullPath) {
  */
 export function getJavaClassNameFromStem(stem) {
   if (!stem) return 'Main';
-  // Convert snake_case to PascalCase for clean Java class naming
-  let cleaned = stem.replace(/_([a-zA-Z0-9])/g, (_, ch) => ch.toUpperCase());
+  // If stem is already a valid Java identifier (e.g. java_02, LinkedList_01, Solution), preserve it
+  if (/^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(stem)) {
+    return stem;
+  }
+  // Convert invalid characters into a valid Java identifier
+  let cleaned = stem.replace(/[-.\s]+([a-zA-Z0-9])/g, (_, ch) => ch.toUpperCase());
+  cleaned = cleaned.replace(/[^a-zA-Z0-9_$]/g, '_');
   let className = cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
-  // Ensure valid Java identifier: must start with [A-Za-z_$]
   if (!/^[a-zA-Z_$]/.test(className)) {
     className = `Solution_${className}`;
   }

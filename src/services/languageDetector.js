@@ -81,6 +81,8 @@ const LANGUAGE_PATTERNS = [
     patterns: [
       /\bpublic\s+class\b/,
       /\bSystem\.out\.print/,
+      /\bIO\.(print|println|readln)\b/,
+      /\bvoid\s+main\s*\(\s*\)/,
       /\bpublic\s+static\s+void\s+main/,
       /\bimport\s+java\./,
       /\bString\[\]\s+args/,
@@ -790,10 +792,10 @@ export function normalizeJavaMainMethod(code) {
     'public static void main('
   );
 
-  // 4. Instance main: void main() or public void main() without static
+  // 4. Instance main in Java 21-26: normalize typo capitalized Main to main, preserve instance void main()
   res = res.replace(
-    /(?<!\bstatic\s+)\b(?:public\s+|protected\s+|private\s+)?void\s+main\s*\(\s*\)/gi,
-    'public static void main(String[] args)'
+    /\b(?:public\s+|protected\s+|private\s+)?void\s+Main\s*\(/g,
+    'void main('
   );
 
   // 5. Clean up any parameter variations for public static void main
@@ -1750,9 +1752,9 @@ export function getCompilationIdentifier(language, filename = '') {
       return {
         compilerName: 'javac',
         runnerName: 'java',
-        displayIdentifier: 'javac 21.0.2 / IJava',
+        displayIdentifier: 'javac 26.0.2.1 / IJava',
         command: (f) => `javac -cp . ${f} && java Cell`,
-        standard: 'OpenJDK 21 (IJava Kernel)',
+        standard: 'OpenJDK 26.0.2.1 (build 26.0.2.1+1-7)',
       };
     }
     if (lowerName.includes('cpp') || lowerName.includes('c++')) {
@@ -1798,9 +1800,9 @@ export function getCompilationIdentifier(language, filename = '') {
     62: {
       compilerName: 'javac',
       runnerName: 'java',
-      displayIdentifier: 'javac 21.0.2 (JDK 21)',
+      displayIdentifier: 'javac 26.0.2.1 (JDK 26)',
       command: (f, cls) => `javac ${f} && java ${cls || f.replace(/\.java$/, '')}`,
-      standard: 'Java SE 21 (OpenJDK LTS)',
+      standard: 'OpenJDK 26.0.2.1 (build 26.0.2.1+1-7)',
     },
     63: {
       compilerName: 'node',

@@ -424,16 +424,23 @@ export function prepareJavaForExecution(code) {
   // 4. Ensure any main method has public static void main
   clean = clean.replace(/\b(?:private|protected)\s+static\s+void\s+main\b/g, 'public static void main');
 
-  // 5. Find which class contains the main method
-  const mainMatch = clean.match(/\bpublic\s+static\s+void\s+main\s*\(/) || clean.match(/\bstatic\s+void\s+main\s*\(/);
+  // 5. Find which class contains the main method (supports static main and instance void main)
+  const mainMatch = clean.match(/\b(?:public\s+)?(?:static\s+)?void\s+main\s*\(/);
   let classWithMain = null;
+  let isStaticMain = false;
   if (mainMatch) {
+    isStaticMain = /\bstatic\b/.test(mainMatch[0]);
     const mainIndex = mainMatch.index;
     const preceding = classes.filter((c) => c.index < mainIndex);
     if (preceding.length > 0) {
       classWithMain = preceding[preceding.length - 1].name;
     }
   }
+
+  // Helper invocation for Main bridge (static vs instance invocation)
+  const mainInvocation = isStaticMain
+    ? `${classWithMain}.main(args);`
+    : `new ${classWithMain}().main();`;
 
   // 6. Demote any public class / record / enum / interface to package-private
   // This automatically removes the "file class" restriction where the class name must match filename.
@@ -450,7 +457,7 @@ export function prepareJavaForExecution(code) {
     if (classWithMain && classWithMain !== 'Main') {
       clean = clean.replace(
         /(\b(?:final\s+|abstract\s+)?class\s+Main\b[^{]*\{)/,
-        `$1\n    public static void main(String[] args) throws Throwable {\n        ${classWithMain}.main(args);\n    }`
+        `$1\n    public static void main(String[] args) throws Throwable {\n        ${mainInvocation}\n    }`
       );
     }
   } else {
@@ -465,10 +472,15 @@ export function prepareJavaForExecution(code) {
     const importBlock = importLines.length > 0 ? importLines.join('\n') + '\n\n' : '';
 
     if (classWithMain) {
-      clean = `${importBlock}class Main {\n    public static void main(String[] args) throws Throwable {\n        ${classWithMain}.main(args);\n    }\n}\n\n` + clean;
+      clean = `${importBlock}class Main {\n    public static void main(String[] args) throws Throwable {\n        ${mainInvocation}\n    }\n}\n\n` + clean;
     } else {
       clean = `${importBlock}class Main {\n    public static void main(String[] args) throws Throwable {\n        // Code compiled successfully\n    }\n}\n\n` + clean;
     }
+  }
+
+  // 8. Add fallback IO class for older sandbox runtimes if IO.print/println is used
+  if (/\bIO\.(print|println|readln)\b/.test(clean) && !/\bclass\s+IO\b/.test(clean)) {
+    clean += `\n\nclass IO {\n    public static void print(Object o) { System.out.print(o); }\n    public static void println(Object o) { System.out.println(o); }\n    public static void println() { System.out.println(); }\n    public static String readln(String prompt) {\n        if (prompt != null) System.out.print(prompt);\n        try { return new java.util.Scanner(System.in).nextLine(); } catch (Exception e) { return ""; }\n    }\n}`;
   }
 
   return clean;
