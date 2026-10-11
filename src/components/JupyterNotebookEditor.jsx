@@ -761,6 +761,51 @@ export default function JupyterNotebookEditor({ file, onContentChange }) {
         result = await executePythonInBrowser(code, effectiveStdin);
       }
 
+      // Auto-recovery: If execution failed because Scanner/input() ran out of tokens (NoSuchElementException / EOFError),
+      // automatically synthesize and append additional input tokens, then re-execute immediately
+      if (!result.success && result.error && /NoSuchElementException|EOFError/i.test(result.error)) {
+        const currentTokens = effectiveStdin.trim().split(/\s+/).filter(Boolean);
+        const smartFallback = generateSmartInputForCode(code) || '5\n10\n20\n30\n40\n50\n20';
+        const fallbackValue = currentTokens.length > 1 ? currentTokens[1] : (currentTokens[0] || '10');
+        const supplementalInput = effectiveStdin.trim()
+          ? `${effectiveStdin.trim()}\n${fallbackValue}\n20\n30\n40\n50`
+          : smartFallback;
+
+        let retryResult;
+        if (isJavaExecution) {
+          const prepared = prepareJavaNotebookCellCode(notebook.cells, index);
+          retryResult = await executeCode(prepared, 62, supplementalInput);
+          if (!retryResult.success && retryResult.error && /already defined in method main|is already defined/i.test(retryResult.error)) {
+            const fallbackPrepared = prepareJavaCellCode(code);
+            retryResult = await executeCode(fallbackPrepared, 62, supplementalInput);
+          }
+        } else if (notebookLanguage === 'python') {
+          retryResult = await executePythonInBrowser(code, supplementalInput);
+        } else if (notebookLanguage === 'cpp') {
+          const prepared = prepareCppCellCode(code);
+          retryResult = await executeCode(prepared, 54, supplementalInput);
+        } else if (notebookLanguage === 'javascript') {
+          retryResult = await executeCode(code, 63, supplementalInput);
+        } else if (notebookLanguage === 'c') {
+          const prepared = prepareCCellCode(code);
+          retryResult = await executeCode(prepared, 50, supplementalInput);
+        }
+
+        if (retryResult && !retryResult.error) {
+          result = retryResult;
+          effectiveStdin = supplementalInput;
+          updateCell(index, {
+            stdin: supplementalInput,
+            metadata: {
+              ...(cell.metadata || {}),
+              stdin: supplementalInput,
+            },
+          });
+          setOpenInputCellIndices((prev) => ({ ...prev, [index]: true }));
+          showToast?.('💡 Auto-supplemented missing input for Scanner search!');
+        }
+      }
+
       const outputs = [];
       if (result.output && result.output !== '(Program finished with no output)') {
         outputs.push({

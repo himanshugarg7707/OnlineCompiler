@@ -147,11 +147,57 @@ export function generateRandomInputForPattern(patternType = 'generic', options =
       const arr = Array.from({ length: count }, () =>
         Math.floor(Math.random() * (max - min + 1)) + min
       );
-      const isSplit = options.code && /split\s*\(/.test(options.code);
+      const code = options.code || '';
+      const isSplit = code && /split\s*\(/.test(code);
+
+      // Check for extra inputs outside the collection loop (e.g. int find = sc.nextInt(); search, target, k)
+      let extraCount = 0;
+      let hasSearch = false;
+      if (code) {
+        const cleanCode = code
+          .replace(/\/\*[\s\S]*?\*\//g, '')
+          .replace(/\/\/.*/g, '');
+
+        hasSearch = /(?:find|search|target|key|element|query|val)\b/i.test(cleanCode);
+
+        // Find loop that reads input
+        const loopRegex = /(?:for|while)\s*\(?[\s\S]*?\{[\s\S]*?\}/g;
+        let match;
+        let lastLoopEnd = -1;
+        while ((match = loopRegex.exec(cleanCode)) !== null) {
+          if (/nextInt|cin|scanf|input/i.test(match[0])) {
+            lastLoopEnd = match.index + match[0].length;
+          }
+        }
+
+        if (lastLoopEnd !== -1) {
+          const afterLoop = cleanCode.slice(lastLoopEnd);
+          const afterMatches = afterLoop.match(/(?:nextInt|nextDouble|nextLong|next\(\)|cin\s*>>|scanf|int\s*\(\s*input|readLine|readln)/gi) || [];
+          extraCount = afterMatches.length;
+        } else if (hasSearch) {
+          extraCount = 1;
+        }
+      }
+
+      const extraValues = [];
+      for (let i = 0; i < extraCount; i++) {
+        // If it's a search/find, pick a value from arr so the search succeeds, or a random value
+        if (i === 0 && hasSearch && arr.length > 0) {
+          extraValues.push(arr[Math.floor(Math.random() * arr.length)]);
+        } else {
+          extraValues.push(Math.floor(Math.random() * (max - min + 1)) + min);
+        }
+      }
+
       if (isSplit) {
+        if (extraValues.length > 0) {
+          return `${count}\n${arr.join(' ')}\n${extraValues.join('\n')}`;
+        }
         return `${count}\n${arr.join(' ')}`;
       }
-      return `${count}\n${arr.join('\n')}`;
+
+      const allTokens = [count, ...arr, ...extraValues];
+      return allTokens.join('\n');
     }
 
     case 'matrix': {
