@@ -291,7 +291,7 @@ export const KERNEL_CONFIGS = {
     packages: ['NumPy', 'Pandas', 'Matplotlib', 'SciPy', 'Folium'],
     icon: '🐍',
     accentColor: '#38bdf8',
-    sampleSnippet: `# Interactive Python cell\nimport numpy as np\nprint("NumPy version:", np.__version__)\n`,
+    sampleSnippet: `# Load sales dataset & inspect with Interactive Data Table\nimport pandas as pd\nimport numpy as np\n\ndf = pd.read_csv('sales_data.csv')\ndf.head(10)\n`,
   },
   cpp: {
     id: 'cpp',
@@ -1508,272 +1508,221 @@ export default function JupyterNotebookEditor({ file, onContentChange }) {
           </div>
         </div>
       ) : (
-        <div className="jupyter-header-toolbar">
-        <div className="jupyter-toolbar-left">
-          <div className="jupyter-kernel-compact-select" ref={kernelDropdownRef}>
-            <button
-              type="button"
-              className="jupyter-kernel-compact-btn"
-              onClick={() => setKernelDropdownOpen((prev) => !prev)}
-              title="Switch Notebook Kernel / Language"
-            >
-              <span className="kernel-compact-icon">
-                {notebookLanguage === 'java' ? (
-                  '☕'
-                ) : notebookLanguage === 'cpp' ? (
-                  '⚡'
-                ) : notebookLanguage === 'javascript' ? (
-                  '🟨'
-                ) : (
-                  <JupyterIcon size={14} />
-                )}
-              </span>
-              <span className="kernel-compact-name">{kernelConfig.name}</span>
-              <ChevronDown size={11} className={`kernel-compact-arrow ${kernelDropdownOpen ? 'open' : ''}`} />
-            </button>
-
-            {kernelDropdownOpen && (
-              <div className="jupyter-kernel-dropdown">
-                <div className="dropdown-label">Select Notebook Kernel</div>
-                {Object.values(KERNEL_CONFIGS).map((cfg) => (
-                  <button
-                    key={cfg.id}
-                    type="button"
-                    className={`kernel-option-item ${notebookLanguage === cfg.id ? 'selected' : ''}`}
-                    onClick={() => handleSwitchKernel(cfg.id)}
-                  >
-                    <span className="kernel-opt-icon">{cfg.icon}</span>
-                    <div className="kernel-opt-info">
-                      <span className="kernel-opt-name">{cfg.name}</span>
-                      <span className="kernel-opt-engine">{cfg.engine}</span>
-                    </div>
-                    {notebookLanguage === cfg.id && <Check size={14} className="kernel-opt-check" />}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Google Colab Runtime Status Indicator & Memory Manager */}
-          {notebookLanguage === 'python' && (
-            <div className="colab-runtime-pill-container" ref={runtimeMenuRef}>
+        <div className="jupyter-header-toolbar colab-header-toolbar">
+          <div className="jupyter-toolbar-left colab-toolbar-left">
+            <div className="jupyter-kernel-compact-select" ref={kernelDropdownRef}>
               <button
                 type="button"
-                className="colab-runtime-pill"
-                onClick={() => setRuntimeMenuOpen((prev) => !prev)}
-                title="View Python runtime status & RAM or restart kernel"
+                className="jupyter-kernel-compact-btn"
+                onClick={() => setKernelDropdownOpen((prev) => !prev)}
+                title="Switch Notebook Kernel / Language"
               >
-                <span className="colab-runtime-dot" />
-                <span className="colab-runtime-label">Connected</span>
-                <span className="colab-runtime-specs">Python 3.12 (WASM)</span>
-                <ChevronDown size={11} className={`colab-runtime-arrow ${runtimeMenuOpen ? 'open' : ''}`} />
+                <span className="kernel-compact-icon">
+                  {notebookLanguage === 'java' ? (
+                    '☕'
+                  ) : notebookLanguage === 'cpp' ? (
+                    '⚡'
+                  ) : notebookLanguage === 'javascript' ? (
+                    '🟨'
+                  ) : (
+                    '🐍'
+                  )}
+                </span>
+                <span className="kernel-compact-name">{kernelConfig.name}</span>
+                <ChevronDown size={11} className={`kernel-compact-arrow ${kernelDropdownOpen ? 'open' : ''}`} />
               </button>
 
-              {runtimeMenuOpen && (
-                <div className="colab-runtime-dropdown">
-                  <div className="colab-runtime-dropdown-header">
-                    <span className="runtime-dropdown-title">Python 3.12 Runtime</span>
-                    <span className="runtime-status-tag">Connected</span>
+              {kernelDropdownOpen && (
+                <div className="jupyter-kernel-dropdown">
+                  <div className="dropdown-label">Select Notebook Kernel</div>
+                  {Object.values(KERNEL_CONFIGS).map((cfg) => (
+                    <button
+                      key={cfg.id}
+                      type="button"
+                      className={`kernel-option-item ${notebookLanguage === cfg.id ? 'selected' : ''}`}
+                      onClick={() => handleSwitchKernel(cfg.id)}
+                    >
+                      <span className="kernel-opt-icon">{cfg.icon}</span>
+                      <div className="kernel-opt-info">
+                        <span className="kernel-opt-name">{cfg.name}</span>
+                        <span className="kernel-opt-engine">{cfg.engine}</span>
+                      </div>
+                      {notebookLanguage === cfg.id && <Check size={14} className="kernel-opt-check" />}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="colab-toolbar-divider" />
+
+            {/* Google Colab Pill Actions: + Code, + Text */}
+            <button
+              className="colab-pill-btn colab-add-code"
+              onClick={() => addCell('code', activeCellIndex)}
+              title={`Add Code cell (Alt+Enter)`}
+            >
+              <Plus size={13} />
+              <span>Code</span>
+            </button>
+
+            <button
+              className="colab-pill-btn colab-add-text"
+              onClick={() => addCell('markdown', activeCellIndex)}
+              title="Add Text / Markdown documentation cell"
+            >
+              <Plus size={13} />
+              <span>Text</span>
+            </button>
+
+            <div className="colab-toolbar-divider" />
+
+            <button
+              className={`colab-pill-btn ${isRunningAll ? 'running' : ''}`}
+              onClick={runAllCells}
+              disabled={isRunningAll || runningCellIndex !== null}
+              title="Run all code cells in sequence"
+            >
+              {isRunningAll ? <Loader2 size={13} className="spin" /> : <Play size={13} fill="currentColor" />}
+              <span>{isRunningAll ? 'Running...' : 'Run All'}</span>
+            </button>
+
+            <button
+              className="colab-pill-btn"
+              onClick={clearAllOutputs}
+              title="Clear all cell execution outputs & plots"
+            >
+              <RotateCcw size={13} />
+              <span>Clear</span>
+            </button>
+          </div>
+
+          <div className="jupyter-toolbar-actions colab-toolbar-right">
+            {/* Google Colab Hardware RAM & Disk Resource Meter Widget */}
+            {notebookLanguage === 'python' && (
+              <div className="colab-hw-widget" ref={runtimeMenuRef}>
+                <button
+                  type="button"
+                  className="colab-hw-pill"
+                  onClick={() => setRuntimeMenuOpen((prev) => !prev)}
+                  title="Google Colab Python Runtime — Click for RAM details & restart"
+                >
+                  <span className="colab-runtime-dot" />
+                  <span className="hw-group">
+                    <span className="hw-name">RAM</span>
+                    <span className="hw-bar-bg"><span className="hw-bar-fill ram" style={{ width: `${Math.min(95, 24 + runtimeVariables.length * 4)}%` }} /></span>
+                  </span>
+                  <span className="hw-group">
+                    <span className="hw-name">Disk</span>
+                    <span className="hw-bar-bg"><span className="hw-bar-fill disk" style={{ width: '32%' }} /></span>
+                  </span>
+                  <ChevronDown size={11} className={`colab-runtime-arrow ${runtimeMenuOpen ? 'open' : ''}`} />
+                </button>
+
+                {runtimeMenuOpen && (
+                  <div className="colab-runtime-dropdown">
+                    <div className="colab-runtime-dropdown-header">
+                      <span className="runtime-dropdown-title">Python 3.12 (Pyodide WASM)</span>
+                      <span className="runtime-status-tag">Connected</span>
+                    </div>
+                    <div className="colab-runtime-stats">
+                      <div className="runtime-stat-row">
+                        <span className="stat-label">RAM Active:</span>
+                        <span className="stat-val">Browser Memory ({Math.min(95, 24 + runtimeVariables.length * 4)}%)</span>
+                      </div>
+                      <div className="runtime-stat-row">
+                        <span className="stat-label">Virtual Disk:</span>
+                        <span className="stat-val">Mounted at <code>/home/pyodide</code></span>
+                      </div>
+                      <div className="runtime-stat-row">
+                        <span className="stat-label">Memory Variables:</span>
+                        <span className="stat-val">{runtimeVariables.length} tracked</span>
+                      </div>
+                      <div className="runtime-stat-row">
+                        <span className="stat-label">Loaded Libraries:</span>
+                        <span className="stat-val">Pandas, NumPy, Matplotlib, SciPy, Scikit-learn</span>
+                      </div>
+                    </div>
+                    <div className="colab-runtime-dropdown-divider" />
+                    <button
+                      type="button"
+                      className="colab-runtime-action-btn danger"
+                      onClick={handleRestartRuntime}
+                      disabled={isRestartingRuntime}
+                    >
+                      {isRestartingRuntime ? <Loader2 size={13} className="spin" /> : <RotateCcw size={13} />}
+                      <span>Restart Runtime & Clear Memory</span>
+                    </button>
                   </div>
-                  <div className="colab-runtime-stats">
-                    <div className="runtime-stat-row">
-                      <span className="stat-label">Engine:</span>
-                      <span className="stat-val">Pyodide WebAssembly</span>
-                    </div>
-                    <div className="runtime-stat-row">
-                      <span className="stat-label">RAM / Memory:</span>
-                      <span className="stat-val">Active in Browser</span>
-                    </div>
-                    <div className="runtime-stat-row">
-                      <span className="stat-label">Active Variables:</span>
-                      <span className="stat-val">{runtimeVariables.length} tracked</span>
-                    </div>
-                    <div className="runtime-stat-row">
-                      <span className="stat-label">Preloaded Stack:</span>
-                      <span className="stat-val">Pandas, NumPy, Matplotlib, SciPy, Scikit-learn</span>
-                    </div>
+                )}
+              </div>
+            )}
+
+            {/* Export Button Group with Dropdown */}
+            <div className="jupyter-export-group" ref={exportDropdownRef}>
+              <button
+                className="colab-pill-btn colab-export-btn"
+                onClick={exportNotebook}
+                title="Export Notebook"
+              >
+                <Download size={13} />
+                <span>Export</span>
+              </button>
+              <button
+                className={`colab-pill-btn colab-export-arrow ${exportDropdownOpen ? 'active' : ''}`}
+                onClick={() => setExportDropdownOpen(!exportDropdownOpen)}
+                title="Export options"
+                aria-expanded={exportDropdownOpen}
+              >
+                <ChevronDown size={11} />
+              </button>
+
+              {exportDropdownOpen && (
+                <div className="jupyter-export-dropdown">
+                  <div className="jupyter-export-dropdown-header">
+                    <span>Export Notebook Options</span>
                   </div>
-                  <div className="colab-runtime-dropdown-divider" />
                   <button
-                    type="button"
-                    className="colab-runtime-action-btn danger"
-                    onClick={handleRestartRuntime}
-                    disabled={isRestartingRuntime}
+                    className="jupyter-export-option recommended"
+                    onClick={() => {
+                      exportRawIpynb();
+                      setExportDropdownOpen(false);
+                    }}
                   >
-                    {isRestartingRuntime ? <Loader2 size={13} className="spin" /> : <RotateCcw size={13} />}
-                    <span>Restart Runtime & Reset Memory</span>
+                    <div className="option-icon">🪐</div>
+                    <div className="option-text">
+                      <div className="option-title">Standard .ipynb Notebook</div>
+                      <div className="option-desc">Export as Google Colab / Jupyter notebook</div>
+                    </div>
+                  </button>
+                  <button
+                    className="jupyter-export-option"
+                    onClick={() => {
+                      handleExportSplitZip();
+                      setExportDropdownOpen(false);
+                    }}
+                  >
+                    <div className="option-icon">📦</div>
+                    <div className="option-text">
+                      <div className="option-title">Split Files (.zip)</div>
+                      <div className="option-desc">Split cells into standalone Python files</div>
+                    </div>
                   </button>
                 </div>
               )}
             </div>
-          )}
-        </div>
 
-        <div className="jupyter-toolbar-actions">
-          <button
-            className="jupyter-btn-action jupyter-btn-primary"
-            onClick={() => addCell('code', activeCellIndex)}
-            title={`Add new ${kernelConfig.name} code cell (Alt+Enter)`}
-          >
-            <Plus size={14} />
-            <Code2 size={14} />
-            <span>Code</span>
-          </button>
-
-          <button
-            className="jupyter-btn-action"
-            onClick={() => addCell('markdown', activeCellIndex)}
-            title="Add new Markdown documentation cell"
-          >
-            <Plus size={14} />
-            <FileText size={14} />
-            <span>Markdown</span>
-          </button>
-
-          <div className="jupyter-action-divider" />
-
-          <button
-            className={`jupyter-btn-action jupyter-btn-run-all ${isRunningAll ? 'running' : ''}`}
-            onClick={runAllCells}
-            disabled={isRunningAll || runningCellIndex !== null}
-            title="Run all code cells in sequence"
-          >
-            {isRunningAll ? (
-              <Loader2 size={14} className="spin" />
-            ) : (
-              <Play size={14} fill="currentColor" />
-            )}
-            <span>{isRunningAll ? 'Running...' : 'Run All'}</span>
-          </button>
-
-          <button
-            className="jupyter-btn-action"
-            onClick={clearAllOutputs}
-            title="Clear all execution outputs and plots"
-          >
-            <RotateCcw size={14} />
-            <span>Restart & Clear</span>
-          </button>
-
-          <button
-            className="jupyter-btn-action jupyter-btn-auto-inputs"
-            onClick={handleAutoGenerateAllCellInputs}
-            title="Automatically detect code patterns and generate smart inputs for all cells in the notebook"
-          >
-            <Sparkles size={14} />
-            <span>Auto Inputs</span>
-          </button>
-
-          <div className="jupyter-action-divider" />
-
-          {/* Export Button Group with Dropdown */}
-          <div className="jupyter-export-group" ref={exportDropdownRef}>
             <button
-              className="jupyter-btn-action jupyter-export-main-btn"
-              onClick={exportNotebook}
-              title={
-                config?.notebookExportMode === 'ipynb'
-                  ? 'Export as .ipynb Jupyter notebook'
-                  : `Export and split into ${notebookLanguage} folder (.zip)`
-              }
+              className={`colab-pill-btn ${viewRawJson ? 'active' : ''}`}
+              onClick={() => setViewRawJson(!viewRawJson)}
+              title="Toggle Raw JSON"
             >
-              <Download size={14} />
-              <span>Export {config?.notebookExportMode === 'ipynb' ? '(.ipynb)' : '(.zip)'}</span>
+              <FileCode2 size={13} />
+              <span>{viewRawJson ? 'Notebook' : 'JSON'}</span>
             </button>
-            <button
-              className={`jupyter-btn-action jupyter-export-arrow-btn ${exportDropdownOpen ? 'active' : ''}`}
-              onClick={() => setExportDropdownOpen(!exportDropdownOpen)}
-              title="Choose export format or workspace extract"
-              aria-expanded={exportDropdownOpen}
-            >
-              <ChevronDown size={13} />
-            </button>
-
-            {exportDropdownOpen && (
-              <div className="jupyter-export-dropdown">
-                <div className="jupyter-export-dropdown-header">
-                  <span>Export Notebook Options</span>
-                </div>
-                <button
-                  className={`jupyter-export-option ${config?.notebookExportMode !== 'ipynb' ? 'recommended' : ''}`}
-                  onClick={() => {
-                    handleExportSplitZip();
-                    setExportDropdownOpen(false);
-                  }}
-                >
-                  <div className="option-icon">📦</div>
-                  <div className="option-text">
-                    <div className="option-title">
-                      Split into Folder (.zip)
-                      {config?.notebookExportMode !== 'ipynb' && <span className="option-badge">Default</span>}
-                    </div>
-                    <div className="option-desc">
-                      Splits cells into <code>{notebookLanguage}/{notebookLanguage}_01</code>, <code>02</code> etc.
-                    </div>
-                  </div>
-                </button>
-
-                <button
-                  className={`jupyter-export-option ${config?.notebookExportMode === 'ipynb' ? 'recommended' : ''}`}
-                  onClick={() => {
-                    exportRawIpynb();
-                    setExportDropdownOpen(false);
-                  }}
-                >
-                  <div className="option-icon">🪐</div>
-                  <div className="option-text">
-                    <div className="option-title">
-                      Single .ipynb File
-                      {config?.notebookExportMode === 'ipynb' && <span className="option-badge">Default</span>}
-                    </div>
-                    <div className="option-desc">
-                      Standard JSON Jupyter notebook file
-                    </div>
-                  </div>
-                </button>
-
-                <div className="jupyter-export-dropdown-divider" />
-
-                <button
-                  className="jupyter-export-option"
-                  onClick={handleExtractToWorkspace}
-                >
-                  <div className="option-icon">📁</div>
-                  <div className="option-text">
-                    <div className="option-title">Extract to Workspace</div>
-                    <div className="option-desc">
-                      Creates <code>{notebookLanguage}/</code> files directly in browser file tree
-                    </div>
-                  </div>
-                </button>
-              </div>
-            )}
           </div>
-
-          <button
-            className={`jupyter-btn-action ${viewRawJson ? 'active' : ''}`}
-            onClick={() => setViewRawJson(!viewRawJson)}
-            title="Toggle between Notebook UI and raw .ipynb JSON"
-          >
-            <FileCode2 size={14} />
-            <span>{viewRawJson ? 'Notebook View' : 'Raw JSON'}</span>
-          </button>
-
-          <button
-            className="jupyter-btn-action jupyter-btn-collapse"
-            onClick={() => {
-              setToolbarMinimized(true);
-              try {
-                localStorage.setItem('fullcode_notebook_toolbar_minimized', 'true');
-              } catch {}
-            }}
-            title="Minimize notebook toolbar to maximize code cells"
-          >
-            <ChevronUp size={14} />
-          </button>
         </div>
-      </div>
-    )}
+      )}
 
       {/* Raw JSON View */}
       {viewRawJson ? (
@@ -1807,11 +1756,8 @@ export default function JupyterNotebookEditor({ file, onContentChange }) {
               onClick={() => setActiveColabTab((prev) => (prev === 'toc' ? null : 'toc'))}
               title="Table of contents outline"
             >
-              <List size={17} />
+              <List size={18} />
               <span className="colab-rail-tooltip">Outline / TOC</span>
-              {tableOfContents.length > 0 && (
-                <span className="colab-rail-badge">{tableOfContents.length}</span>
-              )}
             </button>
 
             <button
@@ -1820,11 +1766,8 @@ export default function JupyterNotebookEditor({ file, onContentChange }) {
               onClick={() => setActiveColabTab((prev) => (prev === 'variables' ? null : 'variables'))}
               title="Variable inspector"
             >
-              <Variable size={17} />
+              <Variable size={18} />
               <span className="colab-rail-tooltip">Variables</span>
-              {runtimeVariables.length > 0 && (
-                <span className="colab-rail-badge">{runtimeVariables.length}</span>
-              )}
             </button>
 
             <button
@@ -1833,7 +1776,7 @@ export default function JupyterNotebookEditor({ file, onContentChange }) {
               onClick={() => setActiveColabTab((prev) => (prev === 'snippets' ? null : 'snippets'))}
               title="Data Science code snippets"
             >
-              <Code2 size={17} />
+              <Code2 size={18} />
               <span className="colab-rail-tooltip">Snippets</span>
             </button>
 
@@ -1843,11 +1786,8 @@ export default function JupyterNotebookEditor({ file, onContentChange }) {
               onClick={() => setActiveColabTab((prev) => (prev === 'files' ? null : 'files'))}
               title="Workspace files and datasets"
             >
-              <Folder size={17} />
+              <Folder size={18} />
               <span className="colab-rail-tooltip">Files</span>
-              {workspaceFiles.length > 0 && (
-                <span className="colab-rail-badge">{workspaceFiles.length}</span>
-              )}
             </button>
           </div>
 

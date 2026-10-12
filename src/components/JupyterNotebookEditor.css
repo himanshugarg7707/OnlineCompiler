@@ -9,8 +9,7 @@
   min-width: 0;
   background: var(--bg-primary, #0d1117);
   color: var(--text-primary, #e6edf3);
-  overflow-y: auto;
-  overflow-x: hidden;
+  overflow: hidden;
   font-family: var(--font-ui, 'Inter', -apple-system, BlinkMacSystemFont, sans-serif);
   position: relative;
   box-sizing: border-box;
@@ -54,6 +53,178 @@
   max-width: 100%;
   min-width: 0;
   box-sizing: border-box;
+}
+
+/* ─── Google Colab Sleek Header Toolbar ────────────────────────────────────── */
+.colab-header-toolbar {
+  padding: 6px 14px;
+  min-height: 44px;
+  background: #0f141c;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  flex-wrap: nowrap;
+  gap: 8px;
+  z-index: 25;
+}
+
+.colab-toolbar-left {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.colab-toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.colab-toolbar-divider {
+  width: 1px;
+  height: 20px;
+  background: rgba(255, 255, 255, 0.12);
+  margin: 0 4px;
+  flex-shrink: 0;
+}
+
+.colab-pill-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 11px;
+  height: 28px;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #cbd5e1;
+  font-size: 11.5px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+  user-select: none;
+}
+
+.colab-pill-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.1);
+  color: #f8fafc;
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.colab-pill-btn.colab-add-code {
+  color: #38bdf8;
+  border-color: rgba(56, 189, 248, 0.25);
+  background: rgba(56, 189, 248, 0.08);
+}
+
+.colab-pill-btn.colab-add-code:hover {
+  background: rgba(56, 189, 248, 0.16);
+  color: #7dd3fc;
+  border-color: rgba(56, 189, 248, 0.45);
+}
+
+.colab-pill-btn.colab-add-text {
+  color: #c084fc;
+  border-color: rgba(192, 132, 252, 0.25);
+  background: rgba(192, 132, 252, 0.08);
+}
+
+.colab-pill-btn.colab-add-text:hover {
+  background: rgba(192, 132, 252, 0.16);
+  color: #e9d5ff;
+  border-color: rgba(192, 132, 252, 0.45);
+}
+
+.colab-pill-btn.running {
+  background: rgba(56, 189, 248, 0.2);
+  color: #38bdf8;
+  border-color: #38bdf8;
+}
+
+.colab-pill-btn.active {
+  background: rgba(255, 255, 255, 0.14);
+  color: #f8fafc;
+  border-color: rgba(255, 255, 255, 0.25);
+}
+
+.colab-export-btn {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+  border-right: none;
+}
+
+.colab-export-arrow {
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+  padding: 4px 6px;
+}
+
+/* Colab RAM & Disk HW Meter Widget */
+.colab-hw-widget {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.colab-hw-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 9999px;
+  padding: 3px 10px;
+  height: 28px;
+  color: #94a3b8;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.colab-hw-pill:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.2);
+  color: #e2e8f0;
+}
+
+.hw-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.hw-name {
+  font-size: 10px;
+  font-weight: 600;
+  color: #94a3b8;
+}
+
+.hw-bar-bg {
+  width: 32px;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 9999px;
+  overflow: hidden;
+  display: inline-block;
+}
+
+.hw-bar-fill {
+  display: block;
+  height: 100%;
+  border-radius: 9999px;
+  transition: width 0.3s ease;
+}
+
+.hw-bar-fill.ram {
+  background: #22c55e;
+}
+
+.hw-bar-fill.disk {
+  background: #38bdf8;
 }
 
 /* Minimized Ultra-Slim Notebook Toolbar (26px) */
@@ -613,16 +784,21 @@
 /* ─── Visual Notebook Canvas ─────────────────────────────────────────────── */
 .jupyter-canvas-container {
   flex: 1;
-  padding: 24px 20px 80px;
+  min-width: 0;
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 20px 24px 80px;
   box-sizing: border-box;
 }
 
 .jupyter-cells-wrapper {
-  max-width: 1040px;
+  max-width: 960px;
   margin: 0 auto;
+  width: 100%;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 8px;
 }
 
 .jupyter-cell-block {
@@ -696,23 +872,23 @@
 /* ─── Individual Cell ────────────────────────────────────────────────────── */
 .jupyter-cell {
   display: flex;
-  border-radius: var(--radius-md, 10px);
-  border: 1px solid var(--border-primary, rgba(48, 54, 61, 0.8));
-  background: var(--bg-secondary, #161b22);
-  transition: all var(--transition-fast, 150ms);
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: #0f141c;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
   position: relative;
   overflow: hidden;
-  box-shadow: var(--shadow-sm, 0 1px 3px rgba(0, 0, 0, 0.3));
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
 }
 
 .jupyter-cell:hover:not(.is-active) {
-  border-color: rgba(255, 255, 255, 0.18);
+  border-color: rgba(255, 255, 255, 0.16);
 }
 
 .jupyter-cell.is-active {
-  border-color: var(--border-accent, rgba(0, 212, 255, 0.4));
-  border-left: 3px solid var(--accent-cyan, #00d4ff);
-  box-shadow: 0 0 20px rgba(0, 212, 255, 0.08), var(--shadow-md, 0 4px 12px rgba(0, 0, 0, 0.4));
+  border-color: rgba(56, 189, 248, 0.45);
+  border-left: 3px solid #38bdf8;
+  box-shadow: 0 0 16px rgba(56, 189, 248, 0.08), 0 4px 14px rgba(0, 0, 0, 0.4);
 }
 
 .jupyter-cell.has-error {
@@ -721,43 +897,45 @@
 
 /* ─── Left Gutter ────────────────────────────────────────────────────────── */
 .jupyter-cell-gutter {
-  width: 54px;
-  min-width: 54px;
-  background: rgba(13, 17, 23, 0.5);
-  border-right: 1px solid var(--border-primary, rgba(48, 54, 61, 0.8));
+  width: 52px;
+  min-width: 52px;
+  background: rgba(11, 15, 25, 0.7);
+  border-right: 1px solid rgba(255, 255, 255, 0.06);
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 12px 4px;
-  gap: 8px;
+  padding: 10px 4px;
+  gap: 6px;
   user-select: none;
 }
 
 .jupyter-run-cell-btn {
-  width: 26px;
-  height: 26px;
-  border-radius: var(--radius-sm, 6px);
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
   background: rgba(255, 255, 255, 0.05);
-  border: 1px solid var(--border-primary, rgba(48, 54, 61, 0.8));
-  color: var(--accent-cyan, #00d4ff);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #cbd5e1;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: all var(--transition-fast, 150ms);
+  transition: all 0.15s ease;
   flex-shrink: 0;
 }
 
 .jupyter-run-cell-btn:hover:not(:disabled) {
-  background: rgba(0, 212, 255, 0.2);
-  border-color: var(--accent-cyan, #00d4ff);
-  transform: scale(1.08);
+  background: #0284c7;
+  border-color: #38bdf8;
+  color: #ffffff;
+  transform: scale(1.06);
+  box-shadow: 0 0 10px rgba(56, 189, 248, 0.4);
 }
 
 .jupyter-run-cell-btn.running {
-  background: rgba(0, 212, 255, 0.2);
-  color: var(--accent-cyan, #00d4ff);
-  border-color: var(--accent-cyan, #00d4ff);
+  background: rgba(56, 189, 248, 0.2);
+  color: #38bdf8;
+  border-color: #38bdf8;
 }
 
 .jupyter-md-gutter-icon {
@@ -1815,7 +1993,9 @@ div.suggest-widget {
   display: flex;
   flex-direction: row;
   width: 100%;
-  height: calc(100% - 48px);
+  flex: 1;
+  min-height: 0;
+  height: 100%;
   position: relative;
   overflow: hidden;
   background: var(--bg-primary, #0d1117);
@@ -1823,11 +2003,11 @@ div.suggest-widget {
 
 /* Colab Left Navigation Rail */
 .colab-nav-rail {
-  width: 44px;
-  min-width: 44px;
+  width: 38px;
+  min-width: 38px;
   height: 100%;
   background: #090d16;
-  border-right: 1px solid rgba(48, 54, 61, 0.6);
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1835,12 +2015,13 @@ div.suggest-widget {
   gap: 6px;
   z-index: 10;
   user-select: none;
+  flex-shrink: 0;
 }
 
 .colab-rail-btn {
-  width: 34px;
-  height: 34px;
-  border-radius: 8px;
+  width: 30px;
+  height: 30px;
+  border-radius: 6px;
   border: 1px solid transparent;
   background: transparent;
   color: #8b949e;
@@ -1853,41 +2034,22 @@ div.suggest-widget {
 }
 
 .colab-rail-btn:hover {
-  background: rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.08);
   color: #e6edf3;
-  border-color: rgba(255, 255, 255, 0.08);
 }
 
 .colab-rail-btn.active {
   background: rgba(56, 189, 248, 0.12);
   color: #38bdf8;
   border-color: rgba(56, 189, 248, 0.35);
-  box-shadow: 0 0 12px rgba(56, 189, 248, 0.2);
-}
-
-.colab-rail-badge {
-  position: absolute;
-  top: 2px;
-  right: 2px;
-  background: #38bdf8;
-  color: #030712;
-  font-size: 9px;
-  font-weight: 700;
-  border-radius: 9999px;
-  min-width: 14px;
-  height: 14px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0 3px;
-  line-height: 1;
+  box-shadow: 0 0 10px rgba(56, 189, 248, 0.15);
 }
 
 /* Tooltip */
 .colab-rail-tooltip {
   display: none;
   position: absolute;
-  left: 48px;
+  left: 44px;
   top: 50%;
   transform: translateY(-50%);
   background: #161b22;
@@ -1908,17 +2070,18 @@ div.suggest-widget {
 
 /* Expandable Colab Side Drawer */
 .colab-side-drawer {
-  width: 320px;
-  min-width: 280px;
-  max-width: 420px;
+  width: 270px;
+  min-width: 240px;
+  max-width: 320px;
   height: 100%;
-  background: #0f172a;
-  border-right: 1px solid rgba(48, 54, 61, 0.7);
+  background: #0c1017;
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
   display: flex;
   flex-direction: column;
   z-index: 9;
   animation: colab-slide-in 0.2s cubic-bezier(0.16, 1, 0.3, 1);
   overflow: hidden;
+  flex-shrink: 0;
 }
 
 @keyframes colab-slide-in {
@@ -1927,7 +2090,7 @@ div.suggest-widget {
     opacity: 0;
   }
   to {
-    width: 320px;
+    width: 270px;
     opacity: 1;
   }
 }

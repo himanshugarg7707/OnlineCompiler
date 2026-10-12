@@ -481,6 +481,46 @@ if not _captured_html:
     except Exception:
         pass
 
+# Colab Feature: Capture any active DataFrame in globals if not already captured from last expression
+if _captured_table is None:
+    try:
+        _df_candidates = ['df', 'data', 'dataset', 'sales_df', 'sales', 'filtered_df', 'result_df', 'res_df']
+        for _cand in list(_df_candidates) + [k for k in globals().keys() if not k.startswith('_')]:
+            if _cand in globals():
+                _cand_obj = globals()[_cand]
+                if hasattr(_cand_obj, 'to_dict') and hasattr(_cand_obj, 'columns') and hasattr(_cand_obj, 'dtypes'):
+                    try:
+                        _col_names = [str(c) for c in _cand_obj.columns]
+                        _col_types = {str(c): str(_cand_obj.dtypes[c]) for c in _cand_obj.columns}
+                        _preview_df = _cand_obj.head(500)
+                        _raw_rows = _preview_df.to_dict(orient="records")
+                        _cleaned_rows = []
+                        for _r in _raw_rows:
+                            _cr = {}
+                            for _k, _val in _r.items():
+                                if hasattr(_val, 'item'):
+                                    _cr[str(_k)] = _val.item()
+                                elif hasattr(_val, 'isoformat'):
+                                    _cr[str(_k)] = _val.isoformat()
+                                elif _val is None or (isinstance(_val, float) and _val != _val):
+                                    _cr[str(_k)] = None
+                                else:
+                                    _cr[str(_k)] = _val
+                            _cleaned_rows.append(_cr)
+
+                        _captured_table = {
+                            "columns": _col_names,
+                            "dtypes": _col_types,
+                            "shape": list(_cand_obj.shape),
+                            "data": _cleaned_rows,
+                            "index": [str(i) for i in _preview_df.index]
+                        }
+                        break
+                    except Exception:
+                        pass
+    except Exception:
+        pass
+
 # Inspect runtime memory variables for Colab Variable Explorer
 _captured_variables = []
 _reserved_keys = {

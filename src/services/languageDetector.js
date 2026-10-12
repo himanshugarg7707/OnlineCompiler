@@ -1261,7 +1261,7 @@ export function createDefaultNotebookJson(targetLang = 'python') {
     );
   }
 
-  // 4. PYTHON NOTEBOOK (Default)
+  // 4. PYTHON NOTEBOOK (Google Colab Data Science Stack)
   return JSON.stringify(
     {
       cells: [
@@ -1269,9 +1269,11 @@ export function createDefaultNotebookJson(targetLang = 'python') {
           cell_type: 'markdown',
           metadata: {},
           source: [
-            '# 🪐 Jupyter Notebook (Python 3)\n',
-            'Interactive computing environment powered by Pyodide WebAssembly.\n',
-            'Directly supports **NumPy**, **Pandas**, **Matplotlib**, and interactive data exploration.'
+            '# 🚀 Data Science Notebook (Google Colab Environment)\n',
+            'Interactive computing environment powered by Pyodide WebAssembly with **Pandas**, **NumPy**, **Matplotlib**, and **Scikit-learn**.\n',
+            '- 📊 **Interactive Data Tables**: Real-time search, sorting, pagination, and CSV/JSON export.\n',
+            '- 📈 **Rich Visualizations**: Inline Matplotlib and Seaborn figures.\n',
+            '- ⚡ **Colab Magics**: Support for `%pip install`, `!ls`, and `%time`.'
           ]
         },
         {
@@ -1280,36 +1282,48 @@ export function createDefaultNotebookJson(targetLang = 'python') {
           metadata: { language: 'python' },
           outputs: [],
           source: [
+            '# 1. Load dataset from workspace and preview with Interactive Data Table\n',
             'import numpy as np\n',
             'import pandas as pd\n',
             'import matplotlib.pyplot as plt\n',
             '\n',
-            'print("NumPy version:", np.__version__)\n',
-            'print("Pandas version:", pd.__version__)\n',
+            'df = pd.read_csv("sales_data.csv")\n',
+            'df.head(10)'
+          ]
+        },
+        {
+          cell_type: 'code',
+          execution_count: null,
+          metadata: { language: 'python' },
+          outputs: [],
+          source: [
+            '# 2. Visualize total revenue by product category\n',
+            'category_rev = df.groupby("category")["revenue"].sum().sort_values(ascending=False)\n',
             '\n',
-            '# Create a sample DataFrame\n',
-            'data = {\n',
-            '    "Language": ["Python", "JavaScript", "C++", "Java", "Rust"],\n',
-            '    "Popularity": [95, 88, 76, 82, 70]\n',
-            '}\n',
-            'df = pd.DataFrame(data)\n',
-            'print("\\nPopular Languages DataFrame:")\n',
-            'print(df)\n',
-            '\n',
-            '# Render a clean plot\n',
-            'plt.figure(figsize=(6, 3))\n',
-            'plt.bar(df["Language"], df["Popularity"], color=["#38bdf8", "#818cf8", "#34d399", "#f59e0b", "#f472b6"])\n',
-            'plt.title("Programming Languages Popularity")\n',
-            'plt.ylabel("Score (%)")\n',
+            'plt.figure(figsize=(9, 4.2))\n',
+            'plt.bar(category_rev.index, category_rev.values, color="#38bdf8", edgecolor="#0284c7", width=0.55)\n',
+            'plt.title("Total Revenue by Product Category ($)", fontsize=13, fontweight="bold", pad=12)\n',
+            'plt.ylabel("Revenue ($)", fontsize=11)\n',
+            'plt.grid(axis="y", linestyle="--", alpha=0.3)\n',
             'plt.tight_layout()\n',
             'plt.show()'
+          ]
+        },
+        {
+          cell_type: 'code',
+          execution_count: null,
+          metadata: { language: 'python' },
+          outputs: [],
+          source: [
+            '# 3. Numerical Summary & Distribution\n',
+            'df.describe()'
           ]
         }
       ],
       metadata: {
         language_info: {
           name: 'python',
-          version: '3.11'
+          version: '3.12'
         },
         kernelspec: {
           display_name: 'Python 3 (Pyodide WebAssembly)',
