@@ -1800,3 +1800,767 @@ div.suggest-widget {
   font-weight: 500;
   color: #a1a1aa;
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   GOOGLE COLAB PARITY SUITE STYLES
+   - Left Navigation Rail (TOC, Variables, Snippets, Files)
+   - Expandable Drawer with interactive sub-panels
+   - Colab Runtime Status Indicator & RAM Inspector
+   - Code Cell Collapse Banner
+   - Interactive DataTable wrapper
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Colab Main Split Layout */
+.jupyter-colab-layout {
+  display: flex;
+  flex-direction: row;
+  width: 100%;
+  height: calc(100% - 48px);
+  position: relative;
+  overflow: hidden;
+  background: var(--bg-primary, #0d1117);
+}
+
+/* Colab Left Navigation Rail */
+.colab-nav-rail {
+  width: 44px;
+  min-width: 44px;
+  height: 100%;
+  background: #090d16;
+  border-right: 1px solid rgba(48, 54, 61, 0.6);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 8px 0;
+  gap: 6px;
+  z-index: 10;
+  user-select: none;
+}
+
+.colab-rail-btn {
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: #8b949e;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  position: relative;
+  transition: all 0.15s ease;
+}
+
+.colab-rail-btn:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: #e6edf3;
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+.colab-rail-btn.active {
+  background: rgba(56, 189, 248, 0.12);
+  color: #38bdf8;
+  border-color: rgba(56, 189, 248, 0.35);
+  box-shadow: 0 0 12px rgba(56, 189, 248, 0.2);
+}
+
+.colab-rail-badge {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  background: #38bdf8;
+  color: #030712;
+  font-size: 9px;
+  font-weight: 700;
+  border-radius: 9999px;
+  min-width: 14px;
+  height: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 3px;
+  line-height: 1;
+}
+
+/* Tooltip */
+.colab-rail-tooltip {
+  display: none;
+  position: absolute;
+  left: 48px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: #161b22;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 5px;
+  padding: 4px 8px;
+  font-size: 11px;
+  color: #f0f6fc;
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  z-index: 50;
+}
+
+.colab-rail-btn:hover .colab-rail-tooltip {
+  display: block;
+}
+
+/* Expandable Colab Side Drawer */
+.colab-side-drawer {
+  width: 320px;
+  min-width: 280px;
+  max-width: 420px;
+  height: 100%;
+  background: #0f172a;
+  border-right: 1px solid rgba(48, 54, 61, 0.7);
+  display: flex;
+  flex-direction: column;
+  z-index: 9;
+  animation: colab-slide-in 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  overflow: hidden;
+}
+
+@keyframes colab-slide-in {
+  from {
+    width: 0;
+    opacity: 0;
+  }
+  to {
+    width: 320px;
+    opacity: 1;
+  }
+}
+
+.colab-drawer-header {
+  height: 42px;
+  padding: 0 14px;
+  background: rgba(15, 23, 42, 0.95);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.colab-drawer-title-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #38bdf8;
+}
+
+.colab-drawer-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #e2e8f0;
+  letter-spacing: -0.2px;
+}
+
+.colab-drawer-close {
+  background: transparent;
+  border: none;
+  color: #94a3b8;
+  padding: 4px;
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+
+.colab-drawer-close:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #f1f5f9;
+}
+
+.colab-drawer-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px;
+}
+
+.colab-panel-search-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #0b0f19;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  padding: 6px 10px;
+  margin-bottom: 12px;
+  color: #94a3b8;
+}
+
+.colab-search-input {
+  background: transparent;
+  border: none;
+  outline: none;
+  font-size: 12px;
+  color: #e2e8f0;
+  width: 100%;
+}
+
+.colab-search-input::placeholder {
+  color: #64748b;
+}
+
+.colab-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 36px 16px;
+  color: #94a3b8;
+}
+
+.colab-empty-state .empty-icon {
+  margin-bottom: 10px;
+  opacity: 0.5;
+  color: #38bdf8;
+}
+
+.colab-empty-state p {
+  font-size: 13px;
+  font-weight: 600;
+  color: #e2e8f0;
+  margin: 0 0 4px;
+}
+
+.colab-empty-state span {
+  font-size: 11.5px;
+  color: #64748b;
+  line-height: 1.4;
+}
+
+.colab-empty-state code {
+  background: rgba(255, 255, 255, 0.08);
+  padding: 1px 4px;
+  border-radius: 3px;
+  color: #38bdf8;
+}
+
+/* TOC Panel */
+.colab-toc-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.colab-toc-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  background: transparent;
+  border: none;
+  border-radius: 5px;
+  color: #94a3b8;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  width: 100%;
+}
+
+.colab-toc-item:hover {
+  background: rgba(56, 189, 248, 0.08);
+  color: #38bdf8;
+}
+
+.colab-toc-item.level-1 {
+  font-weight: 600;
+  color: #f1f5f9;
+  padding-left: 8px;
+}
+
+.colab-toc-item.level-2 {
+  padding-left: 20px;
+}
+
+.colab-toc-item.level-3 {
+  padding-left: 32px;
+  font-size: 11.5px;
+}
+
+.colab-toc-item.level-4,
+.colab-toc-item.level-5,
+.colab-toc-item.level-6 {
+  padding-left: 42px;
+  font-size: 11px;
+}
+
+.toc-indent-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #38bdf8;
+  opacity: 0.7;
+}
+
+.toc-item-title {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Variables Explorer Panel */
+.colab-variables-table-wrap {
+  overflow-x: auto;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  background: #090d16;
+}
+
+.colab-variables-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11.5px;
+}
+
+.colab-variables-table th {
+  background: #111827;
+  color: #94a3b8;
+  font-weight: 600;
+  text-align: left;
+  padding: 6px 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  white-space: nowrap;
+}
+
+.colab-variables-table td {
+  padding: 6px 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  color: #e2e8f0;
+}
+
+.colab-variables-table tr:hover {
+  background: rgba(56, 189, 248, 0.04);
+}
+
+.var-name code {
+  color: #38bdf8;
+  font-family: var(--font-code, monospace);
+  font-size: 11px;
+}
+
+.var-type-badge {
+  background: rgba(147, 51, 234, 0.18);
+  color: #c084fc;
+  border: 1px solid rgba(147, 51, 234, 0.3);
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 10px;
+}
+
+.var-size {
+  color: #94a3b8;
+  font-size: 10.5px;
+}
+
+.var-val {
+  max-width: 120px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: var(--font-code, monospace);
+  font-size: 10.5px;
+  color: #cbd5e1;
+}
+
+.var-action-btn {
+  background: rgba(56, 189, 248, 0.1);
+  border: 1px solid rgba(56, 189, 248, 0.25);
+  color: #38bdf8;
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-size: 10px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.var-action-btn:hover {
+  background: #38bdf8;
+  color: #030712;
+}
+
+/* Snippets Panel */
+.colab-snippets-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.colab-snippet-card {
+  background: #090d16;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  padding: 10px;
+  transition: all 0.15s ease;
+}
+
+.colab-snippet-card:hover {
+  border-color: rgba(56, 189, 248, 0.3);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.snippet-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.snippet-category {
+  font-size: 10px;
+  color: #38bdf8;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 600;
+}
+
+.snippet-title {
+  margin: 2px 0 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: #f1f5f9;
+}
+
+.snippet-btn-group {
+  display: flex;
+  gap: 4px;
+}
+
+.snippet-insert-btn,
+.snippet-add-btn {
+  padding: 3px 7px;
+  font-size: 10.5px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.snippet-insert-btn {
+  background: rgba(56, 189, 248, 0.12);
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  color: #38bdf8;
+}
+
+.snippet-insert-btn:hover {
+  background: #38bdf8;
+  color: #030712;
+}
+
+.snippet-add-btn {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #cbd5e1;
+}
+
+.snippet-add-btn:hover {
+  background: rgba(255, 255, 255, 0.15);
+  color: #ffffff;
+}
+
+.snippet-desc {
+  font-size: 11px;
+  color: #94a3b8;
+  margin: 0 0 6px;
+  line-height: 1.35;
+}
+
+.snippet-code-preview {
+  background: #030712;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 5px;
+  padding: 6px 8px;
+  margin: 0;
+  font-family: var(--font-code, monospace);
+  font-size: 10.5px;
+  color: #a5f3fc;
+  overflow-x: auto;
+  max-height: 85px;
+  white-space: pre;
+}
+
+/* Files Panel */
+.colab-files-header-info {
+  background: rgba(56, 189, 248, 0.08);
+  border: 1px solid rgba(56, 189, 248, 0.2);
+  border-radius: 6px;
+  padding: 6px 10px;
+  margin-bottom: 12px;
+  font-size: 11px;
+  color: #bae6fd;
+}
+
+.colab-files-header-info code {
+  color: #38bdf8;
+  font-family: var(--font-code, monospace);
+  font-weight: 600;
+}
+
+.colab-files-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.colab-file-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 7px 10px;
+  background: #090d16;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 6px;
+  transition: all 0.15s ease;
+}
+
+.colab-file-item:hover {
+  border-color: rgba(56, 189, 248, 0.3);
+}
+
+.colab-file-info {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  overflow: hidden;
+}
+
+.colab-file-icon {
+  font-size: 13px;
+}
+
+.colab-file-name {
+  font-size: 12px;
+  color: #e2e8f0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 140px;
+}
+
+.colab-file-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.colab-file-action-btn {
+  padding: 3px 7px;
+  font-size: 10.5px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #94a3b8;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.colab-file-action-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #f1f5f9;
+}
+
+.colab-file-action-btn.primary {
+  background: rgba(56, 189, 248, 0.12);
+  border-color: rgba(56, 189, 248, 0.3);
+  color: #38bdf8;
+  font-weight: 500;
+}
+
+.colab-file-action-btn.primary:hover {
+  background: #38bdf8;
+  color: #030712;
+}
+
+/* Colab Runtime Status Indicator */
+.colab-runtime-pill-container {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.colab-runtime-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(34, 197, 94, 0.12);
+  border: 1px solid rgba(34, 197, 94, 0.3);
+  border-radius: 9999px;
+  padding: 4px 10px;
+  color: #86efac;
+  font-size: 11.5px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.colab-runtime-pill:hover {
+  background: rgba(34, 197, 94, 0.2);
+  border-color: rgba(34, 197, 94, 0.5);
+  box-shadow: 0 0 10px rgba(34, 197, 94, 0.2);
+}
+
+.colab-runtime-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #22c55e;
+  box-shadow: 0 0 6px #22c55e;
+  animation: colab-dot-pulse 2s infinite ease-in-out;
+}
+
+@keyframes colab-dot-pulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.25);
+    opacity: 0.7;
+  }
+}
+
+.colab-runtime-label {
+  font-weight: 600;
+  color: #4ade80;
+}
+
+.colab-runtime-specs {
+  color: #94a3b8;
+  font-size: 11px;
+}
+
+.colab-runtime-arrow {
+  color: #94a3b8;
+  transition: transform 0.15s ease;
+}
+
+.colab-runtime-arrow.open {
+  transform: rotate(180deg);
+}
+
+/* Colab Runtime Dropdown Menu */
+.colab-runtime-dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  width: 290px;
+  background: #0f172a;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  padding: 12px;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.5);
+  z-index: 50;
+  animation: jupyter-fade-in 0.15s ease-out;
+}
+
+.colab-runtime-dropdown-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.runtime-dropdown-title {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #f1f5f9;
+}
+
+.runtime-status-tag {
+  background: rgba(34, 197, 94, 0.18);
+  color: #4ade80;
+  border: 1px solid rgba(34, 197, 94, 0.4);
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
+.colab-runtime-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 11.5px;
+}
+
+.runtime-stat-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.stat-label {
+  color: #94a3b8;
+  font-size: 11px;
+}
+
+.stat-val {
+  color: #e2e8f0;
+  font-weight: 500;
+  font-size: 11px;
+  text-align: right;
+}
+
+.colab-runtime-dropdown-divider {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.08);
+  margin: 10px 0;
+}
+
+.colab-runtime-action-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.colab-runtime-action-btn.danger {
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: #f87171;
+}
+
+.colab-runtime-action-btn.danger:hover {
+  background: #ef4444;
+  color: #ffffff;
+}
+
+/* Code Cell Collapsed Banner */
+.jupyter-code-collapsed-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(15, 23, 42, 0.7);
+  border: 1px dashed rgba(56, 189, 248, 0.3);
+  border-radius: 6px;
+  padding: 8px 12px;
+  color: #38bdf8;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+
+.jupyter-code-collapsed-banner:hover {
+  background: rgba(56, 189, 248, 0.1);
+  border-color: rgba(56, 189, 248, 0.6);
+  color: #7dd3fc;
+}
+
+/* Interactive Data Table Output Container */
+.jupyter-datatable-container {
+  margin-top: 10px;
+  width: 100%;
+}

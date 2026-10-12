@@ -37,9 +37,23 @@ import {
   Table,
   HelpCircle,
   Sparkles,
+  List,
+  Variable,
+  Folder,
+  ChevronsUp,
+  ChevronsDown,
+  EyeOff,
+  RefreshCw,
+  Search,
+  X,
+  PlaySquare,
+  Cpu,
+  Layers,
+  ArrowRight,
 } from 'lucide-react';
 import { JupyterIcon } from './LanguageIcon';
-import { executePythonInBrowser } from '../services/pythonRunner';
+import InteractiveDataTable from './InteractiveDataTable';
+import { executePythonInBrowser, restartPythonRuntime } from '../services/pythonRunner';
 import { executeCode } from '../services/judge0Service';
 import {
   createDefaultNotebookJson,
@@ -60,6 +74,201 @@ import {
   generateRandomInputForPattern,
 } from '../services/testCaseGeneratorService';
 import './JupyterNotebookEditor.css';
+
+export const COLAB_SNIPPETS = [
+  {
+    category: 'Pandas & Data Analysis',
+    id: 'pandas-load-csv',
+    title: 'Load CSV into DataFrame',
+    description: 'Load a CSV dataset and preview the first 5 records with interactive table',
+    code: `# Load CSV dataset into Pandas DataFrame
+import pandas as pd
+
+df = pd.read_csv('sales_data.csv')
+df.head()`,
+  },
+  {
+    category: 'Pandas & Data Analysis',
+    id: 'pandas-inspect',
+    title: 'Inspect DataFrame Info & Summary',
+    description: 'Check shape, column datatypes, non-null counts, and summary statistics',
+    code: `# Inspect DataFrame summary
+print("Dataset Shape:", df.shape)
+print("\\n--- Column Data Types & Non-Null Counts ---")
+print(df.info())
+print("\\n--- Numerical Summary Statistics ---")
+df.describe()`,
+  },
+  {
+    category: 'Pandas & Data Analysis',
+    id: 'pandas-filter-query',
+    title: 'Filter & Query Records',
+    description: 'Filter rows by condition and sort by values',
+    code: `# Filter rows where price > 100, sort by revenue descending
+filtered_df = df[df['price'] > 100].sort_values(by='revenue', ascending=False)
+filtered_df.head(10)`,
+  },
+  {
+    category: 'Pandas & Data Analysis',
+    id: 'pandas-groupby',
+    title: 'Group By & Aggregations',
+    description: 'Group by a categorical column and compute sum, mean, and count',
+    code: `# Aggregate revenue and quantity by category
+category_stats = df.groupby('category').agg(
+    total_revenue=('revenue', 'sum'),
+    avg_price=('price', 'mean'),
+    total_orders=('quantity', 'sum')
+).reset_index()
+
+category_stats.sort_values(by='total_revenue', ascending=False)`,
+  },
+  {
+    category: 'Pandas & Data Analysis',
+    id: 'pandas-missing-values',
+    title: 'Missing Values Audit',
+    description: 'Detect null values and calculate missing percentage per column',
+    code: `# Check for missing values in all columns
+null_summary = pd.DataFrame({
+    'Missing Values': df.isnull().sum(),
+    'Percentage (%)': (df.isnull().sum() / len(df)) * 100
+})
+null_summary`,
+  },
+  {
+    category: 'Data Visualization',
+    id: 'viz-bar-chart',
+    title: 'Category Revenue Bar Chart',
+    description: 'Clean modern bar chart with formatted labels and grid',
+    code: `import matplotlib.pyplot as plt
+
+# Calculate category totals
+cat_rev = df.groupby('category')['revenue'].sum().sort_values(ascending=False)
+
+plt.figure(figsize=(9, 4.5))
+plt.bar(cat_rev.index, cat_rev.values, color='#38bdf8', edgecolor='#0284c7', width=0.55)
+plt.title("Total Revenue by Product Category", fontsize=13, fontweight='bold', pad=12)
+plt.xlabel("Category", fontsize=11)
+plt.ylabel("Revenue ($)", fontsize=11)
+plt.grid(axis='y', linestyle='--', alpha=0.3)
+plt.tight_layout()
+plt.show()`,
+  },
+  {
+    category: 'Data Visualization',
+    id: 'viz-histogram',
+    title: 'Price Distribution Histogram',
+    description: 'Distribution histogram with frequency bins and mean line',
+    code: `import matplotlib.pyplot as plt
+
+prices = df['price'].dropna()
+
+plt.figure(figsize=(9, 4.5))
+plt.hist(prices, bins=12, color='#818cf8', edgecolor='#1e1b4b', alpha=0.85)
+plt.axvline(prices.mean(), color='#ef4444', linestyle='dashed', linewidth=1.5, label=f'Mean: \${prices.mean():.2f}')
+plt.title("Price Distribution", fontsize=13, fontweight='bold', pad=12)
+plt.xlabel("Price ($)", fontsize=11)
+plt.ylabel("Count", fontsize=11)
+plt.legend()
+plt.grid(axis='y', linestyle='--', alpha=0.3)
+plt.tight_layout()
+plt.show()`,
+  },
+  {
+    category: 'Data Visualization',
+    id: 'viz-scatter-trend',
+    title: 'Scatter Plot with Regression Line',
+    description: 'Correlation scatter plot with linear trendline fit',
+    code: `import matplotlib.pyplot as plt
+import numpy as np
+
+x = df['price'].values
+y = df['revenue'].values
+
+plt.figure(figsize=(9, 5))
+plt.scatter(x, y, color='#34d399', alpha=0.75, s=60, edgecolors='#065f46')
+
+# Compute trendline
+m, b = np.polyfit(x, y, 1)
+plt.plot(x, m*x + b, color='#f43f5e', linewidth=2, label=f'Trend (slope={m:.2f})')
+
+plt.title("Price vs Revenue Correlation", fontsize=13, fontweight='bold', pad=12)
+plt.xlabel("Price ($)", fontsize=11)
+plt.ylabel("Revenue ($)", fontsize=11)
+plt.legend()
+plt.grid(True, linestyle='--', alpha=0.25)
+plt.tight_layout()
+plt.show()`,
+  },
+  {
+    category: 'Machine Learning',
+    id: 'sklearn-regression',
+    title: 'Train-Test Split & Linear Regression',
+    description: 'Fit Linear Regression on numerical features and evaluate R² & RMSE',
+    code: `from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LinearRegression
+from sklearn.metrics import mean_squared_error, r2_score
+import numpy as np
+
+# Select features and target
+X = df[['price', 'quantity']]
+y = df['revenue']
+
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+model = LinearRegression()
+model.fit(X_train, y_train)
+
+preds = model.predict(X_test)
+print(f"Model Intercept: {model.intercept_:.2f}")
+print(f"Coefficients: {dict(zip(X.columns, model.coef_))}")
+print(f"R² Score: {r2_score(y_test, preds):.4f}")
+print(f"RMSE: {np.sqrt(mean_squared_error(y_test, preds)):.4f}")`,
+  },
+  {
+    category: 'Machine Learning',
+    id: 'sklearn-rf-classification',
+    title: 'Random Forest Classifier',
+    description: 'Train Random Forest on benchmark data and print accuracy report',
+    code: `from sklearn.ensemble import RandomForestClassifier
+from sklearn.datasets import load_iris
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import classification_report
+
+# Load dataset
+iris = load_iris(as_frame=True)
+X_train, X_test, y_train, y_test = train_test_split(
+    iris.data, iris.target, test_size=0.3, random_state=42
+)
+
+clf = RandomForestClassifier(n_estimators=100, random_state=42)
+clf.fit(X_train, y_train)
+
+y_pred = clf.predict(X_test)
+print("Classification Report:")
+print(classification_report(y_test, y_pred, target_names=iris.target_names))`,
+  },
+  {
+    category: 'Colab Magics',
+    id: 'magic-pip',
+    title: 'Install Packages (%pip install)',
+    description: 'Install Python packages via micropip into the WebAssembly runtime',
+    code: `%pip install scikit-learn seaborn`,
+  },
+  {
+    category: 'Colab Magics',
+    id: 'magic-ls',
+    title: 'List Filesystem Files (!ls)',
+    description: 'View virtual files in the runtime filesystem',
+    code: `!ls -la`,
+  },
+  {
+    category: 'Colab Magics',
+    id: 'magic-time',
+    title: 'Benchmark Execution Time (%time)',
+    description: 'Time execution of a Python expression',
+    code: `%time [x**2 for x in range(1_000_000)]`,
+  },
+];
 
 export const KERNEL_CONFIGS = {
   java: {
@@ -209,6 +418,17 @@ export default function JupyterNotebookEditor({ file, onContentChange }) {
   const [cellHeights, setCellHeights] = useState({});
   const [openInputCellIndices, setOpenInputCellIndices] = useState({});
 
+  // Google Colab Parity Features State
+  const [activeColabTab, setActiveColabTab] = useState(null); // 'toc' | 'variables' | 'snippets' | 'files' | null
+  const [runtimeVariables, setRuntimeVariables] = useState([]);
+  const [isRestartingRuntime, setIsRestartingRuntime] = useState(false);
+  const [runtimeMenuOpen, setRuntimeMenuOpen] = useState(false);
+  const runtimeMenuRef = useRef(null);
+  const [collapsedCodeCells, setCollapsedCodeCells] = useState({});
+  const [snippetsSearch, setSnippetsSearch] = useState('');
+  const [variablesSearch, setVariablesSearch] = useState('');
+  const [copiedSnippetId, setCopiedSnippetId] = useState(null);
+
   const cellEditorOptions = useMemo(() => getMonacoEditorOptions(config, true), [config]);
 
   // Synchronize Monaco theme when config.theme changes
@@ -316,6 +536,20 @@ export default function JupyterNotebookEditor({ file, onContentChange }) {
       document.removeEventListener('mousedown', handleKernelClickOutside);
     };
   }, [kernelDropdownOpen]);
+
+  useEffect(() => {
+    function handleRuntimeClickOutside(e) {
+      if (runtimeMenuRef.current && !runtimeMenuRef.current.contains(e.target)) {
+        setRuntimeMenuOpen(false);
+      }
+    }
+    if (runtimeMenuOpen) {
+      document.addEventListener('mousedown', handleRuntimeClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleRuntimeClickOutside);
+    };
+  }, [runtimeMenuOpen]);
 
   // Switch Kernel / Language: Loads clean starter cells for target language
   const handleSwitchKernel = (newLangKey) => {
@@ -575,7 +809,7 @@ export default function JupyterNotebookEditor({ file, onContentChange }) {
     setActiveCellIndex(Math.max(0, index - 1));
   };
 
-  // Clear all cell outputs
+  // Clear all cell outputs & reset variables
   const clearAllOutputs = () => {
     const updatedCells = notebook.cells.map((cell) => {
       if (cell.cell_type === 'code') {
@@ -585,13 +819,124 @@ export default function JupyterNotebookEditor({ file, onContentChange }) {
           outputs: [],
           plots: [],
           html: '',
+          table: null,
           execution_time: null,
+          hasError: false,
         };
       }
       return cell;
     });
     setExecutionCounter(1);
+    setRuntimeVariables([]);
     updateNotebook({ ...notebook, cells: updatedCells });
+  };
+
+  // Google Colab: Run all cells above target index
+  const runCellsAbove = async (targetIndex) => {
+    for (let i = 0; i < targetIndex; i++) {
+      if (notebook.cells[i]?.cell_type === 'code') {
+        await runCell(i);
+      }
+    }
+  };
+
+  // Google Colab: Run all cells below target index
+  const runCellsBelow = async (targetIndex) => {
+    for (let i = targetIndex + 1; i < notebook.cells.length; i++) {
+      if (notebook.cells[i]?.cell_type === 'code') {
+        await runCell(i);
+      }
+    }
+  };
+
+  // Google Colab: Toggle code cell collapse
+  const toggleCodeCollapse = (idx) => {
+    setCollapsedCodeCells((prev) => ({
+      ...prev,
+      [idx]: !prev[idx],
+    }));
+  };
+
+  // Google Colab: Restart Python runtime and reset memory
+  const handleRestartRuntime = async () => {
+    setIsRestartingRuntime(true);
+    try {
+      await restartPythonRuntime();
+      setRuntimeVariables([]);
+      showToast?.('⚡ Python runtime restarted and memory cleared.');
+    } catch (err) {
+      showToast?.(`Failed to restart runtime: ${err.message}`, 'error');
+    } finally {
+      setIsRestartingRuntime(false);
+      setRuntimeMenuOpen(false);
+    }
+  };
+
+  // Google Colab: Table of Contents outline from markdown headers
+  const tableOfContents = useMemo(() => {
+    const list = [];
+    (notebook?.cells || []).forEach((cell, idx) => {
+      if (cell.cell_type === 'markdown') {
+        const src = getCellSource(cell);
+        const lines = src.split('\n');
+        for (const line of lines) {
+          const match = line.match(/^(#{1,6})\s+(.+)$/);
+          if (match) {
+            list.push({
+              cellIndex: idx,
+              level: match[1].length,
+              title: match[2].trim(),
+            });
+          }
+        }
+      }
+    });
+    return list;
+  }, [notebook?.cells]);
+
+  const scrollToCell = (idx) => {
+    setActiveCellIndex(idx);
+    const el = document.getElementById(`jupyter-cell-${idx}`);
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  };
+
+  // Google Colab: Workspace Files for file tree drawer
+  const workspaceFiles = useMemo(() => {
+    const rawFiles = appState?.files || [];
+    return rawFiles.filter((f) => f && f.name && !f.name.endsWith('.ipynb'));
+  }, [appState?.files]);
+
+  // Insert code snippet into active cell or as a new cell
+  const handleInsertSnippet = (snippetCode, asNewCell = false) => {
+    if (asNewCell || activeCellIndex === null || activeCellIndex === undefined) {
+      addCell('code', activeCellIndex);
+      setTimeout(() => {
+        const newIdx = (activeCellIndex !== null && activeCellIndex !== undefined) ? activeCellIndex + 1 : notebook.cells.length;
+        updateCell(newIdx, { source: snippetCode });
+      }, 80);
+    } else {
+      const currentCell = notebook.cells[activeCellIndex];
+      const curSrc = currentCell ? getCellSource(currentCell) : '';
+      const newSrc = curSrc.trim() ? `${curSrc}\n\n${snippetCode}` : snippetCode;
+      updateCell(activeCellIndex, { source: newSrc });
+    }
+    showToast?.('📋 Snippet added to notebook!');
+  };
+
+  // One-click read CSV / file into active or new cell
+  const handleInsertFileRead = (fileName) => {
+    let snippet = '';
+    const lower = fileName.toLowerCase();
+    if (lower.endsWith('.csv')) {
+      snippet = `# Load ${fileName} into Pandas DataFrame\nimport pandas as pd\n\ndf = pd.read_csv('${fileName}')\ndf.head()`;
+    } else if (lower.endsWith('.json')) {
+      snippet = `# Load ${fileName} into Pandas DataFrame\nimport pandas as pd\n\ndf = pd.read_json('${fileName}')\ndf.head()`;
+    } else {
+      snippet = `# Read ${fileName}\nwith open('${fileName}', 'r') as f:\n    content = f.read()\nprint(content[:300])`;
+    }
+    handleInsertSnippet(snippet, false);
   };
 
   // Toggle Stdin drawer for a specific cell
@@ -845,9 +1190,14 @@ export default function JupyterNotebookEditor({ file, onContentChange }) {
         outputs,
         plots: result.plots || [],
         html: result.html || '',
+        table: result.table || null,
         execution_time: result.time,
         hasError: Boolean(result.error),
       });
+
+      if (Array.isArray(result.variables) && result.variables.length > 0) {
+        setRuntimeVariables(result.variables);
+      }
 
       // Synchronize output with Output / Terminal panel
       if (typeof window !== 'undefined') {
@@ -1203,6 +1553,60 @@ export default function JupyterNotebookEditor({ file, onContentChange }) {
               </div>
             )}
           </div>
+
+          {/* Google Colab Runtime Status Indicator & Memory Manager */}
+          {notebookLanguage === 'python' && (
+            <div className="colab-runtime-pill-container" ref={runtimeMenuRef}>
+              <button
+                type="button"
+                className="colab-runtime-pill"
+                onClick={() => setRuntimeMenuOpen((prev) => !prev)}
+                title="View Python runtime status & RAM or restart kernel"
+              >
+                <span className="colab-runtime-dot" />
+                <span className="colab-runtime-label">Connected</span>
+                <span className="colab-runtime-specs">Python 3.12 (WASM)</span>
+                <ChevronDown size={11} className={`colab-runtime-arrow ${runtimeMenuOpen ? 'open' : ''}`} />
+              </button>
+
+              {runtimeMenuOpen && (
+                <div className="colab-runtime-dropdown">
+                  <div className="colab-runtime-dropdown-header">
+                    <span className="runtime-dropdown-title">Python 3.12 Runtime</span>
+                    <span className="runtime-status-tag">Connected</span>
+                  </div>
+                  <div className="colab-runtime-stats">
+                    <div className="runtime-stat-row">
+                      <span className="stat-label">Engine:</span>
+                      <span className="stat-val">Pyodide WebAssembly</span>
+                    </div>
+                    <div className="runtime-stat-row">
+                      <span className="stat-label">RAM / Memory:</span>
+                      <span className="stat-val">Active in Browser</span>
+                    </div>
+                    <div className="runtime-stat-row">
+                      <span className="stat-label">Active Variables:</span>
+                      <span className="stat-val">{runtimeVariables.length} tracked</span>
+                    </div>
+                    <div className="runtime-stat-row">
+                      <span className="stat-label">Preloaded Stack:</span>
+                      <span className="stat-val">Pandas, NumPy, Matplotlib, SciPy, Scikit-learn</span>
+                    </div>
+                  </div>
+                  <div className="colab-runtime-dropdown-divider" />
+                  <button
+                    type="button"
+                    className="colab-runtime-action-btn danger"
+                    onClick={handleRestartRuntime}
+                    disabled={isRestartingRuntime}
+                  >
+                    {isRestartingRuntime ? <Loader2 size={13} className="spin" /> : <RotateCcw size={13} />}
+                    <span>Restart Runtime & Reset Memory</span>
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         <div className="jupyter-toolbar-actions">
@@ -1393,60 +1797,350 @@ export default function JupyterNotebookEditor({ file, onContentChange }) {
           />
         </div>
       ) : (
-        /* Visual Interactive Notebook Canvas */
-        <div className="jupyter-canvas-container">
-          <div className="jupyter-cells-wrapper">
-            {/* Top inserter divider */}
-            <div
-              className={`jupyter-insert-divider top ${
-                hoveredDividerIndex === -1 ? 'is-hovered' : ''
-              }`}
-              onMouseEnter={() => setHoveredDividerIndex(-1)}
-              onMouseLeave={() => setHoveredDividerIndex(null)}
+        /* Visual Interactive Notebook Canvas with Google Colab Navigation Rail & Side Drawer */
+        <div className="jupyter-colab-layout">
+          {/* Google Colab Left Navigation Rail */}
+          <div className="colab-nav-rail">
+            <button
+              type="button"
+              className={`colab-rail-btn ${activeColabTab === 'toc' ? 'active' : ''}`}
+              onClick={() => setActiveColabTab((prev) => (prev === 'toc' ? null : 'toc'))}
+              title="Table of contents outline"
             >
-              <div className="insert-divider-line" />
-              <div className="insert-divider-buttons">
+              <List size={17} />
+              <span className="colab-rail-tooltip">Outline / TOC</span>
+              {tableOfContents.length > 0 && (
+                <span className="colab-rail-badge">{tableOfContents.length}</span>
+              )}
+            </button>
+
+            <button
+              type="button"
+              className={`colab-rail-btn ${activeColabTab === 'variables' ? 'active' : ''}`}
+              onClick={() => setActiveColabTab((prev) => (prev === 'variables' ? null : 'variables'))}
+              title="Variable inspector"
+            >
+              <Variable size={17} />
+              <span className="colab-rail-tooltip">Variables</span>
+              {runtimeVariables.length > 0 && (
+                <span className="colab-rail-badge">{runtimeVariables.length}</span>
+              )}
+            </button>
+
+            <button
+              type="button"
+              className={`colab-rail-btn ${activeColabTab === 'snippets' ? 'active' : ''}`}
+              onClick={() => setActiveColabTab((prev) => (prev === 'snippets' ? null : 'snippets'))}
+              title="Data Science code snippets"
+            >
+              <Code2 size={17} />
+              <span className="colab-rail-tooltip">Snippets</span>
+            </button>
+
+            <button
+              type="button"
+              className={`colab-rail-btn ${activeColabTab === 'files' ? 'active' : ''}`}
+              onClick={() => setActiveColabTab((prev) => (prev === 'files' ? null : 'files'))}
+              title="Workspace files and datasets"
+            >
+              <Folder size={17} />
+              <span className="colab-rail-tooltip">Files</span>
+              {workspaceFiles.length > 0 && (
+                <span className="colab-rail-badge">{workspaceFiles.length}</span>
+              )}
+            </button>
+          </div>
+
+          {/* Expandable Google Colab Side Drawer */}
+          {activeColabTab && (
+            <div className="colab-side-drawer">
+              <div className="colab-drawer-header">
+                <div className="colab-drawer-title-group">
+                  {activeColabTab === 'toc' && <List size={15} />}
+                  {activeColabTab === 'variables' && <Variable size={15} />}
+                  {activeColabTab === 'snippets' && <Code2 size={15} />}
+                  {activeColabTab === 'files' && <Folder size={15} />}
+                  <span className="colab-drawer-title">
+                    {activeColabTab === 'toc' && 'Table of contents'}
+                    {activeColabTab === 'variables' && 'Variable inspector'}
+                    {activeColabTab === 'snippets' && 'Code snippets'}
+                    {activeColabTab === 'files' && 'Files & Datasets'}
+                  </span>
+                </div>
                 <button
-                  className="btn-divider-add"
-                  onClick={() => addCell('code', -1)}
-                  title="Insert code cell at top"
+                  type="button"
+                  className="colab-drawer-close"
+                  onClick={() => setActiveColabTab(null)}
+                  title="Close side panel"
                 >
-                  <Plus size={12} />
-                  <span>Code</span>
-                </button>
-                <button
-                  className="btn-divider-add"
-                  onClick={() => addCell('markdown', -1)}
-                  title="Insert markdown cell at top"
-                >
-                  <Plus size={12} />
-                  <span>Markdown</span>
+                  <X size={14} />
                 </button>
               </div>
+
+              <div className="colab-drawer-content">
+                {/* 1. TABLE OF CONTENTS */}
+                {activeColabTab === 'toc' && (
+                  <div className="colab-toc-panel">
+                    {tableOfContents.length === 0 ? (
+                      <div className="colab-empty-state">
+                        <List size={26} className="empty-icon" />
+                        <p>No headings in notebook</p>
+                        <span>Add markdown cells with <code># Heading</code> to build your table of contents outline.</span>
+                      </div>
+                    ) : (
+                      <div className="colab-toc-list">
+                        {tableOfContents.map((item, i) => (
+                          <button
+                            key={i}
+                            type="button"
+                            className={`colab-toc-item level-${item.level}`}
+                            onClick={() => scrollToCell(item.cellIndex)}
+                            title={`Jump to ${item.title}`}
+                          >
+                            <span className="toc-indent-dot" />
+                            <span className="toc-item-title">{item.title}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* 2. VARIABLE INSPECTOR */}
+                {activeColabTab === 'variables' && (
+                  <div className="colab-variables-panel">
+                    <div className="colab-panel-search-bar">
+                      <Search size={13} />
+                      <input
+                        type="text"
+                        placeholder="Filter variables..."
+                        value={variablesSearch}
+                        onChange={(e) => setVariablesSearch(e.target.value)}
+                        className="colab-search-input"
+                      />
+                    </div>
+
+                    {runtimeVariables.length === 0 ? (
+                      <div className="colab-empty-state">
+                        <Variable size={26} className="empty-icon" />
+                        <p>No runtime variables in memory</p>
+                        <span>Run Python cells to inspect live DataFrames, arrays, and models here.</span>
+                      </div>
+                    ) : (
+                      <div className="colab-variables-table-wrap">
+                        <table className="colab-variables-table">
+                          <thead>
+                            <tr>
+                              <th>Name</th>
+                              <th>Type</th>
+                              <th>Size / Shape</th>
+                              <th>Value Preview</th>
+                              <th>Action</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {runtimeVariables
+                              .filter((v) =>
+                                !variablesSearch.trim() ||
+                                v.name.toLowerCase().includes(variablesSearch.toLowerCase()) ||
+                                v.type.toLowerCase().includes(variablesSearch.toLowerCase())
+                              )
+                              .map((v, i) => (
+                                <tr key={i}>
+                                  <td className="var-name"><code>{v.name}</code></td>
+                                  <td className="var-type"><span className="var-type-badge">{v.type}</span></td>
+                                  <td className="var-size">{v.size}</td>
+                                  <td className="var-val" title={v.value}>{v.value}</td>
+                                  <td className="var-actions">
+                                    <button
+                                      type="button"
+                                      className="var-action-btn"
+                                      onClick={() => handleInsertSnippet(`print(${v.name})\n`, false)}
+                                      title={`Insert print(${v.name}) into active cell`}
+                                    >
+                                      print
+                                    </button>
+                                  </td>
+                                </tr>
+                              ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* 3. CODE SNIPPETS */}
+                {activeColabTab === 'snippets' && (
+                  <div className="colab-snippets-panel">
+                    <div className="colab-panel-search-bar">
+                      <Search size={13} />
+                      <input
+                        type="text"
+                        placeholder="Search snippets (pandas, plot, sklearn)..."
+                        value={snippetsSearch}
+                        onChange={(e) => setSnippetsSearch(e.target.value)}
+                        className="colab-search-input"
+                      />
+                    </div>
+
+                    <div className="colab-snippets-list">
+                      {COLAB_SNIPPETS
+                        .filter((snip) => {
+                          if (!snippetsSearch.trim()) return true;
+                          const q = snippetsSearch.toLowerCase();
+                          return (
+                            snip.title.toLowerCase().includes(q) ||
+                            snip.category.toLowerCase().includes(q) ||
+                            snip.description.toLowerCase().includes(q) ||
+                            snip.code.toLowerCase().includes(q)
+                          );
+                        })
+                        .map((snip) => (
+                          <div key={snip.id} className="colab-snippet-card">
+                            <div className="snippet-card-header">
+                              <div>
+                                <span className="snippet-category">{snip.category}</span>
+                                <h4 className="snippet-title">{snip.title}</h4>
+                              </div>
+                              <div className="snippet-btn-group">
+                                <button
+                                  type="button"
+                                  className="snippet-insert-btn"
+                                  onClick={() => handleInsertSnippet(snip.code, false)}
+                                  title="Insert into active cell"
+                                >
+                                  Insert
+                                </button>
+                                <button
+                                  type="button"
+                                  className="snippet-add-btn"
+                                  onClick={() => handleInsertSnippet(snip.code, true)}
+                                  title="Add as new cell"
+                                >
+                                  + Cell
+                                </button>
+                              </div>
+                            </div>
+                            <p className="snippet-desc">{snip.description}</p>
+                            <pre className="snippet-code-preview"><code>{snip.code}</code></pre>
+                          </div>
+                        ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* 4. WORKSPACE FILES */}
+                {activeColabTab === 'files' && (
+                  <div className="colab-files-panel">
+                    <div className="colab-files-header-info">
+                      <span>Files mounted into runtime at <code>/home/pyodide/</code></span>
+                    </div>
+
+                    {workspaceFiles.length === 0 ? (
+                      <div className="colab-empty-state">
+                        <Folder size={26} className="empty-icon" />
+                        <p>No workspace files found</p>
+                      </div>
+                    ) : (
+                      <div className="colab-files-list">
+                        {workspaceFiles.map((f, i) => {
+                          const isCsv = f.name.toLowerCase().endsWith('.csv');
+                          const isJson = f.name.toLowerCase().endsWith('.json');
+                          return (
+                            <div key={i} className="colab-file-item">
+                              <div className="colab-file-info">
+                                <span className="colab-file-icon">{isCsv ? '📊' : isJson ? '📋' : '📄'}</span>
+                                <span className="colab-file-name" title={f.name}>{f.name}</span>
+                              </div>
+                              <div className="colab-file-actions">
+                                <button
+                                  type="button"
+                                  className="colab-file-action-btn"
+                                  onClick={() => {
+                                    navigator.clipboard.writeText(f.name);
+                                    showToast?.(`Path '${f.name}' copied!`);
+                                  }}
+                                  title="Copy filename"
+                                >
+                                  Copy
+                                </button>
+                                {(isCsv || isJson) && (
+                                  <button
+                                    type="button"
+                                    className="colab-file-action-btn primary"
+                                    onClick={() => handleInsertFileRead(f.name)}
+                                    title={`Insert pd.read_${isCsv ? 'csv' : 'json'} into notebook`}
+                                  >
+                                    Load in Pandas
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
+          )}
 
-            {notebook.cells.map((cell, idx) => {
-              const isCode = cell.cell_type === 'code';
-              const isActive = activeCellIndex === idx;
-              const isRunning = runningCellIndex === idx;
-              const isEditingMd = editingMarkdownIndex === idx;
-              const source = getCellSource(cell);
-              const lines = source.split('\n');
-              const lineCount = Math.max(1, lines.length);
-              const readsInput = isCode && checkIfCodeReadsInput(source);
-              const pattern = isCode ? detectInputPattern(source) : { type: 'no_input' };
-              const patternLabel = getPatternLabel(pattern.type);
-              const cellStdin = cell.stdin ?? cell.metadata?.stdin ?? '';
-              const isInputOpen = Boolean(openInputCellIndices[idx]);
-
-              return (
-                <div key={idx} className="jupyter-cell-block">
-                  <div
-                    className={`jupyter-cell ${isCode ? 'cell-code' : 'cell-markdown'} ${
-                      isActive ? 'is-active' : ''
-                    } ${cell.hasError ? 'has-error' : ''}`}
-                    onClick={() => setActiveCellIndex(idx)}
+          {/* Visual Interactive Notebook Canvas */}
+          <div className="jupyter-canvas-container">
+            <div className="jupyter-cells-wrapper">
+              {/* Top inserter divider */}
+              <div
+                className={`jupyter-insert-divider top ${
+                  hoveredDividerIndex === -1 ? 'is-hovered' : ''
+                }`}
+                onMouseEnter={() => setHoveredDividerIndex(-1)}
+                onMouseLeave={() => setHoveredDividerIndex(null)}
+              >
+                <div className="insert-divider-line" />
+                <div className="insert-divider-buttons">
+                  <button
+                    className="btn-divider-add"
+                    onClick={() => addCell('code', -1)}
+                    title="Insert code cell at top"
                   >
+                    <Plus size={12} />
+                    <span>Code</span>
+                  </button>
+                  <button
+                    className="btn-divider-add"
+                    onClick={() => addCell('markdown', -1)}
+                    title="Insert markdown cell at top"
+                  >
+                    <Plus size={12} />
+                    <span>Markdown</span>
+                  </button>
+                </div>
+              </div>
+
+              {notebook.cells.map((cell, idx) => {
+                const isCode = cell.cell_type === 'code';
+                const isActive = activeCellIndex === idx;
+                const isRunning = runningCellIndex === idx;
+                const isEditingMd = editingMarkdownIndex === idx;
+                const source = getCellSource(cell);
+                const lines = source.split('\n');
+                const lineCount = Math.max(1, lines.length);
+                const readsInput = isCode && checkIfCodeReadsInput(source);
+                const pattern = isCode ? detectInputPattern(source) : { type: 'no_input' };
+                const patternLabel = getPatternLabel(pattern.type);
+                const cellStdin = cell.stdin ?? cell.metadata?.stdin ?? '';
+                const isInputOpen = Boolean(openInputCellIndices[idx]);
+
+                return (
+                  <div key={idx} id={`jupyter-cell-${idx}`} className="jupyter-cell-block">
+                    <div
+                      className={`jupyter-cell ${isCode ? 'cell-code' : 'cell-markdown'} ${
+                        isActive ? 'is-active' : ''
+                      } ${cell.hasError ? 'has-error' : ''}`}
+                      onClick={() => setActiveCellIndex(idx)}
+                    >
                     {/* Left Gutter: Prompt & Run Action */}
                     <div className="jupyter-cell-gutter">
                       {isCode ? (
@@ -1533,6 +2227,47 @@ export default function JupyterNotebookEditor({ file, onContentChange }) {
                           {isCode ? <FileText size={13} /> : <Code2 size={13} />}
                         </button>
 
+                        {isCode && (
+                          <button
+                            className={`cell-action-btn ${collapsedCodeCells[idx] ? 'active' : ''}`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleCodeCollapse(idx);
+                            }}
+                            title={collapsedCodeCells[idx] ? 'Expand Code Cell' : 'Collapse Code Cell'}
+                          >
+                            {collapsedCodeCells[idx] ? <EyeOff size={13} /> : <Eye size={13} />}
+                          </button>
+                        )}
+
+                        {isCode && (
+                          <button
+                            className="cell-action-btn"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              runCellsAbove(idx);
+                            }}
+                            disabled={idx === 0 || isRunningAll}
+                            title="Run all code cells above"
+                          >
+                            <ChevronsUp size={13} />
+                          </button>
+                        )}
+
+                        {isCode && (
+                          <button
+                            className="cell-action-btn"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              runCellsBelow(idx);
+                            }}
+                            disabled={idx === notebook.cells.length - 1 || isRunningAll}
+                            title="Run all code cells below"
+                          >
+                            <ChevronsDown size={13} />
+                          </button>
+                        )}
+
                         <button
                           className="cell-action-btn"
                           onClick={(e) => {
@@ -1583,32 +2318,43 @@ export default function JupyterNotebookEditor({ file, onContentChange }) {
                       {/* Monaco Code Editor with Full Syntax Highlighting & Auto Closing Brackets */}
                       {isCode ? (
                         <>
-                          <div className="jupyter-code-editor-box">
-                            <Editor
-                              height={
-                                cellHeights[idx] ||
-                                Math.max(68, ((source || '').split('\n').length) * 20 + 20)
-                              }
-                              language={
-                                notebookLanguage === 'c++'
-                                  ? 'cpp'
-                                  : notebookLanguage === 'js'
-                                  ? 'javascript'
-                                  : notebookLanguage || 'python'
-                              }
-                              value={source}
-                              theme={activeMonacoTheme}
-                              options={cellEditorOptions}
-                              onChange={(val) => updateCell(idx, { source: val ?? '' })}
-                              onMount={(editor, monaco) => handleCellMount(idx, editor, monaco)}
-                              loading={
-                                <div className="jupyter-monaco-loading">
-                                  <Loader2 size={16} className="spin" />
-                                  <span>Loading Editor...</span>
-                                </div>
-                              }
-                            />
-                          </div>
+                          {collapsedCodeCells[idx] ? (
+                            <div
+                              className="jupyter-code-collapsed-banner"
+                              onClick={() => toggleCodeCollapse(idx)}
+                              title="Click to expand code"
+                            >
+                              <Eye size={13} />
+                              <span>Code hidden ({lineCount} lines) — click to expand</span>
+                            </div>
+                          ) : (
+                            <div className="jupyter-code-editor-box">
+                              <Editor
+                                height={
+                                  cellHeights[idx] ||
+                                  Math.max(68, ((source || '').split('\n').length) * 20 + 20)
+                                }
+                                language={
+                                  notebookLanguage === 'c++'
+                                    ? 'cpp'
+                                    : notebookLanguage === 'js'
+                                    ? 'javascript'
+                                    : notebookLanguage || 'python'
+                                }
+                                value={source}
+                                theme={activeMonacoTheme}
+                                options={cellEditorOptions}
+                                onChange={(val) => updateCell(idx, { source: val ?? '' })}
+                                onMount={(editor, monaco) => handleCellMount(idx, editor, monaco)}
+                                loading={
+                                  <div className="jupyter-monaco-loading">
+                                    <Loader2 size={16} className="spin" />
+                                    <span>Loading Editor...</span>
+                                  </div>
+                                }
+                              />
+                            </div>
+                          )}
 
                           {/* Standard Input (Stdin) Drawer */}
                           <div className={`jupyter-cell-stdin-container ${isInputOpen ? 'open' : ''}`}>
@@ -1858,7 +2604,7 @@ export default function JupyterNotebookEditor({ file, onContentChange }) {
 
                       {/* Code Cell Execution Outputs */}
                       {isCode &&
-                        (cell.outputs?.length > 0 || cell.plots?.length > 0 || cell.html) && (
+                        (cell.outputs?.length > 0 || cell.plots?.length > 0 || cell.html || cell.table) && (
                           <div className="jupyter-cell-output-area">
                             <div className="jupyter-output-meta-bar">
                               <div className="output-meta-left">
@@ -1888,6 +2634,7 @@ export default function JupyterNotebookEditor({ file, onContentChange }) {
                                     outputs: [],
                                     plots: [],
                                     html: '',
+                                    table: null,
                                     execution_time: null,
                                     hasError: false,
                                   })
@@ -1897,6 +2644,13 @@ export default function JupyterNotebookEditor({ file, onContentChange }) {
                                 Clear
                               </button>
                             </div>
+
+                            {/* Google Colab Interactive Data Table (Search, Filter, Sort, Pagination, CSV/JSON Export) */}
+                            {cell.table && (
+                              <div className="jupyter-datatable-container">
+                                <InteractiveDataTable table={cell.table} title="Interactive DataFrame Viewer" />
+                              </div>
+                            )}
 
                             {/* Stream Text stdout, warning/stderr, & error */}
                             {cell.outputs?.map((out, outIdx) => {
@@ -1955,8 +2709,8 @@ export default function JupyterNotebookEditor({ file, onContentChange }) {
                               </div>
                             )}
 
-                            {/* Render Interactive Maps / Folium / HTML / DataFrames */}
-                            {cell.html && (
+                            {/* Render Interactive Maps / Folium / HTML (only if not already shown as interactive table) */}
+                            {cell.html && !cell.table && (
                               <div className="jupyter-html-map-container">
                                 <div className="jupyter-map-badge">
                                   {cell.html.includes('<table') ? (
@@ -2065,6 +2819,7 @@ table.dataframe tr:hover { background: rgba(88, 166, 255, 0.08); }
               </span>
             </div>
           </div>
+        </div>
         </div>
       )}
     </div>
