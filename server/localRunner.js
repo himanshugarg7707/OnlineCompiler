@@ -185,7 +185,7 @@ function runProcess(command, args, options = {}, stdinData = '') {
  * Execute code using local system compilers
  * @param {Object} params - { code, languageId, stdin, filename }
  */
-async function _executeCodeLocallyInternal({ code, languageId, stdin = '', filename = '' }) {
+async function _executeCodeLocallyInternal({ code, languageId, stdin = '', filename = '', files = [] }) {
   const compilerInfo = await detectLocalCompilers();
   if (!compilerInfo.available) {
     return {
@@ -197,6 +197,17 @@ async function _executeCodeLocallyInternal({ code, languageId, stdin = '', filen
   const { compilers } = compilerInfo;
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'fullcode-run-'));
   const cleanFilename = filename ? path.basename(filename) : '';
+
+  // Write auxiliary workspace files (e.g. sales_data.csv, text files) into execution directory
+  if (Array.isArray(files) && files.length > 0) {
+    for (const f of files) {
+      if (!f || !f.name || f.name.endsWith('.ipynb')) continue;
+      const clean = path.basename(f.name);
+      try {
+        fs.writeFileSync(path.join(tempDir, clean), f.content || '', 'utf8');
+      } catch (_) {}
+    }
+  }
 
   try {
     // 1. Python 3 (languageId: 71)

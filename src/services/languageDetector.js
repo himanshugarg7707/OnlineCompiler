@@ -489,6 +489,28 @@ const LANGUAGE_PATTERNS = [
     ],
     weight: 1.5,
   },
+  {
+    id: 712,
+    name: 'CSV / Data',
+    monacoLanguage: 'plaintext',
+    extension: 'csv',
+    icon: '📊',
+    patterns: [
+      /^[^\n,]+,[^\n,]+(,[^\n,]+)*$/m,
+    ],
+    weight: 0.5,
+  },
+  {
+    id: 713,
+    name: 'JSON',
+    monacoLanguage: 'json',
+    extension: 'json',
+    icon: '📋',
+    patterns: [
+      /^\s*[\{\[]/m,
+    ],
+    weight: 0.5,
+  },
 ];
 
 const DEFAULT_LANGUAGE = {
@@ -1434,6 +1456,27 @@ dependencies:
   - pip:
     - requests
 `,
+    712: (filename && filename.toLowerCase().includes('sales'))
+      ? `order_id,product_name,category,price,quantity,revenue,customer_city
+1001,MacBook Pro 16,Electronics,2499.00,2,4998.00,San Francisco
+1002,Sony WH-1000XM5,Electronics,399.50,4,1598.00,New York
+1003,Ergonomic Chair,Furniture,349.00,3,1047.00,Austin
+1004,Mechanical Keyboard,Accessories,149.00,8,1192.00,Seattle
+1005,4K Monitor 32-inch,Electronics,699.00,5,3495.00,Chicago
+1006,Standing Desk,Furniture,599.00,2,1198.00,Boston
+1007,Wireless Mouse,Accessories,79.90,12,958.80,Denver
+1008,USB-C Hub,Accessories,49.99,15,749.85,Austin
+1009,Noise Cancelling Earbuds,Electronics,199.00,6,1194.00,San Francisco
+1010,Coffee Maker Espresso,Appliances,289.00,3,867.00,Seattle
+`
+      : `id,name,category,value,status
+1,Item A,Category 1,120.50,active
+2,Item B,Category 2,85.00,active
+3,Item C,Category 1,230.75,pending
+4,Item D,Category 3,45.20,inactive
+5,Item E,Category 2,310.00,active
+`,
+    713: `{\n  "status": "success",\n  "data": []\n}\n`,
   };
 
   return templates[languageId] || templates[71];
@@ -1509,6 +1552,9 @@ const EXTENSION_MAP = {
   ipynb: 710,
   yml: 711,
   yaml: 711,
+  csv: 712,
+  tsv: 712,
+  json: 713,
 };
 
 const DEFAULT_EXTENSIONS = {
@@ -1534,6 +1580,8 @@ const DEFAULT_EXTENSIONS = {
   99: 'notes.txt',
   710: 'notebook.ipynb',
   711: 'environment.yml',
+  712: 'data.csv',
+  713: 'data.json',
 };
 
 /**

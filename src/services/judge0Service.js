@@ -135,7 +135,7 @@ export async function checkLocalServerStatus(forceRefresh = false) {
 /**
  * Attempt ultra-fast local native execution via backend server
  */
-async function tryLocalExecution(code, languageId, stdin = '', filename = '') {
+async function tryLocalExecution(code, languageId, stdin = '', filename = '', files = []) {
   // Only attempt if on local machine with native backend runner
   if (!isLocalEnvironment()) return null;
 
@@ -151,6 +151,7 @@ async function tryLocalExecution(code, languageId, stdin = '', filename = '') {
         stdin,
         filename,
         preferLocal: true,
+        files,
       }),
       signal: controller.signal,
     });
@@ -213,7 +214,7 @@ export async function executeCode(code, languageId, stdin = '', allFiles = [], f
   const isCloudForced = typeof localStorage !== 'undefined' && localStorage.getItem('fullcode_engine_mode') === 'cloud';
   if (isLocalEnvironment() && !isCloudForced && languageId !== 0 && languageId !== 1 && languageId !== 710) {
     try {
-      const localRes = await tryLocalExecution(processedCode, languageId, stdin, filename);
+      const localRes = await tryLocalExecution(processedCode, languageId, stdin, filename, allFiles);
       if (localRes && (localRes.isLocal || localRes.engine === 'local' || localRes.engine === 'sqlite')) {
         return withCompilerMeta(localRes);
       }
@@ -225,7 +226,7 @@ export async function executeCode(code, languageId, stdin = '', allFiles = [], f
   // 1. Python — Use in-browser WebAssembly with NumPy, Pandas, Matplotlib
   if (languageId === 71) {
     try {
-      const res = await executePythonInBrowser(code, stdin);
+      const res = await executePythonInBrowser(code, stdin, allFiles);
       return withCompilerMeta(res);
     } catch (e) {
       console.warn('Pyodide failed, trying Godbolt cloud compiler:', e);
@@ -262,7 +263,7 @@ export async function executeCode(code, languageId, stdin = '', allFiles = [], f
 
       // Check code content fallback if language wasn't explicit
       if (notebookLanguage === 'python') {
-        if (/\bclass\s+\w+|\bSystem\.(out|err)\.|\bScanner\b|\bimport\s+java\.|\bpublic\s+(class|static|void)/.test(combinedCode)) {
+        if (/\bpublic\s+class\b|\bSystem\.(out|err)\.|\bScanner\b|\bimport\s+java\.|\bpublic\s+static\s+void\s+main\b/.test(combinedCode)) {
           notebookLanguage = 'java';
         } else if (/\b#include\s*<iostream>|\bcout\s*<<|\bcin\s*>>|\busing\s+namespace\s+std/.test(combinedCode)) {
           notebookLanguage = 'cpp';
@@ -271,21 +272,21 @@ export async function executeCode(code, languageId, stdin = '', allFiles = [], f
 
       if (notebookLanguage === 'java') {
         const prepared = prepareJavaCellCode(combinedCode);
-        return await executeCode(prepared, 62, stdin);
+        return await executeCode(prepared, 62, stdin, allFiles);
       }
       if (notebookLanguage === 'cpp' || notebookLanguage === 'c++') {
         const prepared = prepareCppCellCode(combinedCode);
-        return await executeCode(prepared, 54, stdin);
+        return await executeCode(prepared, 54, stdin, allFiles);
       }
       if (notebookLanguage === 'javascript' || notebookLanguage === 'js') {
         return await executeJavaScriptInBrowser(combinedCode, stdin);
       }
       if (notebookLanguage === 'c') {
         const prepared = prepareCCellCode(combinedCode);
-        return await executeCode(prepared, 50, stdin);
+        return await executeCode(prepared, 50, stdin, allFiles);
       }
 
-      return await executePythonInBrowser(combinedCode, stdin);
+      return await executePythonInBrowser(combinedCode, stdin, allFiles);
     } catch (e) {
       return {
         success: false,

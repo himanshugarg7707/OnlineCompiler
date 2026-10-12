@@ -133,7 +133,12 @@ function getInitialPage() {
 function normalizeLoadedFiles(files) {
   if (!Array.isArray(files)) return files;
   const hasJava = files.some(
-    (f) => f.name?.endsWith('.java') || f.name?.includes('Main.java') || f.language?.id === 62 || f.language?.monacoLanguage === 'java'
+    (f) =>
+      !f.name?.endsWith('.csv') &&
+      !f.name?.endsWith('.tsv') &&
+      !f.name?.endsWith('.py') &&
+      !f.name?.endsWith('.ipynb') &&
+      (f.name?.endsWith('.java') || f.name?.includes('Main.java') || f.language?.id === 62 || f.language?.monacoLanguage === 'java')
   );
   const hasCpp = files.some(
     (f) => f.name?.endsWith('.cpp') || f.name?.endsWith('.cc') || f.language?.id === 54 || f.language?.monacoLanguage === 'cpp'
@@ -143,6 +148,31 @@ function normalizeLoadedFiles(files) {
   );
 
   return files.map((f) => {
+    // 1. Data files (.csv, .tsv)
+    if (f.name?.endsWith('.csv') || f.name?.endsWith('.tsv')) {
+      let content = f.content;
+      if (
+        !content ||
+        !content.trim() ||
+        content.includes('public class') ||
+        content.includes('import java.') ||
+        content.trim() === '# Start here'
+      ) {
+        content = getStarterTemplate(712, f.name);
+      }
+      return {
+        ...f,
+        language: {
+          id: 712,
+          name: 'CSV / Data',
+          monacoLanguage: 'plaintext',
+          extension: 'csv',
+          icon: '📊',
+        },
+        content,
+      };
+    }
+
     const safeLang = resolveLanguage(f.language, f.name);
     const isIpynb = f.name?.endsWith('.ipynb') || f.language?.id === 710 || f.language?.monacoLanguage === 'ipynb';
     if (!isIpynb) {
@@ -154,10 +184,10 @@ function normalizeLoadedFiles(files) {
 
     const lower = (f.name || '').toLowerCase();
     let targetLang = 'python';
-    if (lower.includes('java')) targetLang = 'java';
+    if (lower.includes('python') || lower.includes('py_')) targetLang = 'python';
+    else if (lower.includes('java')) targetLang = 'java';
     else if (lower.includes('cpp') || lower.includes('c++')) targetLang = 'cpp';
     else if (lower.includes('js') || lower.includes('javascript')) targetLang = 'javascript';
-    else if (lower.includes('python') || lower.includes('py_')) targetLang = 'python';
     else if (hasJava) targetLang = 'java';
     else if (hasCpp) targetLang = 'cpp';
     else if (hasJs) targetLang = 'javascript';
@@ -590,26 +620,30 @@ function reducer(state, action) {
 
       const langFromExt = getLanguageFromFilename(uniqueName);
       let fileLang = langFromExt || state.detectedLanguage;
-      let fileContent = inputContent !== undefined ? inputContent : getStarterTemplate(fileLang?.id || 71);
+      let fileContent = inputContent !== undefined ? inputContent : getStarterTemplate(fileLang?.id || 71, uniqueName);
 
       // If notebook (.ipynb), generate differentiated template matching language context
       const isIpynbFile = fileLang?.id === 710 || uniqueName.endsWith('.ipynb');
       if (isIpynbFile) {
         let nbLang = 'python';
         const lowerName = uniqueName.toLowerCase();
-        if (lowerName.includes('java')) {
+        if (lowerName.includes('py') || lowerName.includes('python')) {
+          nbLang = 'python';
+        } else if (lowerName.includes('java')) {
           nbLang = 'java';
         } else if (lowerName.includes('cpp') || lowerName.includes('c++')) {
           nbLang = 'cpp';
         } else if (lowerName.includes('js') || lowerName.includes('javascript')) {
           nbLang = 'javascript';
-        } else if (lowerName.includes('py') || lowerName.includes('python')) {
-          nbLang = 'python';
         } else {
           // Detect from workspace files
           const wsFiles = state.files || [];
           const hasJava = wsFiles.some(
-            (f) => f.name?.endsWith('.java') || f.language?.id === 62 || f.language?.monacoLanguage === 'java'
+            (f) =>
+              !f.name?.endsWith('.csv') &&
+              !f.name?.endsWith('.tsv') &&
+              !f.name?.endsWith('.py') &&
+              (f.name?.endsWith('.java') || f.language?.id === 62 || f.language?.monacoLanguage === 'java')
           );
           const hasCpp = wsFiles.some(
             (f) => f.name?.endsWith('.cpp') || f.name?.endsWith('.cc') || f.language?.id === 54

@@ -367,6 +367,31 @@ export function AnacondaIcon({ size = 16, className = '', style = {} }) {
   );
 }
 
+export function CsvIcon({ size = 16, className = '', style = {} }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      width={size}
+      height={size}
+      fill="none"
+      stroke="#10b981"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={`lang-svg-icon csv-icon ${className}`}
+      style={{ display: 'inline-block', verticalAlign: 'middle', flexShrink: 0, ...style }}
+      aria-label="CSV Data File"
+    >
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+      <polyline points="14 2 14 8 20 8" />
+      <path d="M8 13h2" />
+      <path d="M8 17h8" />
+      <path d="M14 13h2" />
+    </svg>
+  );
+}
+
 /**
  * Resolves canonical language key from file name or language object
  */
@@ -419,6 +444,7 @@ export function resolveLanguageKey(language, filename = '', workspaceFiles = [])
   // 2. Check filename extension for regular files
   if (filename && typeof filename === 'string') {
     const ext = filename.split('.').pop()?.toLowerCase();
+    if (ext === 'csv' || ext === 'tsv') return 'csv';
     if (ext === 'yml' || ext === 'yaml') return 'anaconda';
     if (ext === 'java') return 'java';
     if (ext === 'py' || ext === 'python') return 'python';
@@ -437,6 +463,7 @@ export function resolveLanguageKey(language, filename = '', workspaceFiles = [])
   // 2. Check language object
   if (language && typeof language === 'object') {
     const id = Number(language.id);
+    if (id === 712) return 'csv';
     if (id === 62) return 'java';
     if (id === 71) return 'python';
     if (id === 54) return 'cpp';
@@ -512,6 +539,8 @@ export default function LanguageIcon({ language, filename = '', workspaceFiles =
           <span style={{ fontSize: `${Math.max(12, Math.round(size * 0.95))}px`, lineHeight: 1 }}>🟨</span>
         </span>
       );
+    case 'csv':
+      return <CsvIcon size={size} className={className} style={style} />;
     case 'anaconda':
       return <AnacondaIcon size={size} className={className} style={style} />;
     case 'java':

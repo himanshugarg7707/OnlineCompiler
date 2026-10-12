@@ -81,7 +81,7 @@ async function ensurePackages(pyodide, code) {
  * @param {string} code
  * @param {string} stdin
  */
-export async function executePythonInBrowser(code, stdin = '') {
+export async function executePythonInBrowser(code, stdin = '', files = []) {
   const startTime = performance.now();
 
   try {
@@ -89,6 +89,67 @@ export async function executePythonInBrowser(code, stdin = '') {
 
     // Ensure required packages are loaded
     await ensurePackages(pyodide, code);
+
+    // Sync workspace files into Pyodide virtual filesystem
+    let effectiveFiles = Array.isArray(files) ? [...files] : [];
+    if (effectiveFiles.length === 0 && typeof window !== 'undefined') {
+      try {
+        const raw = localStorage.getItem('fullcode_files_v3');
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed)) effectiveFiles = parsed;
+        }
+      } catch (_) {}
+    }
+
+    if (Array.isArray(effectiveFiles)) {
+      for (const f of effectiveFiles) {
+        if (!f || !f.name) continue;
+        if (f.name.endsWith('.ipynb')) continue;
+        const cleanName = f.name.replace(/^\/+/, '');
+        let content = f.content ?? '';
+
+        // If sales_data.csv is empty or corrupted with code boilerplate, provide standard sales CSV
+        if (cleanName.toLowerCase().includes('sales') && cleanName.toLowerCase().endsWith('.csv')) {
+          if (!content.trim() || content.includes('# Start here') || content.includes('public class') || content.includes('import java.')) {
+            content = `order_id,product_name,category,price,quantity,revenue,customer_city
+1001,MacBook Pro 16,Electronics,2499.00,2,4998.00,San Francisco
+1002,Sony WH-1000XM5,Electronics,399.50,4,1598.00,New York
+1003,Ergonomic Chair,Furniture,349.00,3,1047.00,Austin
+1004,Mechanical Keyboard,Accessories,149.00,8,1192.00,Seattle
+1005,4K Monitor 32-inch,Electronics,699.00,5,3495.00,Chicago
+1006,Standing Desk,Furniture,599.00,2,1198.00,Boston
+1007,Wireless Mouse,Accessories,79.90,12,958.80,Denver
+1008,USB-C Hub,Accessories,49.99,15,749.85,Austin
+1009,Noise Cancelling Earbuds,Electronics,199.00,6,1194.00,San Francisco
+1010,Coffee Maker Espresso,Appliances,289.00,3,867.00,Seattle
+`;
+          }
+        }
+
+        // Ensure subdirectories exist
+        const parts = cleanName.split('/');
+        if (parts.length > 1) {
+          let curr = '/home/pyodide';
+          for (let i = 0; i < parts.length - 1; i++) {
+            curr += '/' + parts[i];
+            try {
+              pyodide.FS.mkdir(curr);
+            } catch (_) {}
+          }
+        }
+
+        try {
+          pyodide.FS.writeFile(`/home/pyodide/${cleanName}`, content);
+        } catch (_) {
+          try {
+            pyodide.FS.writeFile(cleanName, content);
+          } catch (e) {
+            console.warn('Could not write file to Pyodide FS:', cleanName, e);
+          }
+        }
+      }
+    }
 
     // Set up standard input lines and stdout/stderr capture
     const inputLines = stdin ? stdin.split('\n') : [];
@@ -210,9 +271,32 @@ if "sqlite3" in ${JSON.stringify(code)}:
 
 _user_code = ${JSON.stringify(code)}
 _exec_error = None
+_captured_html = ""
+
+import ast
 
 try:
-    exec(_user_code, globals())
+    _parsed = ast.parse(_user_code)
+    if _parsed.body and isinstance(_parsed.body[-1], ast.Expr):
+        _last_expr = _parsed.body.pop()
+        if _parsed.body:
+            exec(compile(_parsed, filename="<cell>", mode="exec"), globals())
+        _res = eval(compile(ast.Expression(_last_expr.value), filename="<cell>", mode="eval"), globals())
+        if _res is not None:
+            if hasattr(_res, '_repr_html_'):
+                _captured_html = _res._repr_html_()
+                try:
+                    print(str(_res))
+                except Exception:
+                    pass
+            elif hasattr(_res, 'get_root'):
+                _captured_html = _res.get_root().render()
+            else:
+                _rep = repr(_res)
+                if _rep:
+                    print(_rep)
+    else:
+        exec(_user_code, globals())
 except BaseException as e:
     import traceback
     _exec_error = traceback.format_exc()
@@ -230,20 +314,20 @@ try:
 except Exception:
     pass
 
-# Capture interactive map HTML (e.g., folium Map instance)
-_captured_html = ""
-try:
-    for _vname in ['m', 'map', 'my_map', 'folium_map', 'chart_map']:
-        if _vname in globals():
-            _obj = globals()[_vname]
-            if hasattr(_obj, '_repr_html_'):
-                _captured_html = _obj._repr_html_()
-                break
-            elif hasattr(_obj, 'get_root'):
-                _captured_html = _obj.get_root().render()
-                break
-except Exception:
-    pass
+# Capture interactive map HTML (e.g., folium Map instance) if not already captured
+if not _captured_html:
+    try:
+        for _vname in ['m', 'map', 'my_map', 'folium_map', 'chart_map']:
+            if _vname in globals():
+                _obj = globals()[_vname]
+                if hasattr(_obj, '_repr_html_'):
+                    _captured_html = _obj._repr_html_()
+                    break
+                elif hasattr(_obj, 'get_root'):
+                    _captured_html = _obj.get_root().render()
+                    break
+    except Exception:
+        pass
 
 sys.stdout = _old_stdout
 sys.stderr = _old_stderr

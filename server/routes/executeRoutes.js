@@ -27,7 +27,7 @@ router.get(['/status', '/local-status'], async (req, res) => {
 // POST /api/execute - Fast backend execution endpoint (Local Native Compilers + SQL)
 router.post('/', async (req, res) => {
   const startTime = performance.now();
-  const { code, languageId, stdin = '', database = 'main_db', preferLocal = true, filename = '' } = req.body;
+  const { code, languageId, stdin = '', database = 'main_db', preferLocal = true, filename = '', files = [] } = req.body;
 
   if (!code) {
     return res.json({
@@ -118,7 +118,7 @@ router.post('/', async (req, res) => {
   // 2. Local Native Compiler & Interpreter Execution (Python, C, C++, Java, JS, TS, Go, Swift, Shell)
   if (preferLocal && !process.env.VERCEL) {
     try {
-      const localResult = await executeCodeLocally({ code, languageId, stdin, filename });
+      const localResult = await executeCodeLocally({ code, languageId, stdin, filename, files });
       if (localResult && localResult.canExecuteLocally !== false) {
         const totalServerElapsed = ((performance.now() - startTime) / 1000).toFixed(3);
         if (!localResult.time || parseFloat(totalServerElapsed) > parseFloat(localResult.time)) {

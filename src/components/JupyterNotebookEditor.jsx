@@ -34,6 +34,7 @@ import {
   Minimize2,
   Image as ImageIcon,
   MapPin,
+  Table,
   HelpCircle,
   Sparkles,
 } from 'lucide-react';
@@ -710,13 +711,16 @@ export default function JupyterNotebookEditor({ file, onContentChange }) {
 
     try {
       let result;
-      // Guardrail: If cell contains Java syntax or workspace is Java (and file is not explicitly python), strictly execute with Java OpenJDK
+      // Strictly execute with Java OpenJDK only if the notebook is Java or code explicitly contains Java structure
+      const isExplicitJavaCode =
+        /System\.(out|err|in)\b|public\s+static\s+void\s+main|Scanner\s+\w+|import\s+java\./i.test(code);
       const isJavaExecution =
         notebookLanguage === 'java' ||
-        (notebookLanguage !== 'cpp' &&
+        (notebookLanguage !== 'python' &&
+          notebookLanguage !== 'cpp' &&
           notebookLanguage !== 'javascript' &&
-          (/System\.(out|err|in)\b|(?:public|private|protected)?\s*(?:class|interface|enum|record)\s+\w+|public\s+static\s+void\s+main|Scanner\s+\w+|import\s+java\.|List<\w+>|ArrayList<\w+>|Map<\w+|HashMap<\w+|Set<\w+|\/\/.*(?:Java|JShell)/i.test(code) ||
-           appState?.files?.some((f) => f.name?.endsWith('.java') || f.language?.id === 62)));
+          notebookLanguage !== 'c' &&
+          isExplicitJavaCode);
 
       const cellStdin = (cell.stdin ?? cell.metadata?.stdin ?? '');
       let effectiveStdin = cellStdin || notebook.metadata?.stdin || appState?.stdin || '';
@@ -741,24 +745,24 @@ export default function JupyterNotebookEditor({ file, onContentChange }) {
 
       if (isJavaExecution) {
         const prepared = prepareJavaNotebookCellCode(notebook.cells, index);
-        result = await executeCode(prepared, 62, effectiveStdin);
+        result = await executeCode(prepared, 62, effectiveStdin, appState?.files);
         // Fallback: If execution failed with variable redeclaration conflict in main, try active cell
         if (!result.success && result.error && /already defined in method main|is already defined/i.test(result.error)) {
           const fallbackPrepared = prepareJavaCellCode(code);
-          result = await executeCode(fallbackPrepared, 62, effectiveStdin);
+          result = await executeCode(fallbackPrepared, 62, effectiveStdin, appState?.files);
         }
       } else if (notebookLanguage === 'python') {
-        result = await executePythonInBrowser(code, effectiveStdin);
+        result = await executePythonInBrowser(code, effectiveStdin, appState?.files);
       } else if (notebookLanguage === 'cpp') {
         const prepared = prepareCppCellCode(code);
-        result = await executeCode(prepared, 54, effectiveStdin);
+        result = await executeCode(prepared, 54, effectiveStdin, appState?.files);
       } else if (notebookLanguage === 'javascript') {
-        result = await executeCode(code, 63, effectiveStdin);
+        result = await executeCode(code, 63, effectiveStdin, appState?.files);
       } else if (notebookLanguage === 'c') {
         const prepared = prepareCCellCode(code);
-        result = await executeCode(prepared, 50, effectiveStdin);
+        result = await executeCode(prepared, 50, effectiveStdin, appState?.files);
       } else {
-        result = await executePythonInBrowser(code, effectiveStdin);
+        result = await executePythonInBrowser(code, effectiveStdin, appState?.files);
       }
 
       // Auto-recovery: If execution failed because Scanner/input() ran out of tokens (NoSuchElementException / EOFError),
@@ -774,21 +778,21 @@ export default function JupyterNotebookEditor({ file, onContentChange }) {
         let retryResult;
         if (isJavaExecution) {
           const prepared = prepareJavaNotebookCellCode(notebook.cells, index);
-          retryResult = await executeCode(prepared, 62, supplementalInput);
+          retryResult = await executeCode(prepared, 62, supplementalInput, appState?.files);
           if (!retryResult.success && retryResult.error && /already defined in method main|is already defined/i.test(retryResult.error)) {
             const fallbackPrepared = prepareJavaCellCode(code);
-            retryResult = await executeCode(fallbackPrepared, 62, supplementalInput);
+            retryResult = await executeCode(fallbackPrepared, 62, supplementalInput, appState?.files);
           }
         } else if (notebookLanguage === 'python') {
-          retryResult = await executePythonInBrowser(code, supplementalInput);
+          retryResult = await executePythonInBrowser(code, supplementalInput, appState?.files);
         } else if (notebookLanguage === 'cpp') {
           const prepared = prepareCppCellCode(code);
-          retryResult = await executeCode(prepared, 54, supplementalInput);
+          retryResult = await executeCode(prepared, 54, supplementalInput, appState?.files);
         } else if (notebookLanguage === 'javascript') {
-          retryResult = await executeCode(code, 63, supplementalInput);
+          retryResult = await executeCode(code, 63, supplementalInput, appState?.files);
         } else if (notebookLanguage === 'c') {
           const prepared = prepareCCellCode(code);
-          retryResult = await executeCode(prepared, 50, supplementalInput);
+          retryResult = await executeCode(prepared, 50, supplementalInput, appState?.files);
         }
 
         if (retryResult && !retryResult.error) {
@@ -1951,17 +1955,38 @@ export default function JupyterNotebookEditor({ file, onContentChange }) {
                               </div>
                             )}
 
-                            {/* Render Interactive Maps / Folium / HTML */}
+                            {/* Render Interactive Maps / Folium / HTML / DataFrames */}
                             {cell.html && (
                               <div className="jupyter-html-map-container">
                                 <div className="jupyter-map-badge">
-                                  <MapPin size={13} />
-                                  <span>Interactive Folium / HTML Visualization</span>
+                                  {cell.html.includes('<table') ? (
+                                    <>
+                                      <Table size={13} />
+                                      <span>DataFrame / Tabular Output Preview</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <MapPin size={13} />
+                                      <span>Interactive Folium / HTML Visualization</span>
+                                    </>
+                                  )}
                                 </div>
                                 <iframe
-                                  srcDoc={cell.html}
+                                  srcDoc={
+                                    cell.html.includes('<table')
+                                      ? `<!DOCTYPE html><html><head><style>
+body { margin: 12px; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace; font-size: 13px; color: #e6edf3; background: #0d1117; }
+table.dataframe { border-collapse: collapse; width: 100%; border: 1px solid #30363d; border-radius: 6px; overflow: hidden; }
+table.dataframe th, table.dataframe td { padding: 8px 14px; text-align: left; border: 1px solid #30363d; white-space: nowrap; }
+table.dataframe th { background: #161b22; color: #58a6ff; font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
+table.dataframe tr:nth-child(even) { background: rgba(255, 255, 255, 0.02); }
+table.dataframe tr:hover { background: rgba(88, 166, 255, 0.08); }
+</style></head><body>${cell.html}</body></html>`
+                                      : cell.html
+                                  }
                                   title={`Visualization Cell ${idx + 1}`}
                                   className="jupyter-map-frame"
+                                  style={cell.html.includes('<table') ? { height: '220px', background: '#0d1117' } : {}}
                                   sandbox="allow-scripts allow-same-origin"
                                 />
                               </div>
