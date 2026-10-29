@@ -30,6 +30,9 @@ import {
   Glasses,
   Ghost,
   BookOpen,
+  Terminal,
+  Globe,
+  BrainCircuit,
 } from 'lucide-react';
 import MemoryLearningLab from './MemoryLearningLab';
 import { getSupportedLanguages, getLanguageById } from '../services/languageDetector';
@@ -914,6 +917,109 @@ export default function SettingsModal() {
                 />
                 <span className="toggle-slider" />
               </label>
+            </div>
+          </div>
+
+          {/* ─── TERMINAL & WORKSPACE LAYOUT ─── */}
+          <div className="settings-section">
+            <div className="section-title-wrapper">
+              <Terminal size={16} className="section-icon-accent" />
+              <h3 className="section-title">Terminal & Workspace Layout</h3>
+            </div>
+            <p className="section-desc">
+              Move the output terminal dock location and manage workspace tools.
+            </p>
+
+            <div className="setting-row">
+              <div className="setting-info">
+                <span className="setting-label">Move Terminal Position</span>
+                <span className="setting-desc">
+                  Dock terminal at the bottom or move it to the right side of the editor
+                </span>
+              </div>
+              <div className="terminal-dock-options" style={{ display: 'flex', gap: '8px' }}>
+                <button
+                  type="button"
+                  className={`btn-storage-action ${localConfig.terminalPosition !== 'right' ? 'persist' : ''}`}
+                  onClick={() => handleConfigChange('terminalPosition', 'bottom')}
+                  style={{
+                    padding: '6px 12px',
+                    fontSize: '11px',
+                    fontWeight: 600,
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    background: localConfig.terminalPosition !== 'right' ? 'rgba(0, 212, 255, 0.18)' : 'var(--bg-secondary)',
+                    color: localConfig.terminalPosition !== 'right' ? 'var(--accent-cyan)' : 'var(--text-secondary)',
+                    border: localConfig.terminalPosition !== 'right' ? '1px solid var(--accent-cyan)' : '1px solid var(--border-primary)',
+                  }}
+                >
+                  ⬇️ Bottom Dock (Default)
+                </button>
+                <button
+                  type="button"
+                  className={`btn-storage-action ${localConfig.terminalPosition === 'right' ? 'persist' : ''}`}
+                  onClick={() => handleConfigChange('terminalPosition', 'right')}
+                  style={{
+                    padding: '6px 12px',
+                    fontSize: '11px',
+                    fontWeight: 600,
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    background: localConfig.terminalPosition === 'right' ? 'rgba(0, 212, 255, 0.18)' : 'var(--bg-secondary)',
+                    color: localConfig.terminalPosition === 'right' ? 'var(--accent-cyan)' : 'var(--text-secondary)',
+                    border: localConfig.terminalPosition === 'right' ? '1px solid var(--accent-cyan)' : '1px solid var(--border-primary)',
+                  }}
+                >
+                  ➡️ Right Side Dock
+                </button>
+              </div>
+            </div>
+
+            <div className="setting-row">
+              <div className="setting-info">
+                <span className="setting-label">AI Code Tutor & Error Explanations</span>
+                <span className="setting-desc">
+                  Enable built-in zero-config AI analysis for syntax errors and logic hints
+                </span>
+              </div>
+              <label className="toggle-switch">
+                <input
+                  type="checkbox"
+                  checked={localConfig.mockAI}
+                  onChange={(e) => handleConfigChange('mockAI', e.target.checked)}
+                />
+                <span className="toggle-slider" />
+              </label>
+            </div>
+
+            <div className="setting-row">
+              <div className="setting-info">
+                <span className="setting-label">Web Browser Preview</span>
+                <span className="setting-desc">Launch preview in Safari or external browser</span>
+              </div>
+              <button
+                type="button"
+                className="btn-storage-action backup"
+                onClick={() => {
+                  if (window.webkit?.messageHandlers?.nativeHost) {
+                    window.webkit.messageHandlers.nativeHost.postMessage({ type: 'open_website' });
+                  } else {
+                    window.open('http://localhost:5173', '_blank');
+                  }
+                }}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '6px 12px',
+                  fontSize: '11px',
+                  fontWeight: 600,
+                  borderRadius: '6px',
+                }}
+              >
+                <Globe size={12} />
+                <span>Open Browser App ↗</span>
+              </button>
             </div>
           </div>
 

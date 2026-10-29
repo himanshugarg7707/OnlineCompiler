@@ -9,11 +9,6 @@
   overflow: hidden;
 }
 
-.output-panel.is-maximized {
-  height: 100% !important;
-  border-top: none;
-}
-
 /* Tab Bar */
 .output-tabs {
   display: flex;
@@ -97,8 +92,7 @@
   flex-shrink: 0;
 }
 
-.btn-hide-terminal,
-.btn-maximize-terminal {
+.btn-hide-terminal {
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -115,17 +109,10 @@
   flex-shrink: 0;
 }
 
-.btn-hide-terminal:hover,
-.btn-maximize-terminal:hover {
+.btn-hide-terminal:hover {
   background: var(--bg-secondary);
   border-color: var(--accent-cyan);
   color: var(--text-primary);
-}
-
-.btn-maximize-terminal.active {
-  background: rgba(0, 212, 255, 0.14);
-  border-color: var(--accent-cyan);
-  color: var(--accent-cyan);
 }
 
 .status-running,
@@ -855,12 +842,10 @@
   .binding-file-dropdown {
     max-width: 105px;
   }
-  .btn-hide-terminal .btn-hide-text,
-  .btn-maximize-terminal .btn-maximize-text {
+  .btn-hide-terminal .btn-hide-text {
     display: none;
   }
-  .btn-hide-terminal,
-  .btn-maximize-terminal {
+  .btn-hide-terminal {
     padding: 3px 6px;
   }
   .unified-cmd {

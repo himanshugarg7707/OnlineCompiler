@@ -29,7 +29,7 @@ import PracticePage from './pages/PracticePage';
 import GitPage from './pages/GitPage';
 import SplitPaneContainer from './components/SplitPaneContainer';
 import { getLanguageFromFilename } from './services/languageDetector';
-import { FolderTree, ChevronLeft, ChevronRight, Maximize2, Minimize2, Play, Columns2, TerminalSquare } from 'lucide-react';
+import { FolderTree, ChevronLeft, ChevronRight, Maximize2, Minimize2, Play, Columns2 } from 'lucide-react';
 import './App.css';
 
 const SPLIT_STORAGE_KEY = 'fullcode_split_percent';
@@ -146,11 +146,6 @@ function AppContent() {
       if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'e' || e.key === 'E')) {
         e.preventDefault();
         dispatch({ type: 'TOGGLE_EXPLORER' });
-      }
-      // Ctrl+Shift+` to toggle Terminal Maximized
-      if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === '`' || e.key === '~')) {
-        e.preventDefault();
-        dispatch({ type: 'TOGGLE_TERMINAL_MAXIMIZED' });
       }
       // Ctrl+` to toggle Terminal
       if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key === '`') {
@@ -418,16 +413,25 @@ function AppContent() {
     const handleMouseMove = (e) => {
       if (!mainContentRef.current) return;
       const rect = mainContentRef.current.getBoundingClientRect();
-      const clientY = e.clientY ?? e.touches?.[0]?.clientY;
-      if (clientY === undefined) return;
+      const isRightDock = state.config?.terminalPosition === 'right' && !state.splitViewOpen;
 
-      const offsetTop = clientY - rect.top;
-      const totalHeight = rect.height;
-      const percent = (offsetTop / totalHeight) * 100;
-
-      // Clamp between 20% and 75% so terminal always has room
-      const clamped = Math.min(Math.max(percent, 20), 75);
-      setSplitPercent(clamped);
+      if (isRightDock) {
+        const clientX = e.clientX ?? e.touches?.[0]?.clientX;
+        if (clientX === undefined) return;
+        const offsetLeft = clientX - rect.left;
+        const totalWidth = rect.width;
+        const percent = (offsetLeft / totalWidth) * 100;
+        const clamped = Math.min(Math.max(percent, 20), 80);
+        setSplitPercent(clamped);
+      } else {
+        const clientY = e.clientY ?? e.touches?.[0]?.clientY;
+        if (clientY === undefined) return;
+        const offsetTop = clientY - rect.top;
+        const totalHeight = rect.height;
+        const percent = (offsetTop / totalHeight) * 100;
+        const clamped = Math.min(Math.max(percent, 20), 75);
+        setSplitPercent(clamped);
+      }
     };
 
     const handleMouseUp = () => {
@@ -580,8 +584,8 @@ function AppContent() {
       <Header />
       <SharedWorkspaceBanner />
 
-      {/* Floating Discreet Exit Button for Pure Full Screen Mode */}
-      {state.focusMode && (
+      {/* Floating Discreet Exit Button for Pure Full Screen Mode (Single View only; Split View has its own header exit button) */}
+      {state.focusMode && !state.splitViewOpen && (
         <div className="floating-zen-bar animate-fade-in" title="Pure Full Screen: Zero toolbars, pure code. Press Esc or click to exit.">
           <button
             type="button"
@@ -603,17 +607,6 @@ function AppContent() {
             <Columns2 size={11} />
             <span>{state.splitViewOpen ? 'Single View' : 'Split View (2 Terminals)'}</span>
             <kbd>Alt+\</kbd>
-          </button>
-
-          <button
-            type="button"
-            className={`zen-btn-terminal ${state.terminalMaximized ? 'active' : ''}`}
-            onClick={() => dispatch({ type: 'TOGGLE_TERMINAL_MAXIMIZED' })}
-            title="Toggle Terminal Full Screen (Ctrl+Shift+`)"
-          >
-            <TerminalSquare size={11} />
-            <span>{state.terminalMaximized ? 'Code & Terminal' : 'Full Screen Terminal'}</span>
-            <kbd>Ctrl+Shift+`</kbd>
           </button>
         </div>
       )}
@@ -677,7 +670,10 @@ function AppContent() {
         )}
 
         {/* Main Editor & Output Split Panel */}
-        <div className="main-content" ref={mainContentRef}>
+        <div
+          className={`main-content ${state.config?.terminalPosition === 'right' && !state.splitViewOpen ? 'terminal-dock-right' : ''}`}
+          ref={mainContentRef}
+        >
           {state.splitViewOpen ? (
             <div className="editor-section" style={{ height: '100%', flex: '1 1 auto' }}>
               <SplitPaneContainer />
@@ -686,40 +682,49 @@ function AppContent() {
             <>
               <div
                 className="editor-section"
-                style={{
-                  height: state.terminalMaximized
-                    ? '0%'
-                    : effectiveTerminalHidden
-                    ? '100%'
-                    : `${effectiveSplitPercent}%`,
-                  display: state.terminalMaximized ? 'none' : 'block',
-                  flex: 'none',
-                }}
+                style={
+                  state.config?.terminalPosition === 'right'
+                    ? {
+                        width: effectiveTerminalHidden ? '100%' : `${effectiveSplitPercent}%`,
+                        height: '100%',
+                        flex: 'none',
+                      }
+                    : {
+                        height: effectiveTerminalHidden ? '100%' : `${effectiveSplitPercent}%`,
+                        width: '100%',
+                        flex: 'none',
+                      }
+                }
               >
                 <CodeEditor />
               </div>
 
               {!effectiveTerminalHidden && (
                 <>
-                  {!state.terminalMaximized && (
-                    <div
-                      className={`split-resizer ${isVerticalDragging ? 'dragging' : ''}`}
-                      onMouseDown={handleVerticalMouseDown}
-                      onTouchStart={handleVerticalTouchStart}
-                      title="Drag to resize editor and terminal"
-                    >
-                      <div className="resizer-handle" />
-                    </div>
-                  )}
+                  <div
+                    className={`${state.config?.terminalPosition === 'right' ? 'horizontal-resizer' : 'split-resizer'} ${isVerticalDragging ? 'dragging' : ''}`}
+                    onMouseDown={handleVerticalMouseDown}
+                    onTouchStart={handleVerticalTouchStart}
+                    title="Drag to resize editor and terminal"
+                  >
+                    <div className={state.config?.terminalPosition === 'right' ? 'horizontal-resizer-handle' : 'resizer-handle'} />
+                  </div>
 
                   <div
-                    className={`output-section ${state.terminalMaximized ? 'output-maximized' : ''}`}
-                    style={{
-                      height: state.terminalMaximized
-                        ? '100%'
-                        : `${100 - effectiveSplitPercent}%`,
-                      flex: state.terminalMaximized ? '1 1 100%' : 'none',
-                    }}
+                    className="output-section"
+                    style={
+                      state.config?.terminalPosition === 'right'
+                        ? {
+                            width: `${100 - effectiveSplitPercent}%`,
+                            height: '100%',
+                            flex: 'none',
+                          }
+                        : {
+                            height: `${100 - effectiveSplitPercent}%`,
+                            width: '100%',
+                            flex: 'none',
+                          }
+                    }
                   >
                     <OutputPanel />
                   </div>

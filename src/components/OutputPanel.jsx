@@ -18,8 +18,6 @@ import {
   Activity,
   AlertCircle,
   FlaskConical,
-  Maximize2,
-  Minimize2,
 } from 'lucide-react';
 import DatabasePanel from './DatabasePanel';
 import WebPreviewPanel from './WebPreviewPanel';
@@ -781,9 +779,6 @@ export default function OutputPanel({
   overrideState = null,
   onRun = null,
   terminalTitle = '',
-  isMaximized: propIsMaximized,
-  onToggleMaximize = null,
-  onToggleHide = null,
 } = {}) {
   const {
     state,
@@ -796,9 +791,7 @@ export default function OutputPanel({
     handleRunCode,
   } = useApp();
 
-  const isMaximized = propIsMaximized !== undefined ? propIsMaximized : Boolean(state.terminalMaximized);
-  const handleToggleMaximize = onToggleMaximize || (() => dispatch({ type: 'TOGGLE_TERMINAL_MAXIMIZED' }));
-  const handleHide = onToggleHide || handleToggleTerminal;
+  const handleHide = handleToggleTerminal;
 
   const activeTab = state.activeTerminalTab || 'output';
   const setActiveTab = (tabId) => dispatch({ type: 'SET_TERMINAL_TAB', payload: tabId });
@@ -864,7 +857,7 @@ export default function OutputPanel({
   }, [detectedLanguage, activeTab]);
 
   return (
-    <div className={`output-panel ${isMaximized ? 'is-maximized' : ''} ${isSplitTerminal ? 'is-split-terminal' : ''}`}>
+    <div className={`output-panel ${isSplitTerminal ? 'is-split-terminal' : ''}`}>
       {/* Tab Bar */}
       <div className="output-tabs">
         <div className="tab-list">
@@ -930,15 +923,7 @@ export default function OutputPanel({
               </div>
             )}
 
-            {/* Maximize / Restore Terminal Button */}
-            <button
-              className={`btn-maximize-terminal ${isMaximized ? 'active' : ''}`}
-              onClick={handleToggleMaximize}
-              title={isMaximized ? 'Restore Terminal Size' : 'Maximize Terminal Full Screen (Ctrl+Shift+`)'}
-            >
-              {isMaximized ? <Minimize2 size={12} /> : <Maximize2 size={12} />}
-              <span className="btn-maximize-text">{isMaximized ? 'Restore' : 'Maximize'}</span>
-            </button>
+            {/* Maximize / Restore Terminal Button — removed */}
 
             {/* Hide / Collapse Terminal Button */}
             <button
@@ -1006,28 +991,6 @@ export default function OutputPanel({
                 >
                   <Play size={11} fill="currentColor" />
                   <span>Run</span>
-                </button>
-                <button
-                  className="btn-unified-action"
-                  onClick={() => handleTriggerExplanation('code')}
-                  title="Explain this file with AI"
-                >
-                  <BrainCircuit size={11} />
-                  <span>AI Explain</span>
-                </button>
-                <button
-                  className="btn-unified-action"
-                  onClick={() => {
-                    if (window.webkit?.messageHandlers?.nativeHost) {
-                      window.webkit.messageHandlers.nativeHost.postMessage({ type: 'open_website' });
-                    } else {
-                      window.open('http://localhost:5173', '_blank');
-                    }
-                  }}
-                  title="Open Website Version in Safari / Chrome"
-                >
-                  <Globe size={11} />
-                  <span>Website</span>
                 </button>
               </div>
             </div>

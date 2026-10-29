@@ -2082,6 +2082,23 @@ export default function SettingsPage() {
                     </button>
                   </div>
                 </div>
+
+                <div className="form-row">
+                  <div className="form-label-col">
+                    <span className="setting-title">Move Terminal Position</span>
+                    <span className="setting-desc">Choose whether the compiler terminal docks at the bottom of the editor or on the right side</span>
+                  </div>
+                  <div className="form-input-col">
+                    <select
+                      value={localConfig.terminalPosition || 'bottom'}
+                      onChange={(e) => handleConfigChange('terminalPosition', e.target.value)}
+                      className="settings-select"
+                    >
+                      <option value="bottom">Bottom Dock (Default)</option>
+                      <option value="right">Right Side Dock</option>
+                    </select>
+                  </div>
+                </div>
               </div>
             </div>
           )}

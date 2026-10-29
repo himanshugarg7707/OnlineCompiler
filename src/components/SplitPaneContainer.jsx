@@ -13,7 +13,7 @@ import {
   ChevronDown,
   ChevronUp,
   Sparkles,
-  Maximize2,
+  Minimize2,
 } from 'lucide-react';
 import './SplitPaneContainer.css';
 
@@ -54,8 +54,6 @@ export default function SplitPaneContainer() {
   const [leftVPercent, setLeftVPercent] = useState(55);
   const [rightVPercent, setRightVPercent] = useState(55);
 
-  const [leftTerminalMaximized, setLeftTerminalMaximized] = useState(false);
-  const [rightTerminalMaximized, setRightTerminalMaximized] = useState(false);
   const [leftTerminalHidden, setLeftTerminalHidden] = useState(false);
   const [rightTerminalHidden, setRightTerminalHidden] = useState(false);
 
@@ -304,27 +302,11 @@ export default function SplitPaneContainer() {
   const isSplitRunning = state.splitExecution?.executionStatus === 'compiling' || state.splitExecution?.executionStatus === 'running';
   const isLeftRunning = state.executionStatus === 'compiling' || state.executionStatus === 'running';
 
-  const leftEditorHeight = leftTerminalMaximized
-    ? 0
-    : leftTerminalHidden
-    ? 100
-    : leftVPercent;
-  const leftTermHeight = leftTerminalMaximized
-    ? 100
-    : leftTerminalHidden
-    ? 0
-    : 100 - leftVPercent;
+  const leftEditorHeight = leftTerminalHidden ? 100 : leftVPercent;
+  const leftTermHeight = leftTerminalHidden ? 0 : 100 - leftVPercent;
 
-  const rightEditorHeight = rightTerminalMaximized
-    ? 0
-    : rightTerminalHidden
-    ? 100
-    : rightVPercent;
-  const rightTermHeight = rightTerminalMaximized
-    ? 100
-    : rightTerminalHidden
-    ? 0
-    : 100 - rightVPercent;
+  const rightEditorHeight = rightTerminalHidden ? 100 : rightVPercent;
+  const rightTermHeight = rightTerminalHidden ? 0 : 100 - rightVPercent;
 
   return (
     <div
@@ -385,13 +367,12 @@ export default function SplitPaneContainer() {
             className="split-pane-top"
             style={{
               height: `${leftEditorHeight}%`,
-              display: leftTerminalMaximized ? 'none' : 'block',
             }}
           >
             <CodeEditor />
           </div>
 
-          {!leftTerminalMaximized && !leftTerminalHidden && (
+          {!leftTerminalHidden && (
             <div
               className={`split-pane-v-resizer ${isDraggingLeftV ? 'dragging' : ''}`}
               onPointerDown={handleLeftVPointerDown}
@@ -420,7 +401,6 @@ export default function SplitPaneContainer() {
               className="split-pane-bottom"
               style={{
                 height: `${leftTermHeight}%`,
-                flex: leftTerminalMaximized ? '1 1 100%' : 'none',
               }}
             >
               <OutputPanel
@@ -428,8 +408,6 @@ export default function SplitPaneContainer() {
                 overrideFile={leftFile}
                 onRun={handleRunCode}
                 terminalTitle="Terminal 1:"
-                isMaximized={leftTerminalMaximized}
-                onToggleMaximize={() => setLeftTerminalMaximized((v) => !v)}
                 onToggleHide={() => setLeftTerminalHidden(true)}
               />
             </div>
@@ -546,6 +524,18 @@ export default function SplitPaneContainer() {
                   <span>Run File 2</span>
                 </button>
 
+                {isFullScreen && (
+                  <button
+                    type="button"
+                    className="btn-split-exit-fullscreen"
+                    onClick={() => dispatch({ type: 'SET_FOCUS_MODE', payload: false })}
+                    title="Exit Full Screen Mode (Esc / F11)"
+                  >
+                    <Minimize2 size={12} />
+                    <span>Exit Full Screen</span>
+                  </button>
+                )}
+
                 <button
                   type="button"
                   className="btn-split-close"
@@ -562,7 +552,6 @@ export default function SplitPaneContainer() {
               className="split-pane-top"
               style={{
                 height: `${rightEditorHeight}%`,
-                display: rightTerminalMaximized ? 'none' : 'block',
               }}
             >
               <Editor
@@ -590,7 +579,7 @@ export default function SplitPaneContainer() {
               />
             </div>
 
-            {!rightTerminalMaximized && !rightTerminalHidden && (
+            {!rightTerminalHidden && (
               <div
                 className={`split-pane-v-resizer ${isDraggingRightV ? 'dragging' : ''}`}
                 onPointerDown={handleRightVPointerDown}
@@ -619,7 +608,6 @@ export default function SplitPaneContainer() {
                 className="split-pane-bottom"
                 style={{
                   height: `${rightTermHeight}%`,
-                  flex: rightTerminalMaximized ? '1 1 100%' : 'none',
                 }}
               >
                 <OutputPanel
@@ -628,8 +616,6 @@ export default function SplitPaneContainer() {
                   overrideState={state.splitExecution}
                   onRun={handleRunSplitCode}
                   terminalTitle="Terminal 2:"
-                  isMaximized={rightTerminalMaximized}
-                  onToggleMaximize={() => setRightTerminalMaximized((v) => !v)}
                   onToggleHide={() => setRightTerminalHidden(true)}
                 />
               </div>

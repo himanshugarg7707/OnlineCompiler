@@ -27,6 +27,9 @@ const DEFAULT_CONFIG = {
   wordWrap: 'off',
   lineNumbers: true,
 
+  // Terminal settings ('bottom' | 'right')
+  terminalPosition: 'bottom',
+
   // UI settings
   sidebarOpen: false,
   explorerOpen: true,

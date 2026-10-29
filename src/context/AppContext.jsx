@@ -443,7 +443,6 @@ const initialState = {
   toast: null,
   practiceOpen: false,
   focusMode: false,
-  terminalMaximized: false,
   navbarMinimized: (() => {
     try {
       return localStorage.getItem('fullcode_navbar_minimized') === 'true';
@@ -1272,10 +1271,7 @@ function reducer(state, action) {
       return { ...state, focusMode: !state.focusMode };
     case 'SET_FOCUS_MODE':
       return { ...state, focusMode: Boolean(action.payload) };
-    case 'TOGGLE_TERMINAL_MAXIMIZED':
-      return { ...state, terminalMaximized: !state.terminalMaximized, terminalHidden: false };
-    case 'SET_TERMINAL_MAXIMIZED':
-      return { ...state, terminalMaximized: Boolean(action.payload), terminalHidden: false };
+
     case 'TOGGLE_NAVBAR_MINIMIZED': {
       const next = !state.navbarMinimized;
       try {
@@ -2578,10 +2574,6 @@ export function AppProvider({ children }) {
     dispatch({ type: 'TOGGLE_TERMINAL' });
   }, []);
 
-  const handleToggleTerminalMaximized = useCallback(() => {
-    dispatch({ type: 'TOGGLE_TERMINAL_MAXIMIZED' });
-  }, []);
-
   const handleToggleIncognitoMode = useCallback((enabled) => {
     const next = enabled !== undefined ? enabled : !isIncognitoActive();
     setIncognitoActive(next);
@@ -2752,7 +2744,6 @@ export function AppProvider({ children }) {
     handleReorderTabs,
     handleToggleFocusMode,
     handleToggleTerminal,
-    handleToggleTerminalMaximized,
     handleImportZip: async (fileBlobOrBuffer) => {
       try {
         showToast('Unpacking ZIP archive... 📦');
