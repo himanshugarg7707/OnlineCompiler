@@ -34,6 +34,76 @@ import { isLocalEnvironment } from '../services/judge0Service';
 import { processFileList } from '../services/importService';
 import './Header.css';
 
+export function GodNavLogo({ isMinimized = false, onClick }) {
+  return (
+    <div
+      className={`god-navlogo ${isMinimized ? 'is-min' : ''}`}
+      onClick={onClick}
+      title="Full Code IDE — Return to Workspace"
+    >
+      <div className="god-logo-badge">
+        <svg
+          className="god-logo-svg"
+          viewBox="0 0 32 32"
+          fill="none"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <defs>
+            <linearGradient id="godBoltGrad" x1="4" y1="2" x2="28" y2="30" gradientUnits="userSpaceOnUse">
+              <stop offset="0%" stopColor="#00f5ff" />
+              <stop offset="45%" stopColor="#a855f7" />
+              <stop offset="100%" stopColor="#ec4899" />
+            </linearGradient>
+            <linearGradient id="godBracketLeft" x1="2" y1="6" x2="10" y2="26" gradientUnits="userSpaceOnUse">
+              <stop offset="0%" stopColor="#38bdf8" />
+              <stop offset="100%" stopColor="#6366f1" />
+            </linearGradient>
+            <linearGradient id="godBracketRight" x1="22" y1="6" x2="30" y2="26" gradientUnits="userSpaceOnUse">
+              <stop offset="0%" stopColor="#c084fc" />
+              <stop offset="100%" stopColor="#f43f5e" />
+            </linearGradient>
+            <filter id="godGlow" x="-20%" y="-20%" width="140%" height="140%">
+              <feGaussianBlur stdDeviation="1.5" result="blur" />
+              <feComposite in="SourceGraphic" in2="blur" operator="over" />
+            </filter>
+          </defs>
+
+          {/* Left Code Bracket < */}
+          <path
+            d="M8.5 10L3.5 16L8.5 22"
+            stroke="url(#godBracketLeft)"
+            strokeWidth="2.4"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+
+          {/* Center Electric Lightning Bolt ⚡ */}
+          <path
+            d="M18 3L10.5 16.5H16.5L14 29L22.5 14.5H16.5L18 3Z"
+            fill="url(#godBoltGrad)"
+            filter="url(#godGlow)"
+          />
+
+          {/* Right Code Bracket > */}
+          <path
+            d="M23.5 10L28.5 16L23.5 22"
+            stroke="url(#godBracketRight)"
+            strokeWidth="2.4"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+        <span className="god-logo-pulse" />
+      </div>
+
+      <div className="god-logo-text-group">
+        <span className="god-logo-title-full">Full</span>
+        <span className="god-logo-title-code">Code</span>
+      </div>
+    </div>
+  );
+}
+
 export default function Header() {
   const {
     state,
@@ -207,16 +277,10 @@ export default function Header() {
       <header className="header app-header header-minimized">
         <div className="header-min-left">
           {isNativeApp && <div className="mac-traffic-lights-spacer" />}
-          <div
-            className="brand-min"
+          <GodNavLogo
+            isMinimized={true}
             onClick={() => dispatch({ type: 'NAVIGATE_PAGE', payload: 'editor' })}
-            title="Full Code"
-          >
-            <span className="material-symbols-outlined text-primary text-sm" style={{ fontVariationSettings: "'FILL' 1" }}>
-              bolt
-            </span>
-            <span className="brand-title-min">Full Code</span>
-          </div>
+          />
           {activeFile && (
             <div className="min-active-file-badge" title={activeFile.name}>
               <LanguageIcon language={activeFile.language} filename={activeFile.name} size={12} />
@@ -280,16 +344,7 @@ export default function Header() {
       {/* Left: Brand & Menu Navigation */}
       <div className="header-left">
         {isNativeApp && <div className="mac-traffic-lights-spacer" />}
-        <div
-          className="brand"
-          onClick={() => dispatch({ type: 'NAVIGATE_PAGE', payload: 'editor' })}
-          title="Full Code — Return to Workspace"
-        >
-          <span className="material-symbols-outlined brand-bolt-icon" style={{ fontVariationSettings: "'FILL' 1" }}>
-            bolt
-          </span>
-          <span className="brand-title">Full Code</span>
-        </div>
+        <GodNavLogo onClick={() => dispatch({ type: 'NAVIGATE_PAGE', payload: 'editor' })} />
 
         {/* Menubar */}
         <nav className="header-menubar" role="menubar">

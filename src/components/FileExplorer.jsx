@@ -22,10 +22,7 @@ import {
   FolderInput,
   Copy,
   ClipboardPaste,
-  Monitor,
-  Home,
 } from 'lucide-react';
-import { isLocalEnvironment } from '../services/judge0Service';
 import { isItemProtected, isItemUnlocked } from '../services/securityService';
 import { sanitizeFilenameIdentifier } from '../services/identifierSanitizer';
 import PasswordPromptModal from './PasswordPromptModal';
@@ -168,107 +165,6 @@ export default function FileExplorer() {
 
   // External File Drag & Drop
   const [isDroppingExternal, setIsDroppingExternal] = useState(false);
-
-  // Default Mac Sections state
-  const isLocalHost = isLocalEnvironment();
-  const isNativeApp = typeof window !== 'undefined' && Boolean(window.webkit?.messageHandlers?.nativeHost);
-  const [macSectionsOpen, setMacSectionsOpen] = useState(true);
-  const [activeMacSection, setActiveMacSection] = useState(null);
-  const [macLoading, setMacLoading] = useState(false);
-
-  const handleSelectMacSection = async (sectionKey) => {
-    setActiveMacSection(sectionKey);
-    setMacLoading(true);
-    showToast(`Loading Mac ${sectionKey.toUpperCase()}…`);
-
-    // 1. If running in native Mac app WebKit wrapper:
-    if (window.webkit?.messageHandlers?.nativeHost) {
-      window.webkit.messageHandlers.nativeHost.postMessage({
-        type: 'open_mac_section',
-        section: sectionKey,
-      });
-      setMacLoading(false);
-      return;
-    }
-
-    // 2. Local Node dev server /api/fs bridge
-    try {
-      const locRes = await fetch('/api/fs/mac-locations');
-      if (locRes.ok) {
-        const data = await locRes.json();
-        const found = data.locations?.find((l) => l.id === sectionKey);
-        if (found) {
-          const openRes = await fetch('/api/fs/open-folder', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ path: found.path }),
-          });
-          if (openRes.ok) {
-            const folderData = await openRes.json();
-            if (folderData.files && folderData.files.length > 0) {
-              const newFiles = folderData.files.map((f, idx) => ({
-                id: `mac-${Date.now()}-${idx}`,
-                name: f.name,
-                content: f.content || '',
-                language: getLanguageFromFilename(f.name).toLowerCase(),
-                folder: f.name.includes('/') ? f.name.substring(0, f.name.lastIndexOf('/')) : null,
-                isLocalDiskFile: true,
-                localDiskPath: f.localPath,
-              }));
-              const detectedFolders = [...new Set(
-                newFiles
-                  .filter((f) => f.name.includes('/'))
-                  .map((f) => f.name.substring(0, f.name.lastIndexOf('/')))
-              )];
-              dispatch({
-                type: 'LOAD_WORKSPACE_STATE',
-                payload: {
-                  files: newFiles,
-                  folders: detectedFolders,
-                  activeFileId: newFiles[0].id,
-                },
-              });
-              showToast(`Loaded ${newFiles.length} files from Mac ${found.name} 📂`);
-            } else {
-              showToast(`No code files found in Mac ${found.name}`);
-            }
-          }
-        }
-      }
-    } catch (e) {
-      console.warn('Could not load Mac section:', e);
-    } finally {
-      setMacLoading(false);
-    }
-  };
-
-  const handleOpenAnyMacFolder = () => {
-    if (window.webkit?.messageHandlers?.nativeHost) {
-      window.webkit.messageHandlers.nativeHost.postMessage({ type: 'open_local_folder' });
-    } else {
-      const input = document.createElement('input');
-      input.type = 'file';
-      input.webkitdirectory = true;
-      input.multiple = true;
-      input.onchange = async (e) => {
-        if (e.target.files && e.target.files.length > 0) {
-          const result = await processFileList(e.target.files);
-          if (result.files.length > 0) {
-            dispatch({
-              type: 'LOAD_WORKSPACE_STATE',
-              payload: {
-                files: result.files,
-                folders: result.folders,
-                activeFileId: result.files[0].id,
-              },
-            });
-            showToast(`Opened folder with ${result.files.length} files 📂`);
-          }
-        }
-      };
-      input.click();
-    }
-  };
 
   const handleExternalDragOver = (e) => {
     if (e.dataTransfer.types && Array.from(e.dataTransfer.types).includes('Files')) {
@@ -981,79 +877,6 @@ export default function FileExplorer() {
             <X size={11} />
           </button>
         )}
-      </div>
-
-      {/* Default Mac Sections (Documents, Desktop, Downloads, Home) */}
-      <div className="mac-sections-panel">
-        <div
-          className="mac-sections-header"
-          onClick={() => setMacSectionsOpen(!macSectionsOpen)}
-          title="Toggle Default Mac Sections"
-        >
-          <div className="mac-sections-header-left">
-            {macSectionsOpen ? (
-              <ChevronDown size={11} strokeWidth={2.5} className="hierarchy-chevron" />
-            ) : (
-              <ChevronRight size={11} strokeWidth={2.5} className="hierarchy-chevron" />
-            )}
-            <span className="mac-sections-title">MAC SECTIONS</span>
-          </div>
-          <button
-            className="mac-section-action-btn"
-            onClick={(e) => {
-              e.stopPropagation();
-              handleOpenAnyMacFolder();
-            }}
-            title="Open Any Mac Folder..."
-          >
-            <FolderInput size={12} />
-          </button>
-        </div>
-
-        {macSectionsOpen && (
-          <div className="mac-sections-grid">
-            <button
-              className={`mac-section-btn ${activeMacSection === 'documents' ? 'active' : ''}`}
-              onClick={() => handleSelectMacSection('documents')}
-              title="Open macOS Documents"
-            >
-              <Folder size={12} className="mac-sec-icon folder-icon" />
-              <span>Documents</span>
-            </button>
-
-            <button
-              className={`mac-section-btn ${activeMacSection === 'desktop' ? 'active' : ''}`}
-              onClick={() => handleSelectMacSection('desktop')}
-              title="Open macOS Desktop"
-            >
-              <Monitor size={12} className="mac-sec-icon desktop-icon" />
-              <span>Desktop</span>
-            </button>
-
-            <button
-              className={`mac-section-btn ${activeMacSection === 'downloads' ? 'active' : ''}`}
-              onClick={() => handleSelectMacSection('downloads')}
-              title="Open macOS Downloads"
-            >
-              <Download size={12} className="mac-sec-icon download-icon" />
-              <span>Downloads</span>
-            </button>
-
-            <button
-              className={`mac-section-btn ${activeMacSection === 'home' ? 'active' : ''}`}
-              onClick={() => handleSelectMacSection('home')}
-              title="Open macOS User Home (~)"
-            >
-              <Home size={12} className="mac-sec-icon home-icon" />
-              <span>Home (~)</span>
-            </button>
-          </div>
-        )}
-      </div>
-
-      <div className="mac-workspace-divider">
-        <span className="mac-workspace-label">FILES & FOLDERS</span>
-        <span className="mac-workspace-badge">{state.files.length}</span>
       </div>
 
       {/* Recursive Files & Folders Tree */}

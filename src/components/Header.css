@@ -83,6 +83,115 @@
   letter-spacing: 1px;
 }
 
+/* ─── God-Tier Nav Logo ────────────────────────────────────────────── */
+.god-navlogo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  user-select: none;
+  padding: 3px 6px;
+  border-radius: 8px;
+  transition: all var(--transition-fast, 150ms);
+  position: relative;
+}
+
+.god-navlogo:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.god-navlogo.is-min {
+  padding: 1px 4px;
+  gap: 6px;
+}
+
+.god-logo-badge {
+  position: relative;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.god-navlogo.is-min .god-logo-badge {
+  width: 18px;
+  height: 18px;
+}
+
+.god-logo-svg {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  filter: drop-shadow(0 0 6px rgba(168, 85, 247, 0.45));
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), filter 0.25s ease;
+}
+
+.god-navlogo:hover .god-logo-svg {
+  transform: scale(1.08);
+  filter: drop-shadow(0 0 10px rgba(0, 245, 255, 0.6)) drop-shadow(0 0 16px rgba(236, 72, 153, 0.5));
+}
+
+.god-logo-pulse {
+  position: absolute;
+  top: 1px;
+  right: -1px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #00f5ff;
+  box-shadow: 0 0 6px #00f5ff, 0 0 10px #00f5ff;
+  animation: godPulseAnim 2.2s infinite ease-in-out;
+}
+
+@keyframes godPulseAnim {
+  0%, 100% {
+    transform: scale(0.9);
+    opacity: 0.8;
+  }
+  50% {
+    transform: scale(1.35);
+    opacity: 1;
+    box-shadow: 0 0 8px #a855f7, 0 0 14px #ec4899;
+  }
+}
+
+.god-logo-text-group {
+  display: flex;
+  align-items: baseline;
+  gap: 3px;
+  line-height: 1;
+}
+
+.god-logo-title-full {
+  font-size: 15px;
+  font-weight: 800;
+  color: #ffffff;
+  letter-spacing: -0.3px;
+  font-family: var(--font-ui), var(--font-sans), system-ui, -apple-system, sans-serif;
+}
+
+.god-navlogo.is-min .god-logo-title-full {
+  font-size: 11.5px;
+}
+
+.god-logo-title-code {
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: -0.3px;
+  background: linear-gradient(135deg, #f43f5e 0%, #c084fc 50%, #38bdf8 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  font-family: var(--font-ui), var(--font-sans), system-ui, -apple-system, sans-serif;
+  text-shadow: 0 0 20px rgba(192, 132, 252, 0.35);
+}
+
+.god-navlogo.is-min .god-logo-title-code {
+  font-size: 11.5px;
+}
+
 /* Header sections */
 .mac-traffic-lights-spacer {
   width: 72px;
