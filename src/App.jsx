@@ -48,8 +48,10 @@ function AppContent() {
     handleDeclineIncomingChanges,
     handleToggleTerminal,
     handleFormatCode,
+    handleCloseTab,
     handleCloseFile,
     handleDownloadWorkspace,
+    handleToggleSplitView,
     handleUpdateConfig,
     showToast,
   } = useApp();
@@ -233,10 +235,28 @@ function AppContent() {
           handleRunCode();
           break;
         case 'new-file':
-          handleCreateSequentialFile();
+          window.dispatchEvent(new CustomEvent('editor-new-file'));
+          break;
+        case 'new-folder':
+          window.dispatchEvent(new CustomEvent('editor-new-folder'));
+          break;
+        case 'open-settings':
+          dispatch({ type: 'NAVIGATE_PAGE', payload: 'settings' });
           break;
         case 'save':
           handleSaveActiveFile();
+          break;
+        case 'find':
+          window.dispatchEvent(new CustomEvent('editor-find'));
+          break;
+        case 'replace':
+          window.dispatchEvent(new CustomEvent('editor-replace'));
+          break;
+        case 'comment-line':
+          window.dispatchEvent(new CustomEvent('editor-comment-line'));
+          break;
+        case 'expand-selection':
+          window.dispatchEvent(new CustomEvent('editor-expand-selection'));
           break;
         case 'toggle-theme':
           dispatch({ type: 'TOGGLE_THEME' });
@@ -329,10 +349,18 @@ function AppContent() {
           showToast('Terminal cleared 🧹');
           break;
         case 'toggle-web-preview':
+          dispatch({ type: 'SET_TERMINAL_HIDDEN', payload: false });
           dispatch({ type: 'SET_TERMINAL_TAB', payload: 'web' });
           break;
         case 'toggle-explorer':
           dispatch({ type: 'TOGGLE_EXPLORER' });
+          break;
+        case 'toggle-split':
+          if (handleToggleSplitView) {
+            handleToggleSplitView();
+          } else {
+            dispatch({ type: 'TOGGLE_SPLIT_VIEW' });
+          }
           break;
         case 'toggle-zen':
           dispatch({ type: 'TOGGLE_FOCUS_MODE' });
@@ -345,8 +373,78 @@ function AppContent() {
           break;
         case 'close-tab':
           if (activeFile) {
-            handleCloseFile(activeFile.id);
+            if (handleCloseTab) {
+              handleCloseTab(activeFile.id);
+            } else {
+              handleCloseFile(activeFile.id);
+            }
           }
+          break;
+        case 'go-to-file':
+          if (!state.explorerOpen) dispatch({ type: 'TOGGLE_EXPLORER' });
+          setTimeout(() => {
+            const input = document.querySelector('.explorer-search-input');
+            input?.focus();
+          }, 60);
+          break;
+        case 'go-to-line':
+          window.dispatchEvent(new CustomEvent('editor-goto-line'));
+          break;
+        case 'next-tab': {
+          const openIds = state.openFileIds || [];
+          if (openIds.length > 1) {
+            const curIdx = openIds.indexOf(state.activeFileId);
+            const nextIdx = (curIdx + 1) % openIds.length;
+            dispatch({ type: 'SELECT_FILE', payload: openIds[nextIdx] });
+          }
+          break;
+        }
+        case 'prev-tab': {
+          const openIds = state.openFileIds || [];
+          if (openIds.length > 1) {
+            const curIdx = openIds.indexOf(state.activeFileId);
+            const prevIdx = (curIdx - 1 + openIds.length) % openIds.length;
+            dispatch({ type: 'SELECT_FILE', payload: openIds[prevIdx] });
+          }
+          break;
+        }
+        case 'open-copilot':
+          dispatch({ type: 'SET_TERMINAL_HIDDEN', payload: false });
+          dispatch({ type: 'SET_TERMINAL_TAB', payload: 'explanation' });
+          break;
+        case 'open-complexity':
+          dispatch({ type: 'SET_TERMINAL_HIDDEN', payload: false });
+          dispatch({ type: 'SET_TERMINAL_TAB', payload: 'complexity' });
+          break;
+        case 'open-visualizer':
+          window.dispatchEvent(new CustomEvent('open-dsa-visualizer'));
+          break;
+        case 'open-testsuite':
+          dispatch({ type: 'SET_TERMINAL_HIDDEN', payload: false });
+          dispatch({ type: 'SET_TERMINAL_TAB', payload: 'tests' });
+          showToast('🧪 Test Suite opened');
+          break;
+        case 'open-database':
+          dispatch({ type: 'SET_TERMINAL_HIDDEN', payload: false });
+          dispatch({ type: 'SET_TERMINAL_TAB', payload: 'database' });
+          break;
+        case 'open-collab':
+          dispatch({ type: 'TOGGLE_COLLAB_MODAL' });
+          break;
+        case 'open-notebooks':
+          dispatch({ type: 'NAVIGATE_PAGE', payload: 'notebook-setup' });
+          break;
+        case 'open-dsa':
+          dispatch({ type: 'NAVIGATE_PAGE', payload: 'practice' });
+          break;
+        case 'open-exam':
+          dispatch({ type: 'NAVIGATE_PAGE', payload: 'exam' });
+          break;
+        case 'open-snippets':
+          dispatch({ type: 'NAVIGATE_PAGE', payload: 'templates' });
+          break;
+        case 'open-help':
+          dispatch({ type: 'SET_WELCOME_MODAL', payload: true });
           break;
         case 'toast':
           if (action.message) {

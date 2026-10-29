@@ -444,10 +444,32 @@ export default function Header() {
               <div className="menu-dropdown animate-fade-in">
                 <button
                   className="dropdown-entry"
+                  onClick={() => closeMenuAndRun(() => window.dispatchEvent(new CustomEvent('editor-find')))}
+                >
+                  <span>Find in File...</span>
+                  <kbd>Ctrl+F</kbd>
+                </button>
+                <button
+                  className="dropdown-entry"
+                  onClick={() => closeMenuAndRun(() => window.dispatchEvent(new CustomEvent('editor-replace')))}
+                >
+                  <span>Replace in File...</span>
+                  <kbd>Ctrl+H</kbd>
+                </button>
+                <div className="dropdown-divider" />
+                <button
+                  className="dropdown-entry"
                   onClick={() => closeMenuAndRun(() => handleFormatCode())}
                 >
                   <span>Format Document</span>
                   <kbd>Shift+Alt+F</kbd>
+                </button>
+                <button
+                  className="dropdown-entry"
+                  onClick={() => closeMenuAndRun(() => window.dispatchEvent(new CustomEvent('editor-comment-line')))}
+                >
+                  <span>Toggle Line Comment</span>
+                  <kbd>Ctrl+/</kbd>
                 </button>
                 <button
                   className="dropdown-entry"
@@ -478,6 +500,35 @@ export default function Header() {
                 >
                   <span>Clear Output & Terminal</span>
                   <kbd>Ctrl+L</kbd>
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Selection Menu */}
+          <div className="menu-item-wrap">
+            <button
+              className={`menu-bar-btn ${activeMenu === 'Selection' ? 'active' : ''}`}
+              onClick={() => handleMenuClick('Selection')}
+              onMouseEnter={() => handleMenuHover('Selection')}
+            >
+              Selection
+            </button>
+            {activeMenu === 'Selection' && (
+              <div className="menu-dropdown animate-fade-in">
+                <button
+                  className="dropdown-entry"
+                  onClick={() => closeMenuAndRun(() => window.dispatchEvent(new CustomEvent('editor-expand-selection')))}
+                >
+                  <span>Expand Selection</span>
+                  <kbd>Alt+Shift+Right</kbd>
+                </button>
+                <button
+                  className="dropdown-entry"
+                  onClick={() => closeMenuAndRun(() => window.dispatchEvent(new CustomEvent('editor-copy-line-down')))}
+                >
+                  <span>Copy Line Down</span>
+                  <kbd>Shift+Alt+Down</kbd>
                 </button>
               </div>
             )}
@@ -598,9 +649,52 @@ export default function Header() {
                 </button>
                 <button
                   className="dropdown-entry"
+                  onClick={() => closeMenuAndRun(() => window.dispatchEvent(new CustomEvent('editor-goto-line')))}
+                >
+                  <span>Go to Line...</span>
+                  <kbd>Ctrl+G</kbd>
+                </button>
+                <div className="dropdown-divider" />
+                <button
+                  className="dropdown-entry"
+                  onClick={() => closeMenuAndRun(() => {
+                    const openIds = state.openFileIds || [];
+                    if (openIds.length > 1) {
+                      const curIdx = openIds.indexOf(state.activeFileId);
+                      const nextIdx = (curIdx + 1) % openIds.length;
+                      dispatch({ type: 'SELECT_FILE', payload: openIds[nextIdx] });
+                    }
+                  })}
+                >
+                  <span>Next Open Tab</span>
+                  <kbd>Ctrl+]</kbd>
+                </button>
+                <button
+                  className="dropdown-entry"
+                  onClick={() => closeMenuAndRun(() => {
+                    const openIds = state.openFileIds || [];
+                    if (openIds.length > 1) {
+                      const curIdx = openIds.indexOf(state.activeFileId);
+                      const prevIdx = (curIdx - 1 + openIds.length) % openIds.length;
+                      dispatch({ type: 'SELECT_FILE', payload: openIds[prevIdx] });
+                    }
+                  })}
+                >
+                  <span>Previous Open Tab</span>
+                  <kbd>Ctrl+[</kbd>
+                </button>
+                <div className="dropdown-divider" />
+                <button
+                  className="dropdown-entry"
                   onClick={() => closeMenuAndRun(() => dispatch({ type: 'NAVIGATE_PAGE', payload: 'notebook-setup' }))}
                 >
                   <span>Go to Subject Course Notebooks</span>
+                </button>
+                <button
+                  className="dropdown-entry"
+                  onClick={() => closeMenuAndRun(() => dispatch({ type: 'NAVIGATE_PAGE', payload: 'practice' }))}
+                >
+                  <span>Go to DSA Practice Lab</span>
                 </button>
               </div>
             )}
@@ -631,6 +725,103 @@ export default function Header() {
                   <span>Switch Execution Engine</span>
                   <kbd>{engineMode === 'local' ? '⚡️ Local' : '🌐 Cloud'}</kbd>
                 </button>
+                <div className="dropdown-divider" />
+                <button
+                  className="dropdown-entry"
+                  onClick={() => closeMenuAndRun(() => {
+                    dispatch({ type: 'SET_TERMINAL_HIDDEN', payload: false });
+                    dispatch({ type: 'SET_TERMINAL_TAB', payload: 'tests' });
+                    showToast('🧪 Test Suite opened');
+                  })}
+                >
+                  <span>Test Suite & Stress Tester</span>
+                </button>
+                <button
+                  className="dropdown-entry"
+                  onClick={() => closeMenuAndRun(() => {
+                    dispatch({ type: 'SET_TERMINAL_HIDDEN', payload: false });
+                    dispatch({ type: 'SET_TERMINAL_TAB', payload: 'complexity' });
+                  })}
+                >
+                  <span>Big-O Complexity Analyzer</span>
+                </button>
+                <div className="dropdown-divider" />
+                <button
+                  className="dropdown-entry"
+                  onClick={() => closeMenuAndRun(() => {
+                    dispatch({ type: 'CLEAR_OUTPUT' });
+                    showToast('Console output cleared 🧹');
+                  })}
+                >
+                  <span>Clear Console Output</span>
+                  <kbd>Ctrl+L</kbd>
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Terminal Menu */}
+          <div className="menu-item-wrap">
+            <button
+              className={`menu-bar-btn ${activeMenu === 'Terminal' ? 'active' : ''}`}
+              onClick={() => handleMenuClick('Terminal')}
+              onMouseEnter={() => handleMenuHover('Terminal')}
+            >
+              Terminal
+            </button>
+            {activeMenu === 'Terminal' && (
+              <div className="menu-dropdown animate-fade-in">
+                <button
+                  className="dropdown-entry"
+                  onClick={() => closeMenuAndRun(() => {
+                    dispatch({ type: 'SET_TERMINAL_HIDDEN', payload: !state.terminalHidden });
+                  })}
+                >
+                  <span>Toggle Integrated Terminal</span>
+                  <kbd>Ctrl+`</kbd>
+                </button>
+                <button
+                  className="dropdown-entry"
+                  onClick={() => closeMenuAndRun(() => {
+                    window.dispatchEvent(new CustomEvent('clear-terminal-history'));
+                    showToast('Terminal cleared 🧹');
+                  })}
+                >
+                  <span>Clear Terminal Screen</span>
+                  <kbd>Ctrl+K</kbd>
+                </button>
+                <div className="dropdown-divider" />
+                <button
+                  className="dropdown-entry"
+                  onClick={() => closeMenuAndRun(() => {
+                    dispatch({ type: 'SET_TERMINAL_HIDDEN', payload: false });
+                    dispatch({ type: 'SET_TERMINAL_TAB', payload: 'web' });
+                  })}
+                >
+                  <span>Open Web Preview & DevTools</span>
+                </button>
+                <button
+                  className="dropdown-entry"
+                  onClick={() => closeMenuAndRun(() => {
+                    dispatch({ type: 'SET_TERMINAL_HIDDEN', payload: false });
+                    dispatch({ type: 'SET_TERMINAL_TAB', payload: 'database' });
+                  })}
+                >
+                  <span>Open Database & SQL Explorer</span>
+                </button>
+                {isNativeApp && (
+                  <>
+                    <div className="dropdown-divider" />
+                    <button
+                      className="dropdown-entry"
+                      onClick={() => closeMenuAndRun(() => {
+                        window.webkit?.messageHandlers?.nativeHost?.postMessage({ type: 'open_terminal' });
+                      })}
+                    >
+                      <span>Open in macOS Terminal.app</span>
+                    </button>
+                  </>
+                )}
               </div>
             )}
           </div>

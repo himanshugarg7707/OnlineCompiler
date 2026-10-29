@@ -628,8 +628,60 @@ export default function CodeEditor() {
         editorRef.current.focus();
       }
     };
+    const handleFind = () => {
+      if (editorRef.current) {
+        editorRef.current.focus();
+        editorRef.current.getAction('actions.find')?.run();
+      }
+    };
+    const handleReplace = () => {
+      if (editorRef.current) {
+        editorRef.current.focus();
+        editorRef.current.getAction('editor.action.startFindReplaceAction')?.run();
+      }
+    };
+    const handleComment = () => {
+      if (editorRef.current) {
+        editorRef.current.focus();
+        editorRef.current.getAction('editor.action.commentLine')?.run();
+      }
+    };
+    const handleExpandSelection = () => {
+      if (editorRef.current) {
+        editorRef.current.focus();
+        editorRef.current.getAction('editor.action.smartSelect.expand')?.run();
+      }
+    };
+    const handleCopyLineDown = () => {
+      if (editorRef.current) {
+        editorRef.current.focus();
+        editorRef.current.getAction('editor.action.copyLinesDownAction')?.run();
+      }
+    };
+    const handleGoToLine = () => {
+      if (editorRef.current) {
+        editorRef.current.focus();
+        editorRef.current.getAction('editor.action.gotoLine')?.run();
+      }
+    };
+
     window.addEventListener('editor-jump-to-line', handleJump);
-    return () => window.removeEventListener('editor-jump-to-line', handleJump);
+    window.addEventListener('editor-find', handleFind);
+    window.addEventListener('editor-replace', handleReplace);
+    window.addEventListener('editor-comment-line', handleComment);
+    window.addEventListener('editor-expand-selection', handleExpandSelection);
+    window.addEventListener('editor-copy-line-down', handleCopyLineDown);
+    window.addEventListener('editor-goto-line', handleGoToLine);
+
+    return () => {
+      window.removeEventListener('editor-jump-to-line', handleJump);
+      window.removeEventListener('editor-find', handleFind);
+      window.removeEventListener('editor-replace', handleReplace);
+      window.removeEventListener('editor-comment-line', handleComment);
+      window.removeEventListener('editor-expand-selection', handleExpandSelection);
+      window.removeEventListener('editor-copy-line-down', handleCopyLineDown);
+      window.removeEventListener('editor-goto-line', handleGoToLine);
+    };
   }, []);
 
   return (

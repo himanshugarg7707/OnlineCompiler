@@ -397,6 +397,17 @@ export default function FileExplorer() {
     }
   };
 
+  useEffect(() => {
+    const handleNewFileEvent = () => startAddFile('');
+    const handleNewFolderEvent = () => startAddFolder('');
+    window.addEventListener('editor-new-file', handleNewFileEvent);
+    window.addEventListener('editor-new-folder', handleNewFolderEvent);
+    return () => {
+      window.removeEventListener('editor-new-file', handleNewFileEvent);
+      window.removeEventListener('editor-new-folder', handleNewFolderEvent);
+    };
+  }, []);
+
   const finishAdd = () => {
     if (!creationTarget) return;
     const trimmed = newItemName.trim().replace(/\/+$/, '');

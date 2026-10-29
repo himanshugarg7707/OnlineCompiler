@@ -7,7 +7,7 @@ import UserNotifications
 // Real Local Compilers, Native Terminal Bridge, Folder Chooser & Website Hub
 // ─────────────────────────────────────────────────────────────────────────────
 
-class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigationDelegate, WKScriptMessageHandler {
+class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigationDelegate, WKScriptMessageHandler, NSMenuItemValidation {
     var window: NSWindow!
     var webView: WKWebView!
     var statusItem: NSStatusItem!
@@ -309,7 +309,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigati
             print("Failed to auto-spawn npm run dev: \(error)")
         }
 
-        DispatchQueue.main.async {
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
             var attempts = 0
             Timer.scheduledTimer(withTimeInterval: 0.4, repeats: true) { [weak self] timer in
                 guard let self = self else {
@@ -587,7 +588,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigati
     private func setupMainMenu() {
         let mainMenu = NSMenu()
 
-        // 1. App Menu
+        // 1. App Menu (FullCode)
         let appMenuItem = NSMenuItem()
         mainMenu.addItem(appMenuItem)
         let appMenu = NSMenu()
@@ -596,13 +597,17 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigati
         let aboutItem = NSMenuItem(title: "About FullCode IDE", action: #selector(handleAbout), keyEquivalent: "")
         aboutItem.target = self
         appMenu.addItem(aboutItem)
+
+        let prefsItem = NSMenuItem(title: "Preferences / Settings...", action: #selector(handlePreferences), keyEquivalent: ",")
+        prefsItem.target = self
+        appMenu.addItem(prefsItem)
         appMenu.addItem(NSMenuItem.separator())
 
         let hideAppItem = NSMenuItem(title: "Hide FullCode", action: #selector(NSApplication.hide(_:)), keyEquivalent: "h")
         appMenu.addItem(hideAppItem)
 
         let hideOthersItem = NSMenuItem(title: "Hide Others", action: #selector(NSApplication.hideOtherApplications(_:)), keyEquivalent: "h")
-        hideOthersItem.keyEquivalentModifierMask = [.command, .option]
+        hideOthersItem.keyEquivalentModifierMask = NSEvent.ModifierFlags([.command, .option])
         appMenu.addItem(hideOthersItem)
 
         let showAllItem = NSMenuItem(title: "Show All", action: #selector(NSApplication.unhideAllApplications(_:)), keyEquivalent: "")
@@ -623,12 +628,19 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigati
         newFile.target = self
         fileMenu.addItem(newFile)
 
+        let newFolder = NSMenuItem(title: "New Folder", action: #selector(handleNewFolder), keyEquivalent: "N")
+        newFolder.keyEquivalentModifierMask = NSEvent.ModifierFlags([.command, .shift])
+        newFolder.target = self
+        fileMenu.addItem(newFolder)
+
+        fileMenu.addItem(NSMenuItem.separator())
+
         let openFile = NSMenuItem(title: "Open File...", action: #selector(handleOpenLocalFile), keyEquivalent: "o")
         openFile.target = self
         fileMenu.addItem(openFile)
 
         let openFolder = NSMenuItem(title: "Open Project Folder...", action: #selector(handleOpenLocalFolder), keyEquivalent: "O")
-        openFolder.keyEquivalentModifierMask = [.command, .shift]
+        openFolder.keyEquivalentModifierMask = NSEvent.ModifierFlags([.command, .shift])
         openFolder.target = self
         fileMenu.addItem(openFolder)
 
@@ -639,19 +651,17 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigati
         fileMenu.addItem(saveFile)
 
         let saveFileAs = NSMenuItem(title: "Save As...", action: #selector(handleSaveFileAs), keyEquivalent: "S")
-        saveFileAs.keyEquivalentModifierMask = [.command, .shift]
+        saveFileAs.keyEquivalentModifierMask = NSEvent.ModifierFlags([.command, .shift])
         saveFileAs.target = self
         fileMenu.addItem(saveFileAs)
 
-        fileMenu.addItem(NSMenuItem.separator())
-
         let revealFinder = NSMenuItem(title: "Reveal in Finder", action: #selector(handleRevealInFinder), keyEquivalent: "r")
-        revealFinder.keyEquivalentModifierMask = [.command, .option]
+        revealFinder.keyEquivalentModifierMask = NSEvent.ModifierFlags([.command, .option])
         revealFinder.target = self
         fileMenu.addItem(revealFinder)
 
         let exportZip = NSMenuItem(title: "Export Project as ZIP...", action: #selector(handleExportZip), keyEquivalent: "e")
-        exportZip.keyEquivalentModifierMask = [.command, .shift]
+        exportZip.keyEquivalentModifierMask = NSEvent.ModifierFlags([.command, .shift])
         exportZip.target = self
         fileMenu.addItem(exportZip)
 
@@ -661,112 +671,94 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigati
         closeWindow.target = self
         fileMenu.addItem(closeWindow)
 
-        // 3. Edit Menu (Standard macOS Copy/Paste/Undo/Redo for WebKit)
+        // 3. Edit Menu
         let editMenuItem = NSMenuItem()
         mainMenu.addItem(editMenuItem)
         let editMenu = NSMenu(title: "Edit")
         editMenuItem.submenu = editMenu
 
-        editMenu.addItem(NSMenuItem(title: "Undo", action: Selector(("undo:")), keyEquivalent: "z"))
-        let redoItem = NSMenuItem(title: "Redo", action: Selector(("redo:")), keyEquivalent: "Z")
-        redoItem.keyEquivalentModifierMask = [.command, .shift]
+        editMenu.addItem(NSMenuItem(title: "Undo", action: #selector(UndoManager.undo), keyEquivalent: "z"))
+        let redoItem = NSMenuItem(title: "Redo", action: #selector(UndoManager.redo), keyEquivalent: "Z")
+        redoItem.keyEquivalentModifierMask = NSEvent.ModifierFlags([.command, .shift])
         editMenu.addItem(redoItem)
         editMenu.addItem(NSMenuItem.separator())
 
-        editMenu.addItem(NSMenuItem(title: "Cut", action: Selector(("cut:")), keyEquivalent: "x"))
-        editMenu.addItem(NSMenuItem(title: "Copy", action: Selector(("copy:")), keyEquivalent: "c"))
-        editMenu.addItem(NSMenuItem(title: "Paste", action: Selector(("paste:")), keyEquivalent: "v"))
-        editMenu.addItem(NSMenuItem(title: "Select All", action: Selector(("selectAll:")), keyEquivalent: "a"))
+        editMenu.addItem(NSMenuItem(title: "Cut", action: #selector(NSText.cut(_:)), keyEquivalent: "x"))
+        editMenu.addItem(NSMenuItem(title: "Copy", action: #selector(NSText.copy(_:)), keyEquivalent: "c"))
+        editMenu.addItem(NSMenuItem(title: "Paste", action: #selector(NSText.paste(_:)), keyEquivalent: "v"))
+        editMenu.addItem(NSMenuItem(title: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a"))
+        editMenu.addItem(NSMenuItem.separator())
+
+        let findItem = NSMenuItem(title: "Find in File...", action: #selector(handleFind), keyEquivalent: "f")
+        findItem.target = self
+        editMenu.addItem(findItem)
+
+        let replaceItem = NSMenuItem(title: "Replace in File...", action: #selector(handleReplace), keyEquivalent: "F")
+        replaceItem.keyEquivalentModifierMask = NSEvent.ModifierFlags([.command, .option])
+        replaceItem.target = self
+        editMenu.addItem(replaceItem)
+
         editMenu.addItem(NSMenuItem.separator())
 
         let formatCode = NSMenuItem(title: "Format Document", action: #selector(handleFormatCode), keyEquivalent: "F")
-        formatCode.keyEquivalentModifierMask = [.command, .shift, .option]
+        formatCode.keyEquivalentModifierMask = NSEvent.ModifierFlags([.command, .shift, .option])
         formatCode.target = self
         editMenu.addItem(formatCode)
 
-        // 4. Run Menu
-        let runMenuItem = NSMenuItem()
-        mainMenu.addItem(runMenuItem)
-        let runMenu = NSMenu(title: "Run")
-        runMenuItem.submenu = runMenu
+        let commentItem = NSMenuItem(title: "Toggle Line Comment", action: #selector(handleCommentLine), keyEquivalent: "/")
+        commentItem.target = self
+        editMenu.addItem(commentItem)
 
-        let runCode = NSMenuItem(title: "Run Active Code", action: #selector(handleRunCode), keyEquivalent: "\r")
-        runCode.target = self
-        runMenu.addItem(runCode)
+        // 4. Selection Menu
+        let selMenuItem = NSMenuItem()
+        mainMenu.addItem(selMenuItem)
+        let selMenu = NSMenu(title: "Selection")
+        selMenuItem.submenu = selMenu
 
-        let toggleEngine = NSMenuItem(title: "Toggle Engine (Local ⚡️ / Cloud 🌐)", action: #selector(handleToggleEngine), keyEquivalent: "m")
-        toggleEngine.keyEquivalentModifierMask = [.command, .shift]
-        toggleEngine.target = self
-        runMenu.addItem(toggleEngine)
+        let selectAllSel = NSMenuItem(title: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
+        selMenu.addItem(selectAllSel)
 
-        let clearOutput = NSMenuItem(title: "Clear Console Output", action: #selector(handleClearOutput), keyEquivalent: "l")
-        clearOutput.keyEquivalentModifierMask = [.control]
-        clearOutput.target = self
-        runMenu.addItem(clearOutput)
+        let expandSel = NSMenuItem(title: "Expand Selection", action: #selector(handleExpandSelection), keyEquivalent: "A")
+        expandSel.keyEquivalentModifierMask = NSEvent.ModifierFlags([.command, .shift])
+        expandSel.target = self
+        selMenu.addItem(expandSel)
 
-        // 5. Terminal Menu (Dedicated Real Terminal Support)
-        let termMenuItem = NSMenuItem()
-        mainMenu.addItem(termMenuItem)
-        let termMenu = NSMenu(title: "Terminal")
-        termMenuItem.submenu = termMenu
+        let copyLineDown = NSMenuItem(title: "Copy Line Down", action: #selector(handleCopyCode), keyEquivalent: "D")
+        copyLineDown.keyEquivalentModifierMask = NSEvent.ModifierFlags([.command, .shift])
+        copyLineDown.target = self
+        selMenu.addItem(copyLineDown)
 
-        let toggleTerm = NSMenuItem(title: "Toggle Integrated Terminal", action: #selector(handleToggleTerminal), keyEquivalent: "`")
-        toggleTerm.keyEquivalentModifierMask = [.command]
-        toggleTerm.target = self
-        termMenu.addItem(toggleTerm)
-
-        let openMacTerm = NSMenuItem(title: "Open in macOS Terminal.app", action: #selector(handleOpenMacOSTerminal), keyEquivalent: "t")
-        openMacTerm.keyEquivalentModifierMask = [.command, .option]
-        openMacTerm.target = self
-        termMenu.addItem(openMacTerm)
-
-        let clearTerm = NSMenuItem(title: "Clear Terminal Screen", action: #selector(handleClearTerminal), keyEquivalent: "k")
-        clearTerm.keyEquivalentModifierMask = [.command]
-        clearTerm.target = self
-        termMenu.addItem(clearTerm)
-
-        // 6. Website Menu (Dedicated Separate Website Features)
-        let webMenuItem = NSMenuItem()
-        mainMenu.addItem(webMenuItem)
-        let webMenu = NSMenu(title: "Website")
-        webMenuItem.submenu = webMenu
-
-        let openWebBrowser = NSMenuItem(title: "Open Website Version in Safari / Chrome", action: #selector(handleOpenWebsite), keyEquivalent: "b")
-        openWebBrowser.target = self
-        webMenu.addItem(openWebBrowser)
-
-        let copyWebUrl = NSMenuItem(title: "Copy Web URL to Clipboard", action: #selector(handleCopyWebUrl), keyEquivalent: "")
-        copyWebUrl.target = self
-        webMenu.addItem(copyWebUrl)
-
-        let toggleWebPreview = NSMenuItem(title: "Toggle Live Web Preview Tab", action: #selector(handleToggleWebPreview), keyEquivalent: "p")
-        toggleWebPreview.keyEquivalentModifierMask = [.command, .option]
-        toggleWebPreview.target = self
-        webMenu.addItem(toggleWebPreview)
-
-        // 7. View Menu (Zooming, Always on Top, Fullscreen)
+        // 5. View Menu
         let viewMenuItem = NSMenuItem()
         mainMenu.addItem(viewMenuItem)
         let viewMenu = NSMenu(title: "View")
         viewMenuItem.submenu = viewMenu
 
-        let toggleExplorer = NSMenuItem(title: "Toggle File Explorer", action: #selector(handleToggleExplorer), keyEquivalent: "e")
-        toggleExplorer.keyEquivalentModifierMask = [.command, .shift]
+        let toggleExplorer = NSMenuItem(title: "Toggle File Explorer", action: #selector(handleToggleExplorer), keyEquivalent: "b")
         toggleExplorer.target = self
         viewMenu.addItem(toggleExplorer)
 
+        let toggleTermView = NSMenuItem(title: "Toggle Integrated Terminal", action: #selector(handleToggleTerminal), keyEquivalent: "`")
+        toggleTermView.keyEquivalentModifierMask = NSEvent.ModifierFlags([.control])
+        toggleTermView.target = self
+        viewMenu.addItem(toggleTermView)
+
+        let toggleSplit = NSMenuItem(title: "Toggle Split Editor", action: #selector(handleToggleSplit), keyEquivalent: "\\")
+        toggleSplit.target = self
+        viewMenu.addItem(toggleSplit)
+
+        let toggleWebPreview = NSMenuItem(title: "Toggle Web Preview Tab", action: #selector(handleToggleWebPreview), keyEquivalent: "p")
+        toggleWebPreview.keyEquivalentModifierMask = NSEvent.ModifierFlags([.command, .option])
+        toggleWebPreview.target = self
+        viewMenu.addItem(toggleWebPreview)
+
         let toggleZen = NSMenuItem(title: "Toggle Zen / Focus Mode", action: #selector(handleToggleZenMode), keyEquivalent: "z")
-        toggleZen.keyEquivalentModifierMask = [.option]
+        toggleZen.keyEquivalentModifierMask = NSEvent.ModifierFlags([.option])
         toggleZen.target = self
         viewMenu.addItem(toggleZen)
 
-        let reload = NSMenuItem(title: "Reload IDE", action: #selector(handleReload), keyEquivalent: "r")
-        reload.target = self
-        viewMenu.addItem(reload)
-
         viewMenu.addItem(NSMenuItem.separator())
 
-        // Smooth Zooming Items
         let zoomInItem = NSMenuItem(title: "Zoom In", action: #selector(handleZoomIn), keyEquivalent: "=")
         zoomInItem.target = self
         viewMenu.addItem(zoomInItem)
@@ -782,22 +774,149 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigati
         viewMenu.addItem(NSMenuItem.separator())
 
         let alwaysOnTopItem = NSMenuItem(title: "Always on Top", action: #selector(handleToggleAlwaysOnTop), keyEquivalent: "p")
-        alwaysOnTopItem.keyEquivalentModifierMask = [.command, .shift]
+        alwaysOnTopItem.keyEquivalentModifierMask = NSEvent.ModifierFlags([.command, .shift])
         alwaysOnTopItem.state = isAlwaysOnTop ? .on : .off
         alwaysOnTopItem.target = self
         viewMenu.addItem(alwaysOnTopItem)
 
         let toggleFullscreen = NSMenuItem(title: "Toggle Full Screen", action: #selector(handleToggleFullscreen), keyEquivalent: "f")
-        toggleFullscreen.keyEquivalentModifierMask = [.control, .command]
+        toggleFullscreen.keyEquivalentModifierMask = NSEvent.ModifierFlags([.control, .command])
         toggleFullscreen.target = self
         viewMenu.addItem(toggleFullscreen)
 
+        let reload = NSMenuItem(title: "Reload IDE", action: #selector(handleReload), keyEquivalent: "r")
+        reload.target = self
+        viewMenu.addItem(reload)
+
         let devTools = NSMenuItem(title: "Inspect Element / DevTools", action: #selector(handleInspect), keyEquivalent: "i")
-        devTools.keyEquivalentModifierMask = [.command, .option]
+        devTools.keyEquivalentModifierMask = NSEvent.ModifierFlags([.command, .option])
         devTools.target = self
         viewMenu.addItem(devTools)
 
-        // 8. Window Menu
+        // 6. Go Menu
+        let goMenuItem = NSMenuItem()
+        mainMenu.addItem(goMenuItem)
+        let goMenu = NSMenu(title: "Go")
+        goMenuItem.submenu = goMenu
+
+        let goToFile = NSMenuItem(title: "Go to File...", action: #selector(handleGoToFile), keyEquivalent: "p")
+        goToFile.target = self
+        goMenu.addItem(goToFile)
+
+        let goToLine = NSMenuItem(title: "Go to Line...", action: #selector(handleGoToLine), keyEquivalent: "g")
+        goToLine.keyEquivalentModifierMask = NSEvent.ModifierFlags([.control])
+        goToLine.target = self
+        goMenu.addItem(goToLine)
+
+        goMenu.addItem(NSMenuItem.separator())
+
+        let nextTabItem = NSMenuItem(title: "Next Open Tab", action: #selector(handleNextTab), keyEquivalent: "]")
+        nextTabItem.keyEquivalentModifierMask = NSEvent.ModifierFlags([.command, .shift])
+        nextTabItem.target = self
+        goMenu.addItem(nextTabItem)
+
+        let prevTabItem = NSMenuItem(title: "Previous Open Tab", action: #selector(handlePrevTab), keyEquivalent: "[")
+        prevTabItem.keyEquivalentModifierMask = NSEvent.ModifierFlags([.command, .shift])
+        prevTabItem.target = self
+        goMenu.addItem(prevTabItem)
+
+        // 7. Run Menu
+        let runMenuItem = NSMenuItem()
+        mainMenu.addItem(runMenuItem)
+        let runMenu = NSMenu(title: "Run")
+        runMenuItem.submenu = runMenu
+
+        let runCode = NSMenuItem(title: "Run Active Code", action: #selector(handleRunCode), keyEquivalent: "\r")
+        runCode.target = self
+        runMenu.addItem(runCode)
+
+        let toggleEngine = NSMenuItem(title: "Toggle Engine (Local ⚡️ / Cloud 🌐)", action: #selector(handleToggleEngine), keyEquivalent: "m")
+        toggleEngine.keyEquivalentModifierMask = NSEvent.ModifierFlags([.command, .shift])
+        toggleEngine.target = self
+        runMenu.addItem(toggleEngine)
+
+        let clearOutput = NSMenuItem(title: "Clear Console Output", action: #selector(handleClearOutput), keyEquivalent: "l")
+        clearOutput.keyEquivalentModifierMask = NSEvent.ModifierFlags([.control])
+        clearOutput.target = self
+        runMenu.addItem(clearOutput)
+
+        // 8. Tools & AI Menu
+        let toolsMenuItem = NSMenuItem()
+        mainMenu.addItem(toolsMenuItem)
+        let toolsMenu = NSMenu(title: "Tools")
+        toolsMenuItem.submenu = toolsMenu
+
+        let copilotItem = NSMenuItem(title: "⚡️ Antigravity AI Copilot", action: #selector(handleCopilotAI), keyEquivalent: "e")
+        copilotItem.keyEquivalentModifierMask = NSEvent.ModifierFlags([.command, .shift])
+        copilotItem.target = self
+        toolsMenu.addItem(copilotItem)
+
+        let complexityItem = NSMenuItem(title: "📊 Static Big-O Complexity Analyzer", action: #selector(handleComplexityAnalysis), keyEquivalent: "")
+        complexityItem.target = self
+        toolsMenu.addItem(complexityItem)
+
+        let visualizerItem = NSMenuItem(title: "🧠 DSA & Memory Visualizer", action: #selector(handleVisualizer), keyEquivalent: "")
+        visualizerItem.target = self
+        toolsMenu.addItem(visualizerItem)
+
+        toolsMenu.addItem(NSMenuItem.separator())
+
+        let testSuiteItem = NSMenuItem(title: "🧪 Test Suite & Stress Tester", action: #selector(handleTestSuite), keyEquivalent: "")
+        testSuiteItem.target = self
+        toolsMenu.addItem(testSuiteItem)
+
+        let dbItem = NSMenuItem(title: "🗄 In-Browser Database & SQL Explorer", action: #selector(handleDatabaseExplorer), keyEquivalent: "")
+        dbItem.target = self
+        toolsMenu.addItem(dbItem)
+
+        let liveRoomItem = NSMenuItem(title: "👥 Live Room Collaboration", action: #selector(handleLiveRoom), keyEquivalent: "")
+        liveRoomItem.target = self
+        toolsMenu.addItem(liveRoomItem)
+
+        // 9. Learn Menu
+        let learnMenuItem = NSMenuItem()
+        mainMenu.addItem(learnMenuItem)
+        let learnMenu = NSMenu(title: "Learn")
+        learnMenuItem.submenu = learnMenu
+
+        let notebooksItem = NSMenuItem(title: "🎓 Subject Course Notebooks", action: #selector(handleSubjectNotebooks), keyEquivalent: "")
+        notebooksItem.target = self
+        learnMenu.addItem(notebooksItem)
+
+        let dsaItem = NSMenuItem(title: "💡 DSA Practice Lab (70+ Challenges)", action: #selector(handleDsaLab), keyEquivalent: "")
+        dsaItem.target = self
+        learnMenu.addItem(dsaItem)
+
+        let examItem = NSMenuItem(title: "⏱ Proctored Exam & Tests", action: #selector(handleProctoredExam), keyEquivalent: "")
+        examItem.target = self
+        learnMenu.addItem(examItem)
+
+        let snippetsItem = NSMenuItem(title: "📋 Code Templates & Snippets", action: #selector(handleCodeSnippets), keyEquivalent: "")
+        snippetsItem.target = self
+        learnMenu.addItem(snippetsItem)
+
+        // 10. Terminal Menu
+        let termMenuItem = NSMenuItem()
+        mainMenu.addItem(termMenuItem)
+        let termMenu = NSMenu(title: "Terminal")
+        termMenuItem.submenu = termMenu
+
+        let toggleTerm = NSMenuItem(title: "Toggle Integrated Terminal", action: #selector(handleToggleTerminal), keyEquivalent: "`")
+        toggleTerm.keyEquivalentModifierMask = NSEvent.ModifierFlags([.control])
+        toggleTerm.target = self
+        termMenu.addItem(toggleTerm)
+
+        let clearTerm = NSMenuItem(title: "Clear Terminal Screen", action: #selector(handleClearTerminal), keyEquivalent: "k")
+        clearTerm.keyEquivalentModifierMask = NSEvent.ModifierFlags([.command])
+        clearTerm.target = self
+        termMenu.addItem(clearTerm)
+
+        let openMacTerm = NSMenuItem(title: "Open in macOS Terminal.app", action: #selector(handleOpenMacOSTerminal), keyEquivalent: "t")
+        openMacTerm.keyEquivalentModifierMask = NSEvent.ModifierFlags([.command, .option])
+        openMacTerm.target = self
+        termMenu.addItem(openMacTerm)
+
+        // 11. Window Menu
         let windowMenuItem = NSMenuItem()
         mainMenu.addItem(windowMenuItem)
         let windowMenu = NSMenu(title: "Window")
@@ -808,6 +927,21 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigati
 
         let bringAllItem = NSMenuItem(title: "Bring All to Front", action: #selector(NSApplication.arrangeInFront(_:)), keyEquivalent: "")
         windowMenu.addItem(bringAllItem)
+
+        // 12. Help Menu
+        let helpMenuItem = NSMenuItem()
+        mainMenu.addItem(helpMenuItem)
+        let helpMenu = NSMenu(title: "Help")
+        helpMenuItem.submenu = helpMenu
+
+        let helpDoc = NSMenuItem(title: "FullCode Documentation & Guide", action: #selector(handleHelpGuide), keyEquivalent: "?")
+        helpDoc.target = self
+        helpMenu.addItem(helpDoc)
+
+        let openWebBrowser = NSMenuItem(title: "Open Website Version in Safari / Chrome", action: #selector(handleOpenWebsite), keyEquivalent: "b")
+        openWebBrowser.keyEquivalentModifierMask = NSEvent.ModifierFlags([.command, .option])
+        openWebBrowser.target = self
+        helpMenu.addItem(openWebBrowser)
 
         NSApp.mainMenu = mainMenu
     }
@@ -917,7 +1051,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigati
     }
 
     private func dispatchNativeFolderLoad(folderName: String, folderPath: String, files: [[String: String]]) {
-        var payload: [String: Any] = [
+        let payload: [String: Any] = [
             "type": "load-local-folder",
             "folderName": folderName,
             "folderPath": folderPath,
@@ -1167,13 +1301,130 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigati
         NSApp.terminate(nil)
     }
 
+    // ── Menu Validation ──────────────────────────────────────────────────────
+    func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
+        return true
+    }
+
+    // ── Additional Action Handlers ───────────────────────────────────────────
+    @objc func handlePreferences() {
+        dispatchNativeAction("open-settings")
+        showWindow()
+    }
+
+    @objc func handleNewFolder() {
+        dispatchNativeAction("new-folder")
+        showWindow()
+    }
+
+    @objc func handleFind() {
+        dispatchNativeAction("find")
+        showWindow()
+    }
+
+    @objc func handleReplace() {
+        dispatchNativeAction("replace")
+        showWindow()
+    }
+
+    @objc func handleCommentLine() {
+        dispatchNativeAction("comment-line")
+        showWindow()
+    }
+
+    @objc func handleExpandSelection() {
+        dispatchNativeAction("expand-selection")
+        showWindow()
+    }
+
+    @objc func handleToggleSplit() {
+        dispatchNativeAction("toggle-split")
+        showWindow()
+    }
+
+    @objc func handleGoToFile() {
+        dispatchNativeAction("go-to-file")
+        showWindow()
+    }
+
+    @objc func handleGoToLine() {
+        dispatchNativeAction("go-to-line")
+        showWindow()
+    }
+
+    @objc func handleNextTab() {
+        dispatchNativeAction("next-tab")
+        showWindow()
+    }
+
+    @objc func handlePrevTab() {
+        dispatchNativeAction("prev-tab")
+        showWindow()
+    }
+
+    @objc func handleHelpGuide() {
+        dispatchNativeAction("open-help")
+        showWindow()
+    }
+
+    @objc func handleCopilotAI() {
+        dispatchNativeAction("open-copilot")
+        showWindow()
+    }
+
+    @objc func handleComplexityAnalysis() {
+        dispatchNativeAction("open-complexity")
+        showWindow()
+    }
+
+    @objc func handleVisualizer() {
+        dispatchNativeAction("open-visualizer")
+        showWindow()
+    }
+
+    @objc func handleTestSuite() {
+        dispatchNativeAction("open-testsuite")
+        showWindow()
+    }
+
+    @objc func handleDatabaseExplorer() {
+        dispatchNativeAction("open-database")
+        showWindow()
+    }
+
+    @objc func handleLiveRoom() {
+        dispatchNativeAction("open-collab")
+        showWindow()
+    }
+
+    @objc func handleSubjectNotebooks() {
+        dispatchNativeAction("open-notebooks")
+        showWindow()
+    }
+
+    @objc func handleDsaLab() {
+        dispatchNativeAction("open-dsa")
+        showWindow()
+    }
+
+    @objc func handleProctoredExam() {
+        dispatchNativeAction("open-exam")
+        showWindow()
+    }
+
+    @objc func handleCodeSnippets() {
+        dispatchNativeAction("open-snippets")
+        showWindow()
+    }
+
     private func dispatchNativeAction(_ type: String, extra: [String: String] = [:]) {
-        var payload: [String: Any] = ["type": type]
-        for (k, v) in extra { payload[k] = v }
+        let payload: [String: Any] = extra.merging(["type": type]) { (_, new) in new }
         if let data = try? JSONSerialization.data(withJSONObject: payload),
            let jsonStr = String(data: data, encoding: .utf8) {
             let js = "window.dispatchEvent(new CustomEvent('onlinecompiler-native-action', { detail: \(jsonStr) }));"
-            webView.evaluateJavaScript(js, completionHandler: nil)
+            DispatchQueue.main.async { [weak self] in
+                self?.webView.evaluateJavaScript(js, completionHandler: nil)
+            }
         }
     }
 
