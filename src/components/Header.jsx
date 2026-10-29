@@ -782,11 +782,41 @@ export default function Header() {
                     </div>
                   </div>
                 </button>
+                <button
+                  className="dropdown-entry more-entry"
+                  onClick={() => closeMenuAndRun(() => {
+                    window.dispatchEvent(new CustomEvent('open-dsa-visualizer'));
+                  })}
+                >
+                  <div className="more-entry-left">
+                    <span className="material-symbols-outlined entry-icon text-cyan">psychology</span>
+                    <div>
+                      <div className="more-entry-title">DSA & Memory Visualizer</div>
+                      <div className="more-entry-desc">Animated call stack, heap objects & recursion trees</div>
+                    </div>
+                  </div>
+                </button>
 
                 <div className="dropdown-divider" />
 
                 {/* Section: Panels & Preview */}
                 <div className="more-section-label">DEVTOOLS & PANELS</div>
+                <button
+                  className="dropdown-entry more-entry"
+                  onClick={() => closeMenuAndRun(() => {
+                    dispatch({ type: 'SET_TERMINAL_HIDDEN', payload: false });
+                    dispatch({ type: 'SET_TERMINAL_TAB', payload: 'tests' });
+                    showToast('🧪 Test Case Suite & Stress Tester opened');
+                  })}
+                >
+                  <div className="more-entry-left">
+                    <span className="material-symbols-outlined entry-icon text-pink">science</span>
+                    <div>
+                      <div className="more-entry-title">Test Suite & Stress Tester</div>
+                      <div className="more-entry-desc">Batch I/O, diff checker & edge-case stress generator</div>
+                    </div>
+                  </div>
+                </button>
                 <button
                   className="dropdown-entry more-entry"
                   onClick={() => closeMenuAndRun(() => {
@@ -920,17 +950,6 @@ export default function Header() {
           </button>
         )}
 
-        {/* Open Website Button (in macOS native app) */}
-        {isNativeApp && (
-          <button
-            className="btn-header-tool"
-            onClick={handleOpenWebsite}
-            title="Open in Safari / Chrome Browser (⌘B)"
-          >
-            <Globe size={14} />
-          </button>
-        )}
-
         {/* Prominent Run Button */}
         <button
           className={`btn-antigravity-run ${isRunning ? 'running' : ''} ${hasSelection ? 'has-selection' : ''}`}
@@ -950,54 +969,6 @@ export default function Header() {
             </span>
           )}
           <span>{isRunning ? 'Running...' : 'Run'}</span>
-        </button>
-
-        {/* Incognito Mode Small Glass Button */}
-        <button
-          type="button"
-          className={`btn-icon-top header-glass-incognito-btn ${state.incognitoMode ? 'active' : ''}`}
-          onClick={() => handleToggleIncognitoMode()}
-          onContextMenu={(e) => {
-            e.preventDefault();
-            window.location.hash = '#/settings?tab=incognito';
-            dispatch({ type: 'NAVIGATE_PAGE', payload: 'settings' });
-          }}
-          title={
-            state.incognitoMode
-              ? '🕶️ Incognito Active: Data vanishes on reload (Click to turn OFF • Right-click for Settings)'
-              : '🕶️ Incognito Mode: Click to turn ON (Zero data saved, vanishes on refresh)'
-          }
-        >
-          <Glasses size={14} />
-          {state.incognitoMode && <span className="glass-incognito-pip" />}
-        </button>
-
-        {/* Test Suite & Stress Tester Quick Glass Button */}
-        <button
-          type="button"
-          className="btn-icon-top header-glass-top-btn"
-          onClick={() => {
-            dispatch({ type: 'SET_TERMINAL_TAB', payload: 'tests' });
-            if (state.terminalHidden) {
-              dispatch({ type: 'SET_TERMINAL_HIDDEN', payload: false });
-            }
-            showToast('🧪 Test Case Suite & Stress Tester opened in bottom panel');
-          }}
-          title="🧪 Test Case Suite & Stress Tester: Batch I/O, Character Diff & Edge Case Generator"
-        >
-          <FlaskConical size={14} />
-        </button>
-
-        {/* Interactive DSA & Memory Visualizer Glass Button */}
-        <button
-          type="button"
-          className="btn-icon-top header-glass-top-btn"
-          onClick={() => {
-            window.dispatchEvent(new CustomEvent('open-dsa-visualizer'));
-          }}
-          title="🧠 Interactive DSA & Execution Visualizer: Call Stack, Heap Objects, Recursion Tree & Complexity Heatmap"
-        >
-          <Brain size={14} />
         </button>
 
         {/* Settings Button */}

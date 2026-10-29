@@ -1021,6 +1021,59 @@ export default function SettingsModal() {
                 <span>Open Browser App ↗</span>
               </button>
             </div>
+
+            <div className="setting-row">
+              <div className="setting-info">
+                <span className="setting-label">Test Case Suite & Stress Tester</span>
+                <span className="setting-desc">Run batch test inputs, character diff comparisons, and edge-case generator</span>
+              </div>
+              <button
+                type="button"
+                className="btn-storage-action backup"
+                onClick={() => {
+                  dispatch({ type: 'TOGGLE_SETTINGS' });
+                  dispatch({ type: 'SET_TERMINAL_HIDDEN', payload: false });
+                  dispatch({ type: 'SET_TERMINAL_TAB', payload: 'tests' });
+                }}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '6px 12px',
+                  fontSize: '11px',
+                  fontWeight: 600,
+                  borderRadius: '6px',
+                }}
+              >
+                <span>Open Stress Tester 🧪</span>
+              </button>
+            </div>
+
+            <div className="setting-row">
+              <div className="setting-info">
+                <span className="setting-label">Interactive DSA & Execution Visualizer</span>
+                <span className="setting-desc">Visual call stack, dynamic heap allocations, and recursion tree explorer</span>
+              </div>
+              <button
+                type="button"
+                className="btn-storage-action backup"
+                onClick={() => {
+                  dispatch({ type: 'TOGGLE_SETTINGS' });
+                  window.dispatchEvent(new CustomEvent('open-dsa-visualizer'));
+                }}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '6px 12px',
+                  fontSize: '11px',
+                  fontWeight: 600,
+                  borderRadius: '6px',
+                }}
+              >
+                <span>Launch Visualizer 🧠</span>
+              </button>
+            </div>
           </div>
 
           {/* ─── 5. SOURCE CONTROL & GIT STUDIO ─── */}

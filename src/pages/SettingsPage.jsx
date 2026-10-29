@@ -2099,6 +2099,65 @@ export default function SettingsPage() {
                     </select>
                   </div>
                 </div>
+
+                <div className="form-row">
+                  <div className="form-label-col">
+                    <span className="setting-title">Test Suite & Stress Tester</span>
+                    <span className="setting-desc">Batch I/O runner, character diff comparisons, and edge-case generator</span>
+                  </div>
+                  <div className="form-input-col">
+                    <button
+                      type="button"
+                      className="settings-action-btn"
+                      onClick={() => {
+                        dispatch({ type: 'NAVIGATE_PAGE', payload: 'editor' });
+                        dispatch({ type: 'SET_TERMINAL_HIDDEN', payload: false });
+                        dispatch({ type: 'SET_TERMINAL_TAB', payload: 'tests' });
+                      }}
+                      style={{
+                        padding: '6px 14px',
+                        fontSize: '12px',
+                        fontWeight: 600,
+                        borderRadius: '6px',
+                        background: 'var(--bg-elevated)',
+                        color: 'var(--text-primary)',
+                        border: '1px solid var(--border-primary)',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      Open Stress Tester 🧪
+                    </button>
+                  </div>
+                </div>
+
+                <div className="form-row">
+                  <div className="form-label-col">
+                    <span className="setting-title">Interactive DSA Visualizer</span>
+                    <span className="setting-desc">Visual execution tree, call stack frames, and dynamic memory allocations</span>
+                  </div>
+                  <div className="form-input-col">
+                    <button
+                      type="button"
+                      className="settings-action-btn"
+                      onClick={() => {
+                        dispatch({ type: 'NAVIGATE_PAGE', payload: 'editor' });
+                        window.dispatchEvent(new CustomEvent('open-dsa-visualizer'));
+                      }}
+                      style={{
+                        padding: '6px 14px',
+                        fontSize: '12px',
+                        fontWeight: 600,
+                        borderRadius: '6px',
+                        background: 'var(--bg-elevated)',
+                        color: 'var(--text-primary)',
+                        border: '1px solid var(--border-primary)',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      Launch Visualizer 🧠
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
           )}
