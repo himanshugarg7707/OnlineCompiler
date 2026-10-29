@@ -847,7 +847,7 @@ export function normalizeJavaMainMethod(code) {
  */
 export function hasJavaMainMethod(code) {
   if (!code || typeof code !== 'string') return false;
-  return /\b(?:public\s+|protected\s+|private\s+)?(?:static\s+)?void\s+main\s*\(/i.test(code);
+  return /\b(?:public\s+|protected\s+|private\s+)?(?:static\s+)?void\s+[A-Za-z0-9_$]+\s*\(/i.test(code);
 }
 
 /**
@@ -1058,18 +1058,24 @@ ${trimmed.split('\n').map((line) => '    ' + line).join('\n')}
  * Generate standard Jupyter Notebook (v4) JSON template
  * Tailored for specified programming language (Java, Python, C++, JavaScript)
  */
-export function createDefaultNotebookJson(targetLang = 'python') {
+export function getMethodNameFromBaseName(baseName) {
+  if (!baseName) return 'main';
+  let cleaned = baseName.replace(/[^a-zA-Z0-9_$]/g, '_');
+  if (/^[0-9]/.test(cleaned)) {
+    cleaned = `_${cleaned}`;
+  }
+  return cleaned || 'main';
+}
+
+/**
+ * Generate starter template JSON for a Jupyter Notebook
+ */
+export function createDefaultNotebookJson(targetLang = 'python', filename = '') {
   const langKey = String(targetLang).toLowerCase();
-  const isSlashComment =
-    langKey === 'java' ||
-    langKey === '62' ||
-    langKey === 'cpp' ||
-    langKey === 'c++' ||
-    langKey === '54' ||
-    langKey === 'javascript' ||
-    langKey === 'js' ||
-    langKey === '63';
-  const comment = isSlashComment ? '// Start here\n' : '# Start here\n';
+  const baseName = filename ? filename.split('/').pop().replace(/\.[^.]+$/, '') : 'Java_Notebook';
+  const methodName = getMethodNameFromBaseName(baseName);
+
+  let initialSource = '# Start here\n';
 
   let kernelSpec = {
     display_name: 'Python 3',
@@ -1081,12 +1087,15 @@ export function createDefaultNotebookJson(targetLang = 'python') {
   if (langKey === 'java' || langKey === '62') {
     kernelSpec = { display_name: 'Java', language: 'java', name: 'java' };
     langInfo = { name: 'java', version: '17' };
+    initialSource = `import java.util.*;\n\nvoid ${methodName}() {\n    // Start here\n}\n`;
   } else if (langKey === 'cpp' || langKey === '54' || langKey === 'c++') {
     kernelSpec = { display_name: 'C++', language: 'cpp', name: 'cpp' };
     langInfo = { name: 'cpp', version: '20' };
+    initialSource = `#include <iostream>\nusing namespace std;\n\nvoid ${methodName}() {\n    // Start here\n}\n`;
   } else if (langKey === 'javascript' || langKey === 'js' || langKey === '63') {
     kernelSpec = { display_name: 'JavaScript', language: 'javascript', name: 'javascript' };
     langInfo = { name: 'javascript', version: 'ES2023' };
+    initialSource = `function ${methodName}() {\n    // Start here\n}\n\n${methodName}();\n`;
   }
 
   return JSON.stringify(
@@ -1097,7 +1106,7 @@ export function createDefaultNotebookJson(targetLang = 'python') {
           execution_count: null,
           metadata: { language: langInfo.name },
           outputs: [],
-          source: [comment],
+          source: [initialSource],
         },
       ],
       metadata: {
@@ -1124,34 +1133,20 @@ export function getStarterTemplate(languageId, filename = '', notebookLang = '')
     else if (fLower.includes('js') || fLower.includes('javascript')) nbTarget = 'javascript';
   }
 
-  const templates = {
-    71: `# Start here\n`,
-    54: `// Start here\n`,
-    50: `// Start here\n`,
-    62: `// Start here\n`,
-    63: `// Start here\n`,
-    74: `// Start here\n`,
-    51: `// Start here\n`,
-    78: `// Start here\n`,
-    83: `// Start here\n`,
-    60: `// Start here\n`,
-    73: `// Start here\n`,
-    68: `// Start here\n`,
-    72: `# Start here\n`,
-    80: `# Start here\n`,
-    85: `# Start here\n`,
-    81: `// Start here\n`,
-    82: `-- Start here\n`,
-    0: `<!-- Start here -->\n`,
-    1: `/* Start here */\n`,
-    99: `# Start here\n`,
-    710: createDefaultNotebookJson(nbTarget || 'python'),
-    711: `# Start here\n`,
-    712: `# Start here\n`,
-    713: `// Start here\n`,
-  };
+  const baseName = filename ? filename.split('/').pop().replace(/\.[^.]+$/, '') : 'Main';
+  let ext = '';
+  if (filename && filename.includes('.')) {
+    ext = filename.split('.').pop().toLowerCase();
+  } else {
+    const lang = getLanguageById(languageId);
+    ext = lang?.extension || 'py';
+  }
 
-  return templates[languageId] || templates[71];
+  if (languageId === 710 || ext === 'ipynb') {
+    return createDefaultNotebookJson(nbTarget || 'python', baseName);
+  }
+
+  return getSequentialFileStarterContent(baseName, ext);
 }
 
 /**
@@ -1382,29 +1377,67 @@ export function getNextSequentialFilename(files = [], activeFileId = null, detec
  * Generate starter template matching sequential filename with valid language identifiers
  */
 export function getSequentialFileStarterContent(baseName, ext) {
+  const methodName = getMethodNameFromBaseName(baseName);
+
+  if (ext === 'java') {
+    return `import java.util.*;\n\nvoid ${methodName}() {\n    // Start here\n}\n`;
+  }
+  if (ext === 'cpp') {
+    return `#include <iostream>\nusing namespace std;\n\nvoid ${methodName}() {\n    // Start here\n}\n\nint main() {\n    ${methodName}();\n    return 0;\n}\n`;
+  }
+  if (ext === 'c') {
+    return `#include <stdio.h>\n\nvoid ${methodName}() {\n    // Start here\n}\n\nint main() {\n    ${methodName}();\n    return 0;\n}\n`;
+  }
+  if (ext === 'py') {
+    return `def ${methodName}():\n    # Start here\n    pass\n\nif __name__ == '__main__':\n    ${methodName}()\n`;
+  }
+  if (ext === 'js') {
+    return `function ${methodName}() {\n    // Start here\n}\n\n${methodName}();\n`;
+  }
+  if (ext === 'ts') {
+    return `function ${methodName}(): void {\n    // Start here\n}\n\n${methodName}();\n`;
+  }
+  if (ext === 'cs') {
+    return `using System;\n\nclass Program {\n    static void ${methodName}() {\n        // Start here\n    }\n\n    static void Main(string[] args) {\n        ${methodName}();\n    }\n}\n`;
+  }
+  if (ext === 'go') {
+    return `package main\n\nimport "fmt"\n\nfunc ${methodName}() {\n    // Start here\n}\n\nfunc main() {\n    ${methodName}()\n}\n`;
+  }
+  if (ext === 'rs') {
+    return `fn ${methodName}() {\n    // Start here\n}\n\nfn main() {\n    ${methodName}();\n}\n`;
+  }
+  if (ext === 'kt') {
+    return `fun ${methodName}() {\n    // Start here\n}\n\nfun main() {\n    ${methodName}()\n}\n`;
+  }
+  if (ext === 'swift') {
+    return `import Foundation\n\nfunc ${methodName}() {\n    // Start here\n}\n\n${methodName}()\n`;
+  }
+  if (ext === 'php') {
+    return `<?php\n\nfunction ${methodName}() {\n    // Start here\n}\n\n${methodName}();\n`;
+  }
+  if (ext === 'rb') {
+    return `def ${methodName}\n  # Start here\nend\n\n${methodName}\n`;
+  }
+  if (ext === 'r') {
+    return `${methodName} <- function() {\n  # Start here\n}\n\n${methodName}()\n`;
+  }
+  if (ext === 'scala') {
+    return `object Main {\n  def ${methodName}(): Unit = {\n    // Start here\n  }\n\n  def main(args: Array[String]): Unit = {\n    ${methodName}()\n  }\n}\n`;
+  }
+  if (ext === 'pl') {
+    return `sub ${methodName} {\n    # Start here\n}\n\n${methodName}();\n`;
+  }
   if (ext === 'ipynb') {
     const lower = (baseName || '').toLowerCase();
-    if (lower.includes('java')) return createDefaultNotebookJson('java');
-    if (lower.includes('cpp') || lower.includes('c++')) return createDefaultNotebookJson('cpp');
-    if (lower.includes('js') || lower.includes('javascript')) return createDefaultNotebookJson('javascript');
-    return createDefaultNotebookJson('python');
+    if (lower.includes('java')) return createDefaultNotebookJson('java', baseName);
+    if (lower.includes('cpp') || lower.includes('c++')) return createDefaultNotebookJson('cpp', baseName);
+    if (lower.includes('js') || lower.includes('javascript')) return createDefaultNotebookJson('javascript', baseName);
+    return createDefaultNotebookJson('python', baseName);
   }
-  if (['py', 'r', 'rb', 'pl', 'sh', 'bash', 'zsh', 'yml', 'yaml'].includes(ext)) {
-    return `# Start here\n`;
-  }
-  if (ext === 'sql') {
-    return `-- Start here\n`;
-  }
-  if (ext === 'html' || ext === 'htm') {
-    return `<!-- Start here -->\n`;
-  }
-  if (ext === 'css' || ext === 'scss' || ext === 'less') {
-    return `/* Start here */\n`;
-  }
-  if (ext === 'md') {
-    return `# Start here\n`;
-  }
-  // Java, C, C++, C#, JS, TS, Go, Rust, Kotlin, Swift, Scala, PHP, etc.
+  if (ext === 'sql') return `-- Start here\n`;
+  if (ext === 'html' || ext === 'htm') return `<!-- Start here -->\n`;
+  if (ext === 'css' || ext === 'scss' || ext === 'less') return `/* Start here */\n`;
+  if (ext === 'md') return `# Start here\n`;
   return `// Start here\n`;
 }
 

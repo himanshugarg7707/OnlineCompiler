@@ -143,7 +143,14 @@ export function syncJavaClassWithFilename(javaCode, filename) {
   if (ext.toLowerCase() !== 'java') return javaCode;
 
   const className = getJavaClassNameFromStem(stem);
-  // Replace public class <OldClass> with public class <className>
+
+  // 1. If code uses void <methodName>(), update it to void <className>()
+  const voidMethodRegex = /((?:^|\n)\s*(?:(?:public|protected|private)\s+)?void\s+)([a-zA-Z0-9_$]+)(\s*\(\s*\))/;
+  if (voidMethodRegex.test(javaCode)) {
+    return javaCode.replace(voidMethodRegex, `$1${className}$3`);
+  }
+
+  // 2. Replace public class <OldClass> with public class <className>
   const classRegex = /public\s+class\s+([a-zA-Z0-9_$]+)/;
   if (classRegex.test(javaCode)) {
     const match = javaCode.match(classRegex);

@@ -212,6 +212,8 @@ export function prepareJavaForExecution(code) {
     const hasAnyStaticMain = /\b(?:public\s+)?static\s+void\s+main\s*\(/.test(topLevelBody);
     const hasInstanceVoidMain = /\bvoid\s+main\s*\(\s*\)/.test(topLevelBody);
     const hasInstanceVoidMainWithArgs = /\bvoid\s+main\s*\(\s*String\s*\[\s*\]\s*args\s*\)/.test(topLevelBody);
+    const instanceMethodMatch = topLevelBody.match(/(?:^|\n)\s*(?:(?:public|protected|private)\s+)?void\s+([A-Za-z0-9_$]+)\s*\(\s*\)/);
+    const instanceMethodWithArgsMatch = topLevelBody.match(/(?:^|\n)\s*(?:(?:public|protected|private)\s+)?void\s+([A-Za-z0-9_$]+)\s*\(\s*String\s*\[\s*\]\s*args\s*\)/);
 
     let wrappedMainClass = '';
     if (hasCanonicalStaticMain) {
@@ -226,6 +228,12 @@ export function prepareJavaForExecution(code) {
       wrappedMainClass = `class Main {\n${topLevelBody}\n\n    public static void main(String[] args) throws Throwable {\n        new Main().main();\n    }\n}`;
     } else if (hasInstanceVoidMainWithArgs) {
       wrappedMainClass = `class Main {\n${topLevelBody}\n\n    public static void main(String[] args) throws Throwable {\n        new Main().main(args);\n    }\n}`;
+    } else if (instanceMethodMatch) {
+      const targetMethod = instanceMethodMatch[1];
+      wrappedMainClass = `class Main {\n${topLevelBody}\n\n    public static void main(String[] args) throws Throwable {\n        new Main().${targetMethod}();\n    }\n}`;
+    } else if (instanceMethodWithArgsMatch) {
+      const targetMethod = instanceMethodWithArgsMatch[1];
+      wrappedMainClass = `class Main {\n${topLevelBody}\n\n    public static void main(String[] args) throws Throwable {\n        new Main().${targetMethod}(args);\n    }\n}`;
     } else if (topLevelBody) {
       // Loose statements (e.g. IO.println("hello"))
       wrappedMainClass = `class Main {\n    public static void main(String[] args) throws Throwable {\n${topLevelBody}\n    }\n}`;
@@ -272,6 +280,8 @@ export function prepareJavaForExecution(code) {
   const hasAnyStaticMain = /\b(?:public\s+)?static\s+void\s+main\s*\(/.test(clean);
   const hasInstanceVoidMain = /\bvoid\s+main\s*\(\s*\)/.test(clean);
   const hasInstanceVoidMainWithArgs = /\bvoid\s+main\s*\(\s*String\s*\[\s*\]\s*args\s*\)/.test(clean);
+  const instanceMethodMatch = clean.match(/(?:^|\n)\s*(?:(?:public|protected|private)\s+)?void\s+([A-Za-z0-9_$]+)\s*\(\s*\)/);
+  const instanceMethodWithArgsMatch = clean.match(/(?:^|\n)\s*(?:(?:public|protected|private)\s+)?void\s+([A-Za-z0-9_$]+)\s*\(\s*String\s*\[\s*\]\s*args\s*\)/);
 
   if (!hasCanonicalStaticMain) {
     if (hasAnyStaticMain) {
@@ -288,6 +298,18 @@ export function prepareJavaForExecution(code) {
       clean = clean.replace(
         /(\bclass\s+Main\b[^{]*\{)/,
         `$1\n    public static void main(String[] args) throws Throwable {\n        new Main().main(args);\n    }`
+      );
+    } else if (instanceMethodMatch) {
+      const targetMethod = instanceMethodMatch[1];
+      clean = clean.replace(
+        /(\bclass\s+Main\b[^{]*\{)/,
+        `$1\n    public static void main(String[] args) throws Throwable {\n        new Main().${targetMethod}();\n    }`
+      );
+    } else if (instanceMethodWithArgsMatch) {
+      const targetMethod = instanceMethodWithArgsMatch[1];
+      clean = clean.replace(
+        /(\bclass\s+Main\b[^{]*\{)/,
+        `$1\n    public static void main(String[] args) throws Throwable {\n        new Main().${targetMethod}(args);\n    }`
       );
     }
   }
