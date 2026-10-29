@@ -906,6 +906,26 @@ export default function OutputPanel({
 
         {/* Terminal Options / Status Area */}
         <div className="terminal-options-area">
+          {/* Active File Name with Status Dot */}
+          <div className="terminal-navbar-filename" title={`Active file: ${activeFile?.name || 'File'}`}>
+            <span
+              className={`in-use-dot ${isSplitTerminal ? 'split-terminal-dot' : ''}`}
+              title={isSplitTerminal ? 'Terminal 2 Active' : 'Terminal Active'}
+            />
+            <strong className="unified-filename">{activeFile?.name || 'File'}</strong>
+          </div>
+
+          {/* Quick Run Action in Terminal Navbar */}
+          <button
+            className="btn-unified-action btn-run"
+            onClick={runCodeFn}
+            disabled={isRunning}
+            title={`Run ${activeFile?.name || 'Code'}`}
+            data-tooltip="Run Code"
+            aria-label="Run Code"
+          >
+            <Play size={11} fill="currentColor" />
+          </button>
 
           {/* Status indicator & Controls */}
           <div className="execution-status">
@@ -977,30 +997,6 @@ export default function OutputPanel({
         {/* Output Tab */}
         {activeTab === 'output' && (
           <div className="output-view">
-            {/* Clean Unified Terminal & Compiler Toolbar */}
-            <div className="terminal-unified-toolbar">
-              <div className="unified-toolbar-left">
-                <span
-                  className={`in-use-dot ${isSplitTerminal ? 'split-terminal-dot' : ''}`}
-                  title={isSplitTerminal ? 'Terminal 2 Active' : 'Terminal Active'}
-                />
-                <strong className="unified-filename">{activeFile?.name || 'File'}</strong>
-              </div>
-
-              <div className="unified-toolbar-right">
-                <button
-                  className="btn-unified-action btn-run"
-                  onClick={runCodeFn}
-                  disabled={isRunning}
-                  title={`Run ${activeFile?.name || 'Code'}`}
-                  data-tooltip="Run Code"
-                  aria-label="Run Code"
-                >
-                  <Play size={11} fill="currentColor" />
-                </button>
-              </div>
-            </div>
-
             {isRunning ? (
               <div className="output-placeholder running">
                 <div className="loading-animation">
