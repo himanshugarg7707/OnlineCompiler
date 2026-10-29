@@ -11,6 +11,7 @@ import {
   Play,
   Columns2,
   ChevronDown,
+  ChevronUp,
   Sparkles,
   Maximize2,
 } from 'lucide-react';
@@ -39,6 +40,7 @@ export default function SplitPaneContainer() {
     handleSplitCodeChange,
     handleRunSplitCode,
     handleRunCode,
+    handleSelectFile,
   } = useApp();
 
   const containerRef = useRef(null);
@@ -49,8 +51,13 @@ export default function SplitPaneContainer() {
   const [isDraggingLeftV, setIsDraggingLeftV] = useState(false);
   const [isDraggingRightV, setIsDraggingRightV] = useState(false);
 
-  const [leftVPercent, setLeftVPercent] = useState(60);
-  const [rightVPercent, setRightVPercent] = useState(60);
+  const [leftVPercent, setLeftVPercent] = useState(55);
+  const [rightVPercent, setRightVPercent] = useState(55);
+
+  const [leftTerminalMaximized, setLeftTerminalMaximized] = useState(false);
+  const [rightTerminalMaximized, setRightTerminalMaximized] = useState(false);
+  const [leftTerminalHidden, setLeftTerminalHidden] = useState(false);
+  const [rightTerminalHidden, setRightTerminalHidden] = useState(false);
 
   const splitRatio = state.splitRatio ?? 50;
   const [localSplitRatio, setLocalSplitRatio] = useState(splitRatio);
@@ -207,7 +214,7 @@ export default function SplitPaneContainer() {
     }
     if (rafLeftVRef.current) {
       cancelAnimationFrame(rafLeftVRef.current);
-      leftVRafRef.current = null;
+      rafLeftVRef.current = null;
     }
     setIsDraggingLeftV(false);
     document.body.classList.remove('resizing-split-v');
@@ -295,6 +302,29 @@ export default function SplitPaneContainer() {
   }, [isDraggingRightV, handleRightVPointerMove, handleRightVPointerUp]);
 
   const isSplitRunning = state.splitExecution?.executionStatus === 'compiling' || state.splitExecution?.executionStatus === 'running';
+  const isLeftRunning = state.executionStatus === 'compiling' || state.executionStatus === 'running';
+
+  const leftEditorHeight = leftTerminalMaximized
+    ? 0
+    : leftTerminalHidden
+    ? 100
+    : leftVPercent;
+  const leftTermHeight = leftTerminalMaximized
+    ? 100
+    : leftTerminalHidden
+    ? 0
+    : 100 - leftVPercent;
+
+  const rightEditorHeight = rightTerminalMaximized
+    ? 0
+    : rightTerminalHidden
+    ? 100
+    : rightVPercent;
+  const rightTermHeight = rightTerminalMaximized
+    ? 100
+    : rightTerminalHidden
+    ? 0
+    : 100 - rightVPercent;
 
   return (
     <div
@@ -309,30 +339,102 @@ export default function SplitPaneContainer() {
         className="split-pane split-left-pane"
         style={{ width: `${localSplitRatio}%` }}
       >
-        {isFullScreen ? (
-          <div className="split-pane-col">
-            <div className="split-pane-top" style={{ height: `${leftVPercent}%` }}>
-              <CodeEditor />
+        <div className="split-pane-col">
+          {/* Left Pane Navigation Header */}
+          <div className="split-pane-header split-left-header">
+            <div className="split-header-left">
+              <div className="split-file-selector-wrap">
+                <LanguageIcon language={leftFile?.language} filename={leftFile?.name} size={14} />
+                <select
+                  className="split-file-dropdown"
+                  value={leftFile?.id || ''}
+                  onChange={(e) => handleSelectFile && handleSelectFile(e.target.value)}
+                  title="Select file to view and edit in left pane"
+                >
+                  {state.files.map((f) => (
+                    <option key={f.id} value={f.id}>
+                      {f.name} {f.id === splitFile?.id ? '(Right Pane)' : ''}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown size={12} className="split-dropdown-chevron" />
+              </div>
+              <span className="split-pane-tag">Pane 1</span>
             </div>
 
+            <div className="split-header-right">
+              <button
+                type="button"
+                className={`btn-split-run ${isLeftRunning ? 'running' : ''}`}
+                onClick={handleRunCode}
+                disabled={isLeftRunning}
+                title={`Run ${leftFile?.name} in Terminal 1 (Ctrl+Enter)`}
+              >
+                {isLeftRunning ? (
+                  <div className="spinner-split-run" />
+                ) : (
+                  <Play size={12} fill="currentColor" />
+                )}
+                <span>Run File 1</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Left Pane Editor Body */}
+          <div
+            className="split-pane-top"
+            style={{
+              height: `${leftEditorHeight}%`,
+              display: leftTerminalMaximized ? 'none' : 'block',
+            }}
+          >
+            <CodeEditor />
+          </div>
+
+          {!leftTerminalMaximized && !leftTerminalHidden && (
             <div
               className={`split-pane-v-resizer ${isDraggingLeftV ? 'dragging' : ''}`}
               onPointerDown={handleLeftVPointerDown}
-              title="Drag to resize Editor 1 and Terminal 1"
+              onDoubleClick={() => setLeftVPercent(50)}
+              title="Drag to resize Editor 1 and Terminal 1 • Double click to center 50/50"
             >
               <div className="v-resizer-line" />
             </div>
+          )}
 
-            <div className="split-pane-bottom" style={{ height: `${100 - leftVPercent}%` }}>
+          {/* Left Pane Terminal 1 */}
+          {leftTerminalHidden ? (
+            <div className="split-collapsed-terminal-bar">
+              <button
+                type="button"
+                className="btn-split-restore-term"
+                onClick={() => setLeftTerminalHidden(false)}
+                title="Restore Terminal 1"
+              >
+                <ChevronUp size={12} />
+                <span>Show Terminal 1</span>
+              </button>
+            </div>
+          ) : (
+            <div
+              className="split-pane-bottom"
+              style={{
+                height: `${leftTermHeight}%`,
+                flex: leftTerminalMaximized ? '1 1 100%' : 'none',
+              }}
+            >
               <OutputPanel
                 isSplitTerminal={false}
+                overrideFile={leftFile}
+                onRun={handleRunCode}
                 terminalTitle="Terminal 1:"
+                isMaximized={leftTerminalMaximized}
+                onToggleMaximize={() => setLeftTerminalMaximized((v) => !v)}
+                onToggleHide={() => setLeftTerminalHidden(true)}
               />
             </div>
-          </div>
-        ) : (
-          <CodeEditor />
-        )}
+          )}
+        </div>
       </div>
 
       {/* ── VERTICAL RESIZER (Between Left & Right) ── */}
@@ -393,10 +495,10 @@ export default function SplitPaneContainer() {
         {state.splitPaneType === 'pdf' ? (
           <SplitPdfViewer />
         ) : (
-          <div className="split-right-code-view">
+          <div className="split-pane-col">
             {/* Right Pane Navigation Header */}
-            <div className="split-right-header">
-              <div className="split-right-header-left">
+            <div className="split-pane-header split-right-header">
+              <div className="split-header-left">
                 {/* File Dropdown Selector */}
                 <div className="split-file-selector-wrap">
                   <LanguageIcon language={splitFile?.language} filename={splitFile?.name} size={14} />
@@ -414,6 +516,7 @@ export default function SplitPaneContainer() {
                   </select>
                   <ChevronDown size={12} className="split-dropdown-chevron" />
                 </div>
+                <span className="split-pane-tag">Pane 2</span>
 
                 {/* PDF Switcher Button */}
                 <button
@@ -427,7 +530,7 @@ export default function SplitPaneContainer() {
                 </button>
               </div>
 
-              <div className="split-right-header-right">
+              <div className="split-header-right">
                 <button
                   type="button"
                   className={`btn-split-run ${isSplitRunning ? 'running' : ''}`}
@@ -454,80 +557,83 @@ export default function SplitPaneContainer() {
               </div>
             </div>
 
-            {/* Right Pane Editor Body (With optional Terminal 2 in Full Screen) */}
-            <div className="split-right-body">
-              {isFullScreen ? (
-                <div className="split-pane-col">
-                  <div className="split-pane-top" style={{ height: `${rightVPercent}%` }}>
-                    <Editor
-                      height="100%"
-                      language={splitLang?.monacoLanguage || 'plaintext'}
-                      value={splitFile?.content || ''}
-                      theme={activeMonacoTheme}
-                      options={{
-                        fontSize: state.config?.fontSize || 15,
-                        tabSize: state.config?.tabSize || 2,
-                        wordWrap: state.config?.wordWrap ? 'on' : 'off',
-                        minimap: { enabled: state.config?.minimap ?? false },
-                        lineNumbers: state.config?.lineNumbers ? 'on' : 'off',
-                        scrollBeyondLastLine: false,
-                        automaticLayout: true,
-                        fontFamily: "'JetBrains Mono', 'Fira Code', Menlo, monospace",
-                        fontLigatures: true,
-                        padding: { top: 10, bottom: 10 },
-                      }}
-                      onChange={(val) => {
-                        if (splitFile) {
-                          handleSplitCodeChange(splitFile.id, val || '');
-                        }
-                      }}
-                    />
-                  </div>
-
-                  <div
-                    className={`split-pane-v-resizer ${isDraggingRightV ? 'dragging' : ''}`}
-                    onMouseDown={handleRightVMouseDown}
-                    title="Drag to resize Editor 2 and Terminal 2"
-                  >
-                    <div className="v-resizer-line" />
-                  </div>
-
-                  <div className="split-pane-bottom" style={{ height: `${100 - rightVPercent}%` }}>
-                    <OutputPanel
-                      isSplitTerminal={true}
-                      overrideFile={splitFile}
-                      overrideState={state.splitExecution}
-                      onRun={handleRunSplitCode}
-                      terminalTitle="Terminal 2:"
-                    />
-                  </div>
-                </div>
-              ) : (
-                <Editor
-                  height="100%"
-                  language={splitLang?.monacoLanguage || 'plaintext'}
-                  value={splitFile?.content || ''}
-                  theme={activeMonacoTheme}
-                  options={{
-                    fontSize: state.config?.fontSize || 15,
-                    tabSize: state.config?.tabSize || 2,
-                    wordWrap: state.config?.wordWrap ? 'on' : 'off',
-                    minimap: { enabled: state.config?.minimap ?? false },
-                    lineNumbers: state.config?.lineNumbers ? 'on' : 'off',
-                    scrollBeyondLastLine: false,
-                    automaticLayout: true,
-                    fontFamily: "'JetBrains Mono', 'Fira Code', Menlo, monospace",
-                    fontLigatures: true,
-                    padding: { top: 10, bottom: 10 },
-                  }}
-                  onChange={(val) => {
-                    if (splitFile) {
-                      handleSplitCodeChange(splitFile.id, val || '');
-                    }
-                  }}
-                />
-              )}
+            {/* Right Pane Editor Body */}
+            <div
+              className="split-pane-top"
+              style={{
+                height: `${rightEditorHeight}%`,
+                display: rightTerminalMaximized ? 'none' : 'block',
+              }}
+            >
+              <Editor
+                height="100%"
+                language={splitLang?.monacoLanguage || 'plaintext'}
+                value={splitFile?.content || ''}
+                theme={activeMonacoTheme}
+                options={{
+                  fontSize: state.config?.fontSize || 15,
+                  tabSize: state.config?.tabSize || 2,
+                  wordWrap: state.config?.wordWrap ? 'on' : 'off',
+                  minimap: { enabled: state.config?.minimap ?? false },
+                  lineNumbers: state.config?.lineNumbers ? 'on' : 'off',
+                  scrollBeyondLastLine: false,
+                  automaticLayout: true,
+                  fontFamily: "'JetBrains Mono', 'Fira Code', Menlo, monospace",
+                  fontLigatures: true,
+                  padding: { top: 10, bottom: 10 },
+                }}
+                onChange={(val) => {
+                  if (splitFile) {
+                    handleSplitCodeChange(splitFile.id, val || '');
+                  }
+                }}
+              />
             </div>
+
+            {!rightTerminalMaximized && !rightTerminalHidden && (
+              <div
+                className={`split-pane-v-resizer ${isDraggingRightV ? 'dragging' : ''}`}
+                onPointerDown={handleRightVPointerDown}
+                onDoubleClick={() => setRightVPercent(50)}
+                title="Drag to resize Editor 2 and Terminal 2 • Double click to center 50/50"
+              >
+                <div className="v-resizer-line" />
+              </div>
+            )}
+
+            {/* Right Pane Terminal 2 */}
+            {rightTerminalHidden ? (
+              <div className="split-collapsed-terminal-bar">
+                <button
+                  type="button"
+                  className="btn-split-restore-term"
+                  onClick={() => setRightTerminalHidden(false)}
+                  title="Restore Terminal 2"
+                >
+                  <ChevronUp size={12} />
+                  <span>Show Terminal 2</span>
+                </button>
+              </div>
+            ) : (
+              <div
+                className="split-pane-bottom"
+                style={{
+                  height: `${rightTermHeight}%`,
+                  flex: rightTerminalMaximized ? '1 1 100%' : 'none',
+                }}
+              >
+                <OutputPanel
+                  isSplitTerminal={true}
+                  overrideFile={splitFile}
+                  overrideState={state.splitExecution}
+                  onRun={handleRunSplitCode}
+                  terminalTitle="Terminal 2:"
+                  isMaximized={rightTerminalMaximized}
+                  onToggleMaximize={() => setRightTerminalMaximized((v) => !v)}
+                  onToggleHide={() => setRightTerminalHidden(true)}
+                />
+              </div>
+            )}
           </div>
         )}
       </div>

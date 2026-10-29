@@ -18,6 +18,8 @@ import {
   Activity,
   AlertCircle,
   FlaskConical,
+  Maximize2,
+  Minimize2,
 } from 'lucide-react';
 import DatabasePanel from './DatabasePanel';
 import WebPreviewPanel from './WebPreviewPanel';
@@ -779,6 +781,9 @@ export default function OutputPanel({
   overrideState = null,
   onRun = null,
   terminalTitle = '',
+  isMaximized: propIsMaximized,
+  onToggleMaximize = null,
+  onToggleHide = null,
 } = {}) {
   const {
     state,
@@ -790,6 +795,10 @@ export default function OutputPanel({
     handleSelectFile,
     handleRunCode,
   } = useApp();
+
+  const isMaximized = propIsMaximized !== undefined ? propIsMaximized : Boolean(state.terminalMaximized);
+  const handleToggleMaximize = onToggleMaximize || (() => dispatch({ type: 'TOGGLE_TERMINAL_MAXIMIZED' }));
+  const handleHide = onToggleHide || handleToggleTerminal;
 
   const activeTab = state.activeTerminalTab || 'output';
   const setActiveTab = (tabId) => dispatch({ type: 'SET_TERMINAL_TAB', payload: tabId });
@@ -855,7 +864,7 @@ export default function OutputPanel({
   }, [detectedLanguage, activeTab]);
 
   return (
-    <div className="output-panel">
+    <div className={`output-panel ${isMaximized ? 'is-maximized' : ''} ${isSplitTerminal ? 'is-split-terminal' : ''}`}>
       {/* Tab Bar */}
       <div className="output-tabs">
         <div className="tab-list">
@@ -921,10 +930,20 @@ export default function OutputPanel({
               </div>
             )}
 
+            {/* Maximize / Restore Terminal Button */}
+            <button
+              className={`btn-maximize-terminal ${isMaximized ? 'active' : ''}`}
+              onClick={handleToggleMaximize}
+              title={isMaximized ? 'Restore Terminal Size' : 'Maximize Terminal Full Screen (Ctrl+Shift+`)'}
+            >
+              {isMaximized ? <Minimize2 size={12} /> : <Maximize2 size={12} />}
+              <span className="btn-maximize-text">{isMaximized ? 'Restore' : 'Maximize'}</span>
+            </button>
+
             {/* Hide / Collapse Terminal Button */}
             <button
               className="btn-hide-terminal"
-              onClick={handleToggleTerminal}
+              onClick={handleHide}
               title="Collapse / Hide Terminal (Ctrl+`)"
             >
               <ChevronDown size={13} />
@@ -959,35 +978,45 @@ export default function OutputPanel({
         {/* Output Tab */}
         {activeTab === 'output' && (
           <div className="output-view">
-            {/* Terminal in use indicator banner */}
-            <div className="terminal-in-use-banner">
-              <div className="in-use-left">
+            {/* Clean Unified Terminal & Compiler Toolbar */}
+            <div className="terminal-unified-toolbar">
+              <div className="unified-toolbar-left">
                 <span className={`in-use-dot ${isSplitTerminal ? 'split-terminal-dot' : ''}`} />
-                <span className="in-use-text">
-                  {terminalTitle || (isSplitTerminal ? 'Terminal 2 in use with:' : 'Terminal in use with:')} <strong>{activeFile?.name || 'File'}</strong>
+                <span className="unified-title">
+                  {terminalTitle || (isSplitTerminal ? 'Terminal 2:' : 'Terminal:')}
                 </span>
-                <span className="in-use-lang">({getFriendlyLanguageName(activeFile?.language, activeFile?.name)})</span>
+                <strong className="unified-filename">{activeFile?.name || 'File'}</strong>
+                <span className="unified-lang">({getFriendlyLanguageName(activeFile?.language, activeFile?.name)})</span>
+                <span className="unified-sep">•</span>
+                <div className="unified-cmd" title={`Compiler Command: ${activeCompilerCommand}`}>
+                  <span className="cmd-prompt-sym">$</span>
+                  <span className="cmd-prompt-text">{activeCompilerCommand}</span>
+                  {activeCompilerInfo?.compilerName && (
+                    <span className="cmd-compiler-tag">{activeCompilerInfo.compilerName}</span>
+                  )}
+                </div>
               </div>
-              <div className="in-use-right">
+
+              <div className="unified-toolbar-right">
                 <button
-                  className="btn-in-use-action"
+                  className="btn-unified-action btn-run"
                   onClick={runCodeFn}
                   disabled={isRunning}
                   title={`Run ${activeFile?.name}`}
                 >
-                  <Play size={12} fill="currentColor" />
-                  <span>Run File</span>
+                  <Play size={11} fill="currentColor" />
+                  <span>Run</span>
                 </button>
                 <button
-                  className="btn-in-use-action"
+                  className="btn-unified-action"
                   onClick={() => handleTriggerExplanation('code')}
                   title="Explain this file with AI"
                 >
-                  <BrainCircuit size={12} />
-                  <span>Explain with AI</span>
+                  <BrainCircuit size={11} />
+                  <span>AI Explain</span>
                 </button>
                 <button
-                  className="btn-in-use-action"
+                  className="btn-unified-action"
                   onClick={() => {
                     if (window.webkit?.messageHandlers?.nativeHost) {
                       window.webkit.messageHandlers.nativeHost.postMessage({ type: 'open_website' });
@@ -997,20 +1026,9 @@ export default function OutputPanel({
                   }}
                   title="Open Website Version in Safari / Chrome"
                 >
-                  <Globe size={12} />
+                  <Globe size={11} />
                   <span>Website</span>
                 </button>
-              </div>
-            </div>
-
-            {/* Terminal Compiler Invocation Prompt Banner */}
-            <div className="terminal-cmd-banner" title={`Exact Invocation: ${activeCompilerCommand}`}>
-              <div className="terminal-cmd-left">
-                <span className="cmd-prompt-sym">$</span>
-                <span className="cmd-prompt-text">{activeCompilerCommand}</span>
-              </div>
-              <div className="terminal-cmd-right">
-                <span className="cmd-compiler-tag">{activeCompilerInfo.compilerName}</span>
               </div>
             </div>
 

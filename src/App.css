@@ -612,13 +612,57 @@ body.resizing-vertical * {
   transform: translateY(-1px);
 }
 
-.zen-btn-exit kbd {
+.output-section {
+  min-height: 140px;
+}
+
+.output-section.output-maximized {
+  height: 100% !important;
+  max-height: 100% !important;
+  flex: 1 1 100% !important;
+}
+
+.app-container.focus-mode-active .output-section.output-maximized {
+  height: 100vh !important;
+  max-height: 100vh !important;
+}
+
+.zen-btn-terminal {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: var(--radius-full, 9999px);
+  background: rgba(15, 23, 42, 0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: var(--text-secondary, #94a3b8);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  opacity: 0.5;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+}
+
+.zen-btn-terminal:hover,
+.zen-btn-terminal.active {
+  opacity: 1;
+  background: rgba(0, 212, 255, 0.22);
+  color: #38bdf8;
+  border-color: rgba(0, 212, 255, 0.5);
+  box-shadow: 0 4px 20px rgba(0, 212, 255, 0.25);
+  transform: translateY(-1px);
+}
+
+.zen-btn-terminal kbd {
   font-size: 9px;
   font-family: inherit;
-  background: rgba(0, 0, 0, 0.35);
   padding: 1px 4px;
-  border-radius: 4px;
-  color: rgba(255, 255, 255, 0.85);
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.12);
+  color: inherit;
   margin-left: 2px;
 }
 

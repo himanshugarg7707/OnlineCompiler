@@ -9,6 +9,11 @@
   overflow: hidden;
 }
 
+.output-panel.is-maximized {
+  height: 100% !important;
+  border-top: none;
+}
+
 /* Tab Bar */
 .output-tabs {
   display: flex;
@@ -92,7 +97,8 @@
   flex-shrink: 0;
 }
 
-.btn-hide-terminal {
+.btn-hide-terminal,
+.btn-maximize-terminal {
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -109,10 +115,17 @@
   flex-shrink: 0;
 }
 
-.btn-hide-terminal:hover {
+.btn-hide-terminal:hover,
+.btn-maximize-terminal:hover {
   background: var(--bg-secondary);
   border-color: var(--accent-cyan);
   color: var(--text-primary);
+}
+
+.btn-maximize-terminal.active {
+  background: rgba(0, 212, 255, 0.14);
+  border-color: var(--accent-cyan);
+  color: var(--accent-cyan);
 }
 
 .status-running,
@@ -606,6 +619,111 @@
   font-size: 12px;
 }
 
+/* ─── Ultra-Clean Unified Terminal & Compiler Toolbar ────────────────── */
+.terminal-unified-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 10px;
+  background: rgba(0, 0, 0, 0.28);
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+  border-radius: var(--radius-sm, 6px);
+  margin-bottom: 8px;
+  min-height: 28px;
+  gap: 8px;
+  flex-shrink: 0;
+  user-select: none;
+}
+
+.unified-toolbar-left {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.unified-title {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.unified-filename {
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  white-space: nowrap;
+}
+
+.unified-lang {
+  color: var(--text-muted);
+  font-size: 10.5px;
+  white-space: nowrap;
+}
+
+.unified-sep {
+  color: rgba(255, 255, 255, 0.2);
+  font-size: 10px;
+}
+
+.unified-cmd {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  background: rgba(255, 255, 255, 0.04);
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
+.unified-toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
+}
+
+.btn-unified-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 7px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border-primary, rgba(255, 255, 255, 0.1));
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition-fast, 0.15s ease);
+}
+
+.btn-unified-action:hover {
+  background: rgba(0, 212, 255, 0.1);
+  border-color: var(--accent-cyan);
+  color: var(--accent-cyan);
+}
+
+.btn-unified-action.btn-run {
+  background: rgba(16, 185, 129, 0.15);
+  border-color: rgba(16, 185, 129, 0.4);
+  color: #34d399;
+  font-weight: 600;
+}
+
+.btn-unified-action.btn-run:hover:not(:disabled) {
+  background: rgba(16, 185, 129, 0.28);
+  color: #ffffff;
+  border-color: #34d399;
+}
+
 .terminal-in-use-banner {
   display: flex;
   align-items: center;
@@ -737,15 +855,32 @@
   .binding-file-dropdown {
     max-width: 105px;
   }
-  .btn-hide-terminal .btn-hide-text {
+  .btn-hide-terminal .btn-hide-text,
+  .btn-maximize-terminal .btn-maximize-text {
     display: none;
   }
-  .btn-hide-terminal {
+  .btn-hide-terminal,
+  .btn-maximize-terminal {
     padding: 3px 6px;
+  }
+  .unified-cmd {
+    max-width: 150px;
   }
 }
 
 @container output-panel (max-width: 520px) {
+  .unified-cmd {
+    display: none;
+  }
+  .unified-sep {
+    display: none;
+  }
+  .btn-unified-action span {
+    display: none;
+  }
+  .btn-unified-action {
+    padding: 2px 5px;
+  }
   .terminal-options-area {
     gap: 4px;
     margin-left: 4px;

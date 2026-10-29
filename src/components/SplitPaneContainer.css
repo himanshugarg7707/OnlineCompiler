@@ -195,6 +195,87 @@ body.resizing-split-v canvas {
   background: #ffffff;
 }
 
+/* ─── Split Pane Headers (Symmetric Left & Right) ────────────────────────── */
+.split-pane-col .file-tabs-bar {
+  display: none !important;
+}
+
+.split-pane-header {
+  height: 38px;
+  min-height: 38px;
+  background: var(--bg-secondary, #111827);
+  border-bottom: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 10px;
+  gap: 8px;
+  user-select: none;
+  flex-shrink: 0;
+  min-width: 0;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+.split-header-left,
+.split-right-header-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+}
+
+.split-header-right,
+.split-right-header-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.split-pane-tag {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-muted, #9ca3af);
+  white-space: nowrap;
+}
+
+.split-collapsed-terminal-bar {
+  height: 28px;
+  background: var(--bg-secondary, #111827);
+  border-top: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 0 8px;
+  flex-shrink: 0;
+}
+
+.btn-split-restore-term {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: var(--bg-tertiary, #1f2937);
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.1));
+  color: var(--text-secondary, #d1d5db);
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-split-restore-term:hover {
+  background: var(--bg-elevated, #374151);
+  color: var(--accent-cyan, #00d4ff);
+}
+
 /* Right Pane Header */
 .split-right-code-view {
   display: flex;

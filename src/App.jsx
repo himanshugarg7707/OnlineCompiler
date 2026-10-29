@@ -29,7 +29,7 @@ import PracticePage from './pages/PracticePage';
 import GitPage from './pages/GitPage';
 import SplitPaneContainer from './components/SplitPaneContainer';
 import { getLanguageFromFilename } from './services/languageDetector';
-import { FolderTree, ChevronLeft, ChevronRight, Maximize2, Minimize2, Play, Columns2 } from 'lucide-react';
+import { FolderTree, ChevronLeft, ChevronRight, Maximize2, Minimize2, Play, Columns2, TerminalSquare } from 'lucide-react';
 import './App.css';
 
 const SPLIT_STORAGE_KEY = 'fullcode_split_percent';
@@ -80,13 +80,13 @@ function AppContent() {
       const saved = localStorage.getItem(SPLIT_STORAGE_KEY);
       if (saved) {
         const val = parseFloat(saved);
-        if (!isNaN(val) && val >= 20 && val <= 85) return val;
+        if (!isNaN(val) && val >= 20 && val <= 75) return val;
       }
     } catch {}
-    return 58;
+    return 56;
   });
 
-  const effectiveSplitPercent = (!isNotebookActive && splitPercent >= 92) ? 62 : splitPercent;
+  const effectiveSplitPercent = (!isNotebookActive && splitPercent >= 75) ? 56 : splitPercent;
 
   // Horizontal Left Explorer Split (width in px)
   const [explorerWidth, setExplorerWidth] = useState(() => {
@@ -147,8 +147,13 @@ function AppContent() {
         e.preventDefault();
         dispatch({ type: 'TOGGLE_EXPLORER' });
       }
+      // Ctrl+Shift+` to toggle Terminal Maximized
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === '`' || e.key === '~')) {
+        e.preventDefault();
+        dispatch({ type: 'TOGGLE_TERMINAL_MAXIMIZED' });
+      }
       // Ctrl+` to toggle Terminal
-      if ((e.ctrlKey || e.metaKey) && e.key === '`') {
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key === '`') {
         e.preventDefault();
         handleToggleTerminal();
       }
@@ -182,9 +187,15 @@ function AppContent() {
         // Allow native browser reset zoom to work naturally
         window.webkit?.messageHandlers?.nativeHost?.postMessage({ type: 'zoom_reset' });
       }
-      // Escape to exit Full Page Code Mode
-      if (e.key === 'Escape' && state.focusMode) {
-        dispatch({ type: 'SET_FOCUS_MODE', payload: false });
+      // Escape to exit Full Screen Terminal or Full Page Code Mode
+      if (e.key === 'Escape') {
+        if (state.terminalMaximized) {
+          dispatch({ type: 'SET_TERMINAL_MAXIMIZED', payload: false });
+          return;
+        }
+        if (state.focusMode) {
+          dispatch({ type: 'SET_FOCUS_MODE', payload: false });
+        }
       }
     };
 
@@ -414,8 +425,8 @@ function AppContent() {
       const totalHeight = rect.height;
       const percent = (offsetTop / totalHeight) * 100;
 
-      // Clamp between 20% and 85%
-      const clamped = Math.min(Math.max(percent, 20), 85);
+      // Clamp between 20% and 75% so terminal always has room
+      const clamped = Math.min(Math.max(percent, 20), 75);
       setSplitPercent(clamped);
     };
 
@@ -593,6 +604,17 @@ function AppContent() {
             <span>{state.splitViewOpen ? 'Single View' : 'Split View (2 Terminals)'}</span>
             <kbd>Alt+\</kbd>
           </button>
+
+          <button
+            type="button"
+            className={`zen-btn-terminal ${state.terminalMaximized ? 'active' : ''}`}
+            onClick={() => dispatch({ type: 'TOGGLE_TERMINAL_MAXIMIZED' })}
+            title="Toggle Terminal Full Screen (Ctrl+Shift+`)"
+          >
+            <TerminalSquare size={11} />
+            <span>{state.terminalMaximized ? 'Code & Terminal' : 'Full Screen Terminal'}</span>
+            <kbd>Ctrl+Shift+`</kbd>
+          </button>
         </div>
       )}
 
@@ -656,7 +678,7 @@ function AppContent() {
 
         {/* Main Editor & Output Split Panel */}
         <div className="main-content" ref={mainContentRef}>
-          {state.focusMode && state.splitViewOpen ? (
+          {state.splitViewOpen ? (
             <div className="editor-section" style={{ height: '100%', flex: '1 1 auto' }}>
               <SplitPaneContainer />
             </div>
@@ -665,27 +687,39 @@ function AppContent() {
               <div
                 className="editor-section"
                 style={{
-                  height: effectiveTerminalHidden ? '100%' : `${effectiveSplitPercent}%`,
+                  height: state.terminalMaximized
+                    ? '0%'
+                    : effectiveTerminalHidden
+                    ? '100%'
+                    : `${effectiveSplitPercent}%`,
+                  display: state.terminalMaximized ? 'none' : 'block',
                   flex: 'none',
                 }}
               >
-                {state.splitViewOpen ? <SplitPaneContainer /> : <CodeEditor />}
+                <CodeEditor />
               </div>
 
               {!effectiveTerminalHidden && (
                 <>
-                  <div
-                    className={`split-resizer ${isVerticalDragging ? 'dragging' : ''}`}
-                    onMouseDown={handleVerticalMouseDown}
-                    onTouchStart={handleVerticalTouchStart}
-                    title="Drag to resize editor and terminal"
-                  >
-                    <div className="resizer-handle" />
-                  </div>
+                  {!state.terminalMaximized && (
+                    <div
+                      className={`split-resizer ${isVerticalDragging ? 'dragging' : ''}`}
+                      onMouseDown={handleVerticalMouseDown}
+                      onTouchStart={handleVerticalTouchStart}
+                      title="Drag to resize editor and terminal"
+                    >
+                      <div className="resizer-handle" />
+                    </div>
+                  )}
 
                   <div
-                    className="output-section"
-                    style={{ height: `${100 - effectiveSplitPercent}%`, flex: 'none' }}
+                    className={`output-section ${state.terminalMaximized ? 'output-maximized' : ''}`}
+                    style={{
+                      height: state.terminalMaximized
+                        ? '100%'
+                        : `${100 - effectiveSplitPercent}%`,
+                      flex: state.terminalMaximized ? '1 1 100%' : 'none',
+                    }}
                   >
                     <OutputPanel />
                   </div>
