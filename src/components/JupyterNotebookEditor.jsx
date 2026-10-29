@@ -51,7 +51,7 @@ import {
   Layers,
   ArrowRight,
 } from 'lucide-react';
-import { JupyterIcon } from './LanguageIcon';
+import { JupyterIcon, JavaNotebookIcon } from './LanguageIcon';
 import InteractiveDataTable from './InteractiveDataTable';
 import { executePythonInBrowser, restartPythonRuntime } from '../services/pythonRunner';
 import { executeCode } from '../services/judge0Service';
@@ -1448,7 +1448,7 @@ export default function JupyterNotebookEditor({ file, onContentChange }) {
         <div className="jupyter-header-toolbar jupyter-toolbar-minimized">
           <div className="jupyter-toolbar-min-left">
             <span className="min-kernel-pill">
-              {notebookLanguage === 'java' ? '☕' : notebookLanguage === 'cpp' ? '⚡' : notebookLanguage === 'javascript' ? '🟨' : '🪐'} {kernelConfig.name}
+              {notebookLanguage === 'java' ? <JavaNotebookIcon size={13} style={{ marginRight: 4 }} /> : notebookLanguage === 'cpp' ? '⚡' : notebookLanguage === 'javascript' ? '🟨' : '🪐'} {kernelConfig.name}
             </span>
             <span className="min-cells-badge">{notebook.cells.length} cells</span>
           </div>
@@ -1519,7 +1519,7 @@ export default function JupyterNotebookEditor({ file, onContentChange }) {
               >
                 <span className="kernel-compact-icon">
                   {notebookLanguage === 'java' ? (
-                    '☕'
+                    <JavaNotebookIcon size={14} />
                   ) : notebookLanguage === 'cpp' ? (
                     '⚡'
                   ) : notebookLanguage === 'javascript' ? (
@@ -1542,7 +1542,9 @@ export default function JupyterNotebookEditor({ file, onContentChange }) {
                       className={`kernel-option-item ${notebookLanguage === cfg.id ? 'selected' : ''}`}
                       onClick={() => handleSwitchKernel(cfg.id)}
                     >
-                      <span className="kernel-opt-icon">{cfg.icon}</span>
+                      <span className="kernel-opt-icon">
+                        {cfg.id === 'java' ? <JavaNotebookIcon size={16} /> : cfg.icon}
+                      </span>
                       <div className="kernel-opt-info">
                         <span className="kernel-opt-name">{cfg.name}</span>
                         <span className="kernel-opt-engine">{cfg.engine}</span>

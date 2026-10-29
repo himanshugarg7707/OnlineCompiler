@@ -1,4 +1,5 @@
 import React from 'react';
+import javaNotebookIcon from '../assets/java-notebook-icon.png';
 
 /**
  * High-fidelity, official brand SVG icons for programming languages
@@ -37,6 +38,29 @@ export function JavaIcon({ size = 16, className = '', style = {} }) {
         d="M52.214 126.021c22.476 1.437 57-.8 57.817-11.436 0 0-1.571 4.032-18.577 7.231-19.186 3.612-42.854 3.191-56.887.874 0 .001 2.875 2.381 17.647 3.331z"
       />
     </svg>
+  );
+}
+
+export function JavaNotebookIcon({ size = 16, className = '', style = {} }) {
+  return (
+    <img
+      src={javaNotebookIcon}
+      alt="Java Notebook"
+      width={size}
+      height={size}
+      className={`lang-svg-icon java-notebook-icon ${className}`}
+      style={{
+        width: size,
+        height: size,
+        objectFit: 'contain',
+        display: 'inline-block',
+        verticalAlign: 'middle',
+        flexShrink: 0,
+        ...style,
+      }}
+      aria-label="Java Notebook Logo"
+      title="Java Interactive Notebook (.ipynb)"
+    />
   );
 }
 
@@ -510,15 +534,7 @@ export default function LanguageIcon({ language, filename = '', workspaceFiles =
     case 'jupyter':
       return <JupyterIcon size={size} className={className} style={style} />;
     case 'jupyter-java':
-      return (
-        <span
-          className={`jupyter-lang-composite-icon ${className}`}
-          style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: size, height: size, ...style }}
-          title="Java Interactive Notebook (.ipynb)"
-        >
-          <span style={{ fontSize: `${Math.max(12, Math.round(size * 0.95))}px`, lineHeight: 1 }}>☕</span>
-        </span>
-      );
+      return <JavaNotebookIcon size={size} className={className} style={style} />;
     case 'jupyter-cpp':
       return (
         <span
