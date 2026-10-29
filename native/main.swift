@@ -246,19 +246,20 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigati
 
     // ── Auto-Start Local Services ────────────────────────────────────────────
     private func ensureServicesAndLoad() {
+        // Immediately start loading so the app opens instantly
+        loadAppUrl()
+
         checkServerReachable { [weak self] isRunning in
             guard let self = self else { return }
-            if isRunning {
-                DispatchQueue.main.async {
+            DispatchQueue.main.async {
+                if isRunning {
                     self.loadAppUrl()
-                }
-            } else {
-                DispatchQueue.main.async {
+                } else {
                     self.loadingLabel?.stringValue = "Launching local dev & native compiler server…"
-                }
-                self.startBackgroundServer {
-                    DispatchQueue.main.async {
-                        self.loadAppUrl()
+                    self.startBackgroundServer {
+                        DispatchQueue.main.async {
+                            self.loadAppUrl()
+                        }
                     }
                 }
             }
@@ -308,13 +309,21 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigati
             print("Failed to auto-spawn npm run dev: \(error)")
         }
 
-        var attempts = 0
-        Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { timer in
-            attempts += 1
-            self.checkServerReachable { isLive in
-                if isLive || attempts >= 40 {
+        DispatchQueue.main.async {
+            var attempts = 0
+            Timer.scheduledTimer(withTimeInterval: 0.4, repeats: true) { [weak self] timer in
+                guard let self = self else {
                     timer.invalidate()
-                    completion()
+                    return
+                }
+                attempts += 1
+                self.checkServerReachable { isLive in
+                    DispatchQueue.main.async {
+                        if isLive || attempts >= 20 {
+                            timer.invalidate()
+                            completion()
+                        }
+                    }
                 }
             }
         }
@@ -323,6 +332,13 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigati
     private func loadAppUrl() {
         if let url = URL(string: appUrlString) {
             webView.load(URLRequest(url: url))
+        } else if let bundledDist = Bundle.main.url(forResource: "index", withExtension: "html", subdirectory: "dist") {
+            webView.loadFileURL(bundledDist, allowingReadAccessTo: bundledDist.deletingLastPathComponent())
+        }
+
+        // Safety failsafe: always dismiss loading overlay within 1.2s max so it never hangs
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { [weak self] in
+            self?.hideLoadingOverlay()
         }
     }
 
@@ -332,8 +348,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigati
     }
 
     func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
-            self?.loadAppUrl()
+        if let bundledDist = Bundle.main.url(forResource: "index", withExtension: "html", subdirectory: "dist") {
+            webView.loadFileURL(bundledDist, allowingReadAccessTo: bundledDist.deletingLastPathComponent())
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
+            self?.hideLoadingOverlay()
         }
     }
 

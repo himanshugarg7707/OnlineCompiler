@@ -26,6 +26,11 @@ mkdir -p "$APP_BUNDLE/Contents/Resources"
 cp "$SCRIPT_DIR/Info.plist" "$APP_BUNDLE/Contents/Info.plist"
 cp "$SCRIPT_DIR/AppIcon.icns" "$APP_BUNDLE/Contents/Resources/AppIcon.icns"
 
+if [ -d "$PROJECT_DIR/dist" ]; then
+  echo "🌐 Bundling production web assets into FullCode.app..."
+  cp -R "$PROJECT_DIR/dist" "$APP_BUNDLE/Contents/Resources/dist"
+fi
+
 # ── 3. Compile Swift Native Application ──────────────────────────
 echo "🔨 Compiling Swift native runtime…"
 SWIFTC_BIN="/Library/Developer/CommandLineTools/usr/bin/swiftc"
