@@ -29,14 +29,14 @@ import { isLocalEnvironment } from '../services/judge0Service';
 import './OutputPanel.css';
 
 const TABS = [
-  { id: 'terminal', label: 'Terminal', icon: TerminalSquare },
-  { id: 'output', label: 'Output', icon: Terminal },
-  { id: 'tests', label: 'Test Suite', icon: FlaskConical },
-  { id: 'problems', label: 'Problems', icon: AlertCircle },
-  { id: 'complexity', label: 'Complexity', icon: Activity },
+  { id: 'output', label: 'Program Output', icon: Terminal },
+  { id: 'input', label: 'Custom Input (stdin)', icon: Keyboard },
+  { id: 'terminal', label: 'Terminal / Shell', icon: TerminalSquare },
+  { id: 'tests', label: 'Test Case Suite', icon: FlaskConical },
+  { id: 'problems', label: 'Problems & Errors', icon: AlertCircle },
+  { id: 'complexity', label: 'Complexity Analyzer', icon: Activity },
   { id: 'web', label: 'Web Preview', icon: Globe },
   { id: 'database', label: 'Database Explorer', icon: Database },
-  { id: 'input', label: 'Input', icon: Keyboard },
   { id: 'explanation', label: 'AI Explanation', icon: BrainCircuit },
 ];
 
