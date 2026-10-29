@@ -264,12 +264,41 @@
   min-height: 34px;
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: space-between;
   padding: 0 10px;
   background: var(--bg-secondary);
   border-bottom: 1px solid var(--border-primary);
   user-select: none;
   box-sizing: border-box;
+}
+
+.hierarchy-title-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-muted);
+  user-select: none;
+  cursor: default;
+}
+
+.hierarchy-chevron {
+  color: var(--text-muted);
+  flex-shrink: 0;
+  transition: color var(--transition-fast);
+}
+
+.hierarchy-title {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  font-family: var(--font-ui), var(--font-sans);
+}
+
+.hierarchy-title-group:hover .hierarchy-chevron,
+.hierarchy-title-group:hover .hierarchy-title {
+  color: var(--text-primary);
 }
 
 .hierarchy-header-actions {

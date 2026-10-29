@@ -794,8 +794,13 @@ export default function FileExplorer() {
 
   return (
     <aside className="file-explorer file-explorer-sidebar antigravity-sidebar">
-      {/* Top Header Actions */}
+      {/* Top Explorer Header */}
       <div className="hierarchy-header">
+        <div className="hierarchy-title-group">
+          <ChevronDown size={11} strokeWidth={2.5} className="hierarchy-chevron" />
+          <span className="hierarchy-title">Explorer</span>
+        </div>
+
         <div className="hierarchy-header-actions">
           <button
             className="hierarchy-action-btn"
