@@ -246,6 +246,8 @@ body.resizing-horizontal .horizontal-resizer {
 
 /* Output Section */
 .output-section {
+  display: flex;
+  flex-direction: column;
   min-height: 80px;
   overflow: hidden;
   position: relative;
@@ -505,6 +507,7 @@ body.resizing-vertical * {
   width: 100% !important;
   max-width: 100% !important;
   display: flex !important;
+  flex-direction: column !important;
 }
 
 .app-container.focus-mode-active.simple-file-active .split-resizer {

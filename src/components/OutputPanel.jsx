@@ -847,7 +847,20 @@ export default function OutputPanel({
   }, [activeFile?.language, activeFile?.name, detectedLanguage?.monacoLanguage]);
 
   const activeCompilerInfo = state.compilerInfo || fileCompilationInfo;
-  const activeCompilerCommand = state.compilerCommand || activeCompilerInfo.command;
+  const activeCompilerCommand = useMemo(() => {
+    const raw = (isSplitTerminal && overrideState?.compilerCommand) || state.compilerCommand || activeCompilerInfo?.command;
+    if (typeof raw === 'function') {
+      const fileName = activeFile?.name || 'Main.java';
+      const className = fileName.replace(/\.[^.]+$/, '');
+      try {
+        return raw(fileName, className);
+      } catch {
+        return activeCompilerInfo?.compilerName || 'javac Main.java';
+      }
+    }
+    if (typeof raw === 'string') return raw;
+    return activeCompilerInfo?.compilerName || 'javac Main.java';
+  }, [isSplitTerminal, overrideState?.compilerCommand, state.compilerCommand, activeCompilerInfo, activeFile?.name]);
 
   // If user selects SQL language, auto-show database tab option
   useEffect(() => {

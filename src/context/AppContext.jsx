@@ -1020,7 +1020,12 @@ function reducer(state, action) {
         sqlData: action.payload.sqlData || null,
         executionStatus: action.payload.success ? 'success' : 'error',
         compilerInfo: action.payload.compilerInfo || null,
-        compilerCommand: action.payload.compilerCommand || action.payload.compilerInfo?.command || null,
+        compilerCommand:
+          typeof action.payload.compilerCommand === 'string'
+            ? action.payload.compilerCommand
+            : typeof action.payload.compilerInfo?.command === 'string'
+            ? action.payload.compilerInfo.command
+            : null,
       };
 
     case 'SET_STDIN': {
