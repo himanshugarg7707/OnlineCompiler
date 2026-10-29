@@ -980,20 +980,11 @@ export default function OutputPanel({
             {/* Clean Unified Terminal & Compiler Toolbar */}
             <div className="terminal-unified-toolbar">
               <div className="unified-toolbar-left">
-                <span className={`in-use-dot ${isSplitTerminal ? 'split-terminal-dot' : ''}`} />
-                <span className="unified-title">
-                  {terminalTitle || (isSplitTerminal ? 'Terminal 2:' : 'Terminal:')}
-                </span>
+                <span
+                  className={`in-use-dot ${isSplitTerminal ? 'split-terminal-dot' : ''}`}
+                  title={isSplitTerminal ? 'Terminal 2 Active' : 'Terminal Active'}
+                />
                 <strong className="unified-filename">{activeFile?.name || 'File'}</strong>
-                <span className="unified-lang">({getFriendlyLanguageName(activeFile?.language, activeFile?.name)})</span>
-                <span className="unified-sep">•</span>
-                <div className="unified-cmd" title={`Compiler Command: ${activeCompilerCommand}`}>
-                  <span className="cmd-prompt-sym">$</span>
-                  <span className="cmd-prompt-text">{activeCompilerCommand}</span>
-                  {activeCompilerInfo?.compilerName && (
-                    <span className="cmd-compiler-tag">{activeCompilerInfo.compilerName}</span>
-                  )}
-                </div>
               </div>
 
               <div className="unified-toolbar-right">
@@ -1001,7 +992,7 @@ export default function OutputPanel({
                   className="btn-unified-action btn-run"
                   onClick={runCodeFn}
                   disabled={isRunning}
-                  title={`Run ${activeFile?.name}`}
+                  title={`Run ${activeFile?.name || 'Code'}`}
                   data-tooltip="Run Code"
                   aria-label="Run Code"
                 >

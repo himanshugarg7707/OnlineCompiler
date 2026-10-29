@@ -20,7 +20,6 @@ import {
   Globe,
   Plus,
   Download,
-  Terminal as TerminalIcon,
   RotateCcw,
   Sparkles,
   Search,
@@ -451,37 +450,6 @@ export default function Header() {
             )}
           </div>
 
-          {/* Selection Menu */}
-          <div className="menu-item-wrap">
-            <button
-              className={`menu-bar-btn ${activeMenu === 'Selection' ? 'active' : ''}`}
-              onClick={() => handleMenuClick('Selection')}
-              onMouseEnter={() => handleMenuHover('Selection')}
-            >
-              Selection
-            </button>
-            {activeMenu === 'Selection' && (
-              <div className="menu-dropdown animate-fade-in">
-                <button
-                  className="dropdown-entry"
-                  onClick={() => closeMenuAndRun(() => handleRunCode())}
-                >
-                  <span>Run Selected Code Only</span>
-                  <kbd>Ctrl+Enter</kbd>
-                </button>
-                <button
-                  className="dropdown-entry"
-                  onClick={() => closeMenuAndRun(() => {
-                    window.dispatchEvent(new CustomEvent('editor-select-all'));
-                  })}
-                >
-                  <span>Select All</span>
-                  <kbd>Ctrl+A</kbd>
-                </button>
-              </div>
-            )}
-          </div>
-
           {/* View Menu */}
           <div className="menu-item-wrap">
             <button
@@ -630,53 +598,6 @@ export default function Header() {
                   <span>Switch Execution Engine</span>
                   <kbd>{engineMode === 'local' ? '⚡️ Local' : '🌐 Cloud'}</kbd>
                 </button>
-              </div>
-            )}
-          </div>
-
-          {/* Terminal Menu */}
-          <div className="menu-item-wrap">
-            <button
-              className={`menu-bar-btn ${activeMenu === 'Terminal' ? 'active' : ''}`}
-              onClick={() => handleMenuClick('Terminal')}
-              onMouseEnter={() => handleMenuHover('Terminal')}
-            >
-              Terminal
-            </button>
-            {activeMenu === 'Terminal' && (
-              <div className="menu-dropdown animate-fade-in">
-                <button
-                  className="dropdown-entry"
-                  onClick={() => closeMenuAndRun(() => {
-                    dispatch({ type: 'SET_TERMINAL_HIDDEN', payload: false });
-                    dispatch({ type: 'SET_TERMINAL_TAB', payload: 'terminal' });
-                  })}
-                >
-                  <span>New Terminal / Shell</span>
-                  <kbd>Ctrl+`</kbd>
-                </button>
-                <button
-                  className="dropdown-entry"
-                  onClick={() => closeMenuAndRun(() => {
-                    dispatch({ type: 'SET_TERMINAL_HIDDEN', payload: false });
-                    dispatch({ type: 'SET_TERMINAL_TAB', payload: 'output' });
-                  })}
-                >
-                  <span>View Program Output</span>
-                </button>
-                {isNativeApp && (
-                  <button
-                    className="dropdown-entry"
-                    onClick={() => closeMenuAndRun(() => {
-                      if (window.webkit?.messageHandlers?.nativeHost) {
-                        window.webkit.messageHandlers.nativeHost.postMessage({ type: 'open_terminal' });
-                      }
-                    })}
-                  >
-                    <span>Launch External macOS Terminal</span>
-                    <kbd>⌥⌘T</kbd>
-                  </button>
-                )}
               </div>
             )}
           </div>
