@@ -191,6 +191,72 @@ export default function Header() {
   const isNativeApp = typeof window !== 'undefined' && Boolean(window.webkit?.messageHandlers?.nativeHost);
   const isLocalHost = isLocalEnvironment();
 
+  const [activeMenu, setActiveMenu] = useState(null);
+  const menuBarRef = useRef(null);
+
+  const [engineMode, setEngineMode] = useState(() => {
+    if (!isLocalHost) return 'cloud';
+    const stored = localStorage.getItem('fullcode_engine_mode');
+    return stored === 'cloud' ? 'cloud' : 'local';
+  });
+
+  useEffect(() => {
+    const handleEngineChange = (e) => {
+      if (e.detail?.mode) setEngineMode(e.detail.mode);
+    };
+    window.addEventListener('engine-mode-changed', handleEngineChange);
+    return () => window.removeEventListener('engine-mode-changed', handleEngineChange);
+  }, []);
+
+  const toggleEngineMode = () => {
+    const next = engineMode === 'local' ? 'cloud' : 'local';
+    setEngineMode(next);
+    localStorage.setItem('fullcode_engine_mode', next);
+    window.dispatchEvent(new CustomEvent('engine-mode-changed', { detail: { mode: next } }));
+    showToast(
+      next === 'local'
+        ? '⚡️ Engine: Local Native Mac Compilers (Ultra-Fast 0.02s)'
+        : '🌐 Engine: Cloud Sandbox (WebAssembly & Remote)'
+    );
+  };
+
+  // Close menus when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (menuBarRef.current && !menuBarRef.current.contains(e.target)) {
+        setActiveMenu(null);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Keyboard shortcut listener to close active menu on Escape
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape' && activeMenu) {
+        setActiveMenu(null);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [activeMenu]);
+
+  const handleMenuClick = (menuName) => {
+    setActiveMenu((prev) => (prev === menuName ? null : menuName));
+  };
+
+  const handleMenuHover = (menuName) => {
+    if (activeMenu) {
+      setActiveMenu(menuName);
+    }
+  };
+
+  const closeMenuAndRun = (action) => {
+    setActiveMenu(null);
+    if (typeof action === 'function') action();
+  };
+
   const isRunning = executionStatus === 'compiling' || executionStatus === 'running';
   const hasSelection = Boolean(state.selectedCode && state.selectedCode.trim());
   const activeFile = files.find((f) => f.id === activeFileId) || files[0];
@@ -265,10 +331,499 @@ export default function Header() {
 
   // Standard TopAppBar
   return (
-    <header className="header app-header antigravity-top-bar">
+    <header className="header app-header antigravity-top-bar" ref={menuBarRef}>
       {/* Left: Brand Logo (Aligned directly to the left) */}
       <div className="header-left">
         <GodNavLogo onClick={() => dispatch({ type: 'NAVIGATE_PAGE', payload: 'editor' })} />
+
+        {/* Website Top Menubar (File, Edit, View, Go, Run, More) — Hidden in Native macOS Desktop App */}
+        {!isNativeApp && (
+          <nav className="header-menubar" role="menubar">
+          {/* File Menu */}
+          <div className="menu-item-wrap">
+            <button
+              className={`menu-bar-btn ${activeMenu === 'File' ? 'active' : ''}`}
+              onClick={() => handleMenuClick('File')}
+              onMouseEnter={() => handleMenuHover('File')}
+            >
+              File
+            </button>
+            {activeMenu === 'File' && (
+              <div className="menu-dropdown animate-fade-in">
+                <button
+                  className="dropdown-entry"
+                  onClick={() => closeMenuAndRun(() => window.dispatchEvent(new CustomEvent('editor-new-file')))}
+                >
+                  <span>New File</span>
+                  <kbd>Ctrl+N</kbd>
+                </button>
+                <button
+                  className="dropdown-entry"
+                  onClick={() => closeMenuAndRun(() => window.dispatchEvent(new CustomEvent('editor-new-folder')))}
+                >
+                  <span>New Folder</span>
+                </button>
+                <div className="dropdown-divider" />
+                <button
+                  className="dropdown-entry"
+                  onClick={() => closeMenuAndRun(handleTriggerImportFile)}
+                >
+                  <span>Import File...</span>
+                  <kbd>Ctrl+O</kbd>
+                </button>
+                <button
+                  className="dropdown-entry"
+                  onClick={() => closeMenuAndRun(handleTriggerImportFolder)}
+                >
+                  <span>Import Folder...</span>
+                </button>
+                <div className="dropdown-divider" />
+                <button
+                  className="dropdown-entry"
+                  onClick={() => closeMenuAndRun(() => handleSaveActiveFile())}
+                >
+                  <span>Save</span>
+                  <kbd>Ctrl+S</kbd>
+                </button>
+                <button
+                  className="dropdown-entry"
+                  onClick={() => closeMenuAndRun(() => dispatch({ type: 'SET_SAVE_AS_MODAL', payload: { isOpen: true, targetFile: activeFile } }))}
+                >
+                  <span>Save As...</span>
+                  <kbd>Ctrl+Shift+S</kbd>
+                </button>
+                <div className="dropdown-divider" />
+                <button
+                  className="dropdown-entry"
+                  onClick={() => closeMenuAndRun(() => dispatch({ type: 'TOGGLE_WORKSPACES_MODAL' }))}
+                >
+                  <span>Workspaces Manager</span>
+                  <kbd>Ctrl+Shift+W</kbd>
+                </button>
+                <button
+                  className="dropdown-entry"
+                  onClick={() => closeMenuAndRun(() => handleDownloadWorkspace())}
+                >
+                  <span>Download Workspace ZIP</span>
+                </button>
+                <div className="dropdown-divider" />
+                <button
+                  className="dropdown-entry danger-entry"
+                  onClick={() => closeMenuAndRun(() => {
+                    if (window.confirm('Reset workspace cache and reload defaults?')) {
+                      localStorage.clear();
+                      window.location.reload();
+                    }
+                  })}
+                >
+                  <span>Reset Cache & Restart</span>
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Edit Menu */}
+          <div className="menu-item-wrap">
+            <button
+              className={`menu-bar-btn ${activeMenu === 'Edit' ? 'active' : ''}`}
+              onClick={() => handleMenuClick('Edit')}
+              onMouseEnter={() => handleMenuHover('Edit')}
+            >
+              Edit
+            </button>
+            {activeMenu === 'Edit' && (
+              <div className="menu-dropdown animate-fade-in">
+                <button
+                  className="dropdown-entry"
+                  onClick={() => closeMenuAndRun(() => handleFormatCode())}
+                >
+                  <span>Format Document</span>
+                  <kbd>Shift+Alt+F</kbd>
+                </button>
+                <button
+                  className="dropdown-entry"
+                  onClick={() => closeMenuAndRun(() => {
+                    const active = files.find((f) => f.id === activeFileId);
+                    if (active) {
+                      dispatch({
+                        type: 'ADD_FILE',
+                        payload: {
+                          name: `copy_${active.name}`,
+                          content: active.content,
+                          openTab: true,
+                        },
+                      });
+                      showToast(`Created copy of ${active.name}`);
+                    }
+                  })}
+                >
+                  <span>Duplicate File</span>
+                </button>
+                <div className="dropdown-divider" />
+                <button
+                  className="dropdown-entry"
+                  onClick={() => closeMenuAndRun(() => {
+                    dispatch({ type: 'CLEAR_OUTPUT' });
+                    showToast('Cleared output and terminal logs');
+                  })}
+                >
+                  <span>Clear Output & Terminal</span>
+                  <kbd>Ctrl+L</kbd>
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* View Menu */}
+          <div className="menu-item-wrap">
+            <button
+              className={`menu-bar-btn ${activeMenu === 'View' ? 'active' : ''}`}
+              onClick={() => handleMenuClick('View')}
+              onMouseEnter={() => handleMenuHover('View')}
+            >
+              View
+            </button>
+            {activeMenu === 'View' && (
+              <div className="menu-dropdown animate-fade-in">
+                <button
+                  className="dropdown-entry"
+                  onClick={() => closeMenuAndRun(() => dispatch({ type: 'TOGGLE_EXPLORER' }))}
+                >
+                  <span>Toggle File Explorer</span>
+                  <kbd>Ctrl+B</kbd>
+                </button>
+                <button
+                  className="dropdown-entry"
+                  onClick={() => closeMenuAndRun(() => {
+                    dispatch({ type: 'SET_TERMINAL_HIDDEN', payload: !state.terminalHidden });
+                  })}
+                >
+                  <span>Toggle Terminal / Output</span>
+                  <kbd>Ctrl+`</kbd>
+                </button>
+                <button
+                  className="dropdown-entry"
+                  onClick={() => closeMenuAndRun(() => dispatch({ type: 'TOGGLE_FOCUS_MODE' }))}
+                >
+                  <span>Full Page Code / Zen Mode</span>
+                  <kbd>F11</kbd>
+                </button>
+                <button
+                  className={`dropdown-entry ${state.splitViewOpen && state.splitPaneType !== 'pdf' ? 'active' : ''}`}
+                  onClick={() => closeMenuAndRun(() => {
+                    if (state.splitViewOpen && state.splitPaneType === 'file') {
+                      handleToggleSplitView(false);
+                    } else {
+                      handleToggleSplitView(true);
+                      handleSetSplitPaneType('file');
+                    }
+                  })}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Columns2 size={14} />
+                    <span>Split View (2 Files / Terminals)</span>
+                  </div>
+                  <kbd>Alt+\</kbd>
+                </button>
+                <button
+                  className={`dropdown-entry ${state.splitViewOpen && state.splitPaneType === 'pdf' ? 'active' : ''}`}
+                  onClick={() => closeMenuAndRun(() => {
+                    if (state.splitViewOpen && state.splitPaneType === 'pdf') {
+                      handleToggleSplitView(false);
+                    } else {
+                      handleToggleSplitView(true);
+                      handleSetSplitPaneType('pdf');
+                    }
+                  })}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <FileText size={14} />
+                    <span>Open PDF in Split View</span>
+                  </div>
+                  <kbd>PDF</kbd>
+                </button>
+                <button
+                  className="dropdown-entry"
+                  onClick={() => closeMenuAndRun(() => dispatch({ type: 'TOGGLE_NAVBAR_MINIMIZED' }))}
+                >
+                  <span>Minimize Navigation Bar</span>
+                  <kbd>Alt+M</kbd>
+                </button>
+                <div className="dropdown-divider" />
+                <button
+                  className="dropdown-entry"
+                  onClick={() => closeMenuAndRun(() => {
+                    window.location.hash = '#/settings?tab=themes';
+                    dispatch({ type: 'NAVIGATE_PAGE', payload: 'settings' });
+                  })}
+                >
+                  <span>Color Theme & Palette...</span>
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Go Menu */}
+          <div className="menu-item-wrap">
+            <button
+              className={`menu-bar-btn ${activeMenu === 'Go' ? 'active' : ''}`}
+              onClick={() => handleMenuClick('Go')}
+              onMouseEnter={() => handleMenuHover('Go')}
+            >
+              Go
+            </button>
+            {activeMenu === 'Go' && (
+              <div className="menu-dropdown animate-fade-in">
+                <button
+                  className="dropdown-entry"
+                  onClick={() => closeMenuAndRun(() => {
+                    if (!explorerOpen) dispatch({ type: 'TOGGLE_EXPLORER' });
+                    setTimeout(() => {
+                      const searchInput = document.querySelector('.explorer-search-input');
+                      searchInput?.focus();
+                    }, 50);
+                  })}
+                >
+                  <span>Go to File...</span>
+                  <kbd>Ctrl+P</kbd>
+                </button>
+                <button
+                  className="dropdown-entry"
+                  onClick={() => closeMenuAndRun(() => dispatch({ type: 'NAVIGATE_PAGE', payload: 'notebook-setup' }))}
+                >
+                  <span>Go to Subject Course Notebooks</span>
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Run Menu */}
+          <div className="menu-item-wrap">
+            <button
+              className={`menu-bar-btn ${activeMenu === 'Run' ? 'active' : ''}`}
+              onClick={() => handleMenuClick('Run')}
+              onMouseEnter={() => handleMenuHover('Run')}
+            >
+              Run
+            </button>
+            {activeMenu === 'Run' && (
+              <div className="menu-dropdown animate-fade-in">
+                <button
+                  className="dropdown-entry"
+                  onClick={() => closeMenuAndRun(() => handleRunCode())}
+                >
+                  <span>Run Document</span>
+                  <kbd>Ctrl+Enter</kbd>
+                </button>
+                <button
+                  className="dropdown-entry"
+                  onClick={() => closeMenuAndRun(() => toggleEngineMode())}
+                >
+                  <span>Switch Execution Engine</span>
+                  <kbd>{engineMode === 'local' ? '⚡️ Local' : '🌐 Cloud'}</kbd>
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* More Menu */}
+          <div className="menu-item-wrap">
+            <button
+              className={`menu-bar-btn ${activeMenu === 'More' ? 'active' : ''}`}
+              onClick={() => handleMenuClick('More')}
+              onMouseEnter={() => handleMenuHover('More')}
+            >
+              More
+            </button>
+            {activeMenu === 'More' && (
+              <div className="menu-dropdown more-menu-dropdown animate-fade-in">
+                {/* Top: Live Room & About Full Code */}
+                <button
+                  className="dropdown-entry more-entry"
+                  onClick={() => closeMenuAndRun(() => dispatch({ type: 'TOGGLE_COLLAB_MODAL' }))}
+                >
+                  <div className="more-entry-left">
+                    <span className="material-symbols-outlined entry-icon text-green">groups</span>
+                    <div>
+                      <div className="more-entry-title">Live Room Collaboration</div>
+                      <div className="more-entry-desc">Peer-to-peer real-time multi-user coding session</div>
+                    </div>
+                  </div>
+                </button>
+                <button
+                  className="dropdown-entry more-entry"
+                  onClick={() => closeMenuAndRun(() => dispatch({ type: 'SET_WELCOME_MODAL', payload: true }))}
+                >
+                  <div className="more-entry-left">
+                    <span className="material-symbols-outlined entry-icon text-cyan" style={{ fontVariationSettings: "'FILL' 1" }}>
+                      bolt
+                    </span>
+                    <div>
+                      <div className="more-entry-title">About Full Code</div>
+                      <div className="more-entry-desc">Version 2.4.0 Core • Universal Cloud Workspace & Engine</div>
+                    </div>
+                  </div>
+                </button>
+
+                <div className="dropdown-divider" />
+
+                {/* Section: Intelligent AI & Analysis */}
+                <div className="more-section-label">INTELLIGENT TOOLS & AI</div>
+                <button
+                  className="dropdown-entry more-entry"
+                  onClick={() => closeMenuAndRun(() => {
+                    dispatch({ type: 'SET_TERMINAL_HIDDEN', payload: false });
+                    dispatch({ type: 'SET_TERMINAL_TAB', payload: 'explanation' });
+                  })}
+                >
+                  <div className="more-entry-left">
+                    <span className="material-symbols-outlined entry-icon text-cyan">auto_awesome</span>
+                    <div>
+                      <div className="more-entry-title">Antigravity AI Copilot</div>
+                      <div className="more-entry-desc">Code explanation, bug detection & logic suggestions</div>
+                    </div>
+                  </div>
+                  <kbd>Ctrl+Shift+E</kbd>
+                </button>
+                <button
+                  className="dropdown-entry more-entry"
+                  onClick={() => closeMenuAndRun(() => {
+                    dispatch({ type: 'SET_TERMINAL_HIDDEN', payload: false });
+                    dispatch({ type: 'SET_TERMINAL_TAB', payload: 'complexity' });
+                  })}
+                >
+                  <div className="more-entry-left">
+                    <span className="material-symbols-outlined entry-icon text-green">speed</span>
+                    <div>
+                      <div className="more-entry-title">Complexity Analyzer</div>
+                      <div className="more-entry-desc">Static Big-O asymptotic runtime & memory scaling</div>
+                    </div>
+                  </div>
+                </button>
+
+                <div className="dropdown-divider" />
+
+                {/* Section: Academic & DSA Hub */}
+                <div className="more-section-label">ACADEMIC & LEARNING SUITE</div>
+                <button
+                  className="dropdown-entry more-entry"
+                  onClick={() => closeMenuAndRun(() => dispatch({ type: 'NAVIGATE_PAGE', payload: 'notebook-setup' }))}
+                >
+                  <div className="more-entry-left">
+                    <span className="material-symbols-outlined entry-icon text-blue">menu_book</span>
+                    <div>
+                      <div className="more-entry-title">Subject Course Notebooks</div>
+                      <div className="more-entry-desc">Interactive OpenJDK Java, Python & C++ syllabus workspaces</div>
+                    </div>
+                  </div>
+                  <span className="more-entry-badge">Course</span>
+                </button>
+                <button
+                  className="dropdown-entry more-entry"
+                  onClick={() => closeMenuAndRun(() => dispatch({ type: 'NAVIGATE_PAGE', payload: 'practice' }))}
+                >
+                  <div className="more-entry-left">
+                    <span className="material-symbols-outlined entry-icon text-yellow">code_blocks</span>
+                    <div>
+                      <div className="more-entry-title">DSA Practice Lab</div>
+                      <div className="more-entry-desc">70+ curated coding challenges with automated test runners</div>
+                    </div>
+                  </div>
+                </button>
+                <button
+                  className="dropdown-entry more-entry"
+                  onClick={() => closeMenuAndRun(() => dispatch({ type: 'NAVIGATE_PAGE', payload: 'exam' }))}
+                >
+                  <div className="more-entry-left">
+                    <span className="material-symbols-outlined entry-icon text-purple">timer</span>
+                    <div>
+                      <div className="more-entry-title">Proctored Exam & Tests</div>
+                      <div className="more-entry-desc">Live timed examination suite with automated grading</div>
+                    </div>
+                  </div>
+                </button>
+                <button
+                  className="dropdown-entry more-entry"
+                  onClick={() => closeMenuAndRun(() => dispatch({ type: 'NAVIGATE_PAGE', payload: 'templates' }))}
+                >
+                  <div className="more-entry-left">
+                    <span className="material-symbols-outlined entry-icon text-pink">data_object</span>
+                    <div>
+                      <div className="more-entry-title">Code Templates & Snippets</div>
+                      <div className="more-entry-desc">Pre-built algorithms, data structures & boilerplate</div>
+                    </div>
+                  </div>
+                </button>
+                <button
+                  className="dropdown-entry more-entry"
+                  onClick={() => closeMenuAndRun(() => {
+                    window.dispatchEvent(new CustomEvent('open-dsa-visualizer'));
+                  })}
+                >
+                  <div className="more-entry-left">
+                    <span className="material-symbols-outlined entry-icon text-cyan">psychology</span>
+                    <div>
+                      <div className="more-entry-title">DSA & Memory Visualizer</div>
+                      <div className="more-entry-desc">Animated call stack, heap objects & recursion trees</div>
+                    </div>
+                  </div>
+                </button>
+
+                <div className="dropdown-divider" />
+
+                {/* Section: Panels & Preview */}
+                <div className="more-section-label">DEVTOOLS & PANELS</div>
+                <button
+                  className="dropdown-entry more-entry"
+                  onClick={() => closeMenuAndRun(() => {
+                    dispatch({ type: 'SET_TERMINAL_HIDDEN', payload: false });
+                    dispatch({ type: 'SET_TERMINAL_TAB', payload: 'tests' });
+                    showToast('🧪 Test Case Suite & Stress Tester opened');
+                  })}
+                >
+                  <div className="more-entry-left">
+                    <span className="material-symbols-outlined entry-icon text-pink">science</span>
+                    <div>
+                      <div className="more-entry-title">Test Suite & Stress Tester</div>
+                      <div className="more-entry-desc">Batch I/O, diff checker & edge-case stress generator</div>
+                    </div>
+                  </div>
+                </button>
+                <button
+                  className="dropdown-entry more-entry"
+                  onClick={() => closeMenuAndRun(() => {
+                    dispatch({ type: 'SET_TERMINAL_HIDDEN', payload: false });
+                    dispatch({ type: 'SET_TERMINAL_TAB', payload: 'web' });
+                  })}
+                >
+                  <div className="more-entry-left">
+                    <span className="material-symbols-outlined entry-icon text-cyan">language</span>
+                    <div>
+                      <div className="more-entry-title">Web Preview & DevTools</div>
+                      <div className="more-entry-desc">Live browser engine DOM & console inspect</div>
+                    </div>
+                  </div>
+                </button>
+                <button
+                  className="dropdown-entry more-entry"
+                  onClick={() => closeMenuAndRun(() => {
+                    dispatch({ type: 'SET_TERMINAL_HIDDEN', payload: false });
+                    dispatch({ type: 'SET_TERMINAL_TAB', payload: 'database' });
+                  })}
+                >
+                  <div className="more-entry-left">
+                    <span className="material-symbols-outlined entry-icon text-purple">database</span>
+                    <div>
+                      <div className="more-entry-title">Database & SQL Explorer</div>
+                      <div className="more-entry-desc">In-browser SQLite relational database with visual tables</div>
+                    </div>
+                  </div>
+                </button>
+              </div>
+            )}
+          </div>
+        </nav>
+        )}
       </div>
 
       {/* Right Controls: Workspace Symbol Button, Run, Settings, Profile */}
