@@ -38,20 +38,20 @@
 }
 
 .tab-btn {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: var(--sp-2);
-  padding: var(--sp-2) var(--sp-3);
-  border-radius: var(--radius-sm);
-  font-size: var(--fs-xs);
-  font-weight: 500;
+  justify-content: center;
+  width: 30px;
+  height: 28px;
+  padding: 0;
+  border-radius: var(--radius-sm, 4px);
   color: var(--text-secondary);
   background: transparent;
   border: none;
   cursor: pointer;
   transition: all var(--transition-fast);
   position: relative;
-  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .tab-btn:hover {
@@ -61,15 +61,15 @@
 
 .tab-btn.active {
   color: var(--accent-cyan);
-  background: rgba(0, 212, 255, 0.08);
+  background: rgba(0, 212, 255, 0.12);
 }
 
 .tab-btn.active::after {
   content: '';
   position: absolute;
-  bottom: -1px;
-  left: var(--sp-2);
-  right: var(--sp-2);
+  bottom: -5px;
+  left: 6px;
+  right: 6px;
   height: 2px;
   background: var(--accent-cyan);
   border-radius: 2px 2px 0 0;
@@ -80,7 +80,65 @@
   height: 6px;
   border-radius: 50%;
   background: var(--accent-cyan);
+  position: absolute;
+  top: 3px;
+  right: 3px;
   animation: pulse-glow 2s infinite;
+}
+
+.tab-problems-badge {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #f87171;
+  box-shadow: 0 0 6px rgba(248, 113, 113, 0.6);
+}
+
+/* Delayed Tooltip on hover (appears after ~2s hover delay) */
+.tab-btn[data-tooltip],
+.btn-hide-terminal[data-tooltip],
+.btn-unified-action[data-tooltip],
+.btn-new-file[data-tooltip] {
+  position: relative;
+}
+
+.tab-btn[data-tooltip]::before,
+.btn-hide-terminal[data-tooltip]::before,
+.btn-unified-action[data-tooltip]::before,
+.btn-new-file[data-tooltip]::before {
+  content: attr(data-tooltip);
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%) translateY(-2px);
+  background: rgba(15, 23, 42, 0.95);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  color: #f1f5f9;
+  padding: 4px 8px;
+  font-size: 11px;
+  font-weight: 500;
+  border-radius: 4px;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5);
+  z-index: 9999;
+  transition: opacity 0.2s ease 2s, transform 0.2s ease 2s, visibility 0.2s ease 2s;
+}
+
+.tab-btn[data-tooltip]:hover::before,
+.btn-hide-terminal[data-tooltip]:hover::before,
+.btn-unified-action[data-tooltip]:hover::before,
+.btn-new-file[data-tooltip]:hover::before {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(-50%) translateY(0);
 }
 
 /* Status */
@@ -96,14 +154,14 @@
 .btn-hide-terminal {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 3px 8px;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
   background: var(--bg-elevated);
   border: 1px solid var(--border-primary);
   border-radius: var(--radius-sm, 6px);
   color: var(--text-muted);
-  font-size: 11px;
-  font-weight: 500;
   cursor: pointer;
   transition: all var(--transition-fast);
   margin-left: 2px;

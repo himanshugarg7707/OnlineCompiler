@@ -890,13 +890,13 @@ export default function OutputPanel({
                     handleExplainCode(hasError ? 'error' : 'code');
                   }
                 }}
+                title={tab.label}
+                data-tooltip={tab.label}
+                aria-label={tab.label}
               >
                 <Icon size={14} />
-                <span>{tab.label}</span>
-                {tab.id === 'problems' && (
-                  <span className={`tab-problems-count ${hasError ? 'error-active' : ''}`}>
-                    {hasError ? '1' : '0'}
-                  </span>
+                {tab.id === 'problems' && hasError && (
+                  <span className="tab-problems-badge" />
                 )}
                 {hasNotification && tab.id !== 'problems' && <span className="tab-dot" />}
               </button>
@@ -943,9 +943,10 @@ export default function OutputPanel({
               className="btn-hide-terminal"
               onClick={handleHide}
               title="Collapse / Hide Terminal (Ctrl+`)"
+              data-tooltip="Hide Terminal"
+              aria-label="Hide Terminal"
             >
-              <ChevronDown size={13} />
-              <span className="btn-hide-text">Hide</span>
+              <ChevronDown size={14} />
             </button>
           </div>
         </div>
@@ -1001,9 +1002,10 @@ export default function OutputPanel({
                   onClick={runCodeFn}
                   disabled={isRunning}
                   title={`Run ${activeFile?.name}`}
+                  data-tooltip="Run Code"
+                  aria-label="Run Code"
                 >
                   <Play size={11} fill="currentColor" />
-                  <span>Run</span>
                 </button>
               </div>
             </div>

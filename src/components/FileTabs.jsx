@@ -430,10 +430,11 @@ export default function FileTabs() {
         <button
           className="btn-new-file"
           onClick={handleStartAdd}
-          title="Add new file (Ctrl+N)"
+          title="New File (Ctrl+N)"
+          data-tooltip="New File"
+          aria-label="New File"
         >
           <Plus size={14} />
-          <span className="tab-action-label">New File</span>
         </button>
       </div>
 
