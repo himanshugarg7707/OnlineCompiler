@@ -6,12 +6,9 @@ import {
   FileCode,
   Edit2,
   Download,
-  FolderKanban,
   Lock,
   ZoomIn,
   ZoomOut,
-  Columns2,
-  FileText,
   ChevronLeft,
   ChevronRight,
 } from 'lucide-react';
@@ -32,8 +29,6 @@ export default function FileTabs() {
     handleCloseTab,
     handleRenameFile,
     handleSaveActiveFile,
-    handleToggleSplitView,
-    handleSetSplitPaneType,
     handleDownloadWorkspace,
     handleReorderTabs,
     handleUpdateConfig,
@@ -433,59 +428,9 @@ export default function FileTabs() {
 
       <div className="file-tabs-right-actions">
         <button
-          className="btn-tab-action"
-          onClick={() => handleSaveActiveFile()}
-          title="Save active file (Cmd+S / Ctrl+S)"
-        >
-          <Download size={13} />
-          <span className="tab-action-label">Save</span>
-        </button>
-
-        <button
-          className={`btn-tab-action ${state.splitViewOpen && state.splitPaneType !== 'pdf' ? 'active' : ''}`}
-          onClick={() => {
-            if (state.splitViewOpen && state.splitPaneType === 'file') {
-              handleToggleSplitView(false);
-            } else {
-              handleToggleSplitView(true);
-              handleSetSplitPaneType('file');
-            }
-          }}
-          title="Split View: Edit two files side-by-side (Alt+\)"
-        >
-          <Columns2 size={13} />
-          <span className="tab-action-label">Split</span>
-        </button>
-
-        <button
-          className={`btn-tab-action ${state.splitViewOpen && state.splitPaneType === 'pdf' ? 'active' : ''}`}
-          onClick={() => {
-            if (state.splitViewOpen && state.splitPaneType === 'pdf') {
-              handleToggleSplitView(false);
-            } else {
-              handleToggleSplitView(true);
-              handleSetSplitPaneType('pdf');
-            }
-          }}
-          title="Open PDF Viewer in Split View (Read notes/questions while coding)"
-        >
-          <FileText size={13} />
-          <span className="tab-action-label">PDF</span>
-        </button>
-
-        <button
-          className="btn-tab-action"
-          onClick={() => dispatch({ type: 'TOGGLE_WORKSPACES_MODAL' })}
-          title="Saved Workspaces Manager (Save & Load Projects)"
-        >
-          <FolderKanban size={13} />
-          <span className="tab-action-label">Workspaces</span>
-        </button>
-
-        <button
           className="btn-new-file"
           onClick={handleStartAdd}
-          title="Add new file (Enter file name)"
+          title="Add new file (Ctrl+N)"
         >
           <Plus size={14} />
           <span className="tab-action-label">New File</span>

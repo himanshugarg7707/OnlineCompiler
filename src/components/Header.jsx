@@ -28,8 +28,9 @@ import {
   Glasses,
   FlaskConical,
   Brain,
+  Columns2,
+  FileText,
 } from 'lucide-react';
-import LanguageSelector from './LanguageSelector';
 import LanguageIcon from './LanguageIcon';
 import { isLocalEnvironment } from '../services/judge0Service';
 import { processFileList } from '../services/importService';
@@ -46,6 +47,8 @@ export default function Header() {
     handleDownloadWorkspace,
     handleUpdateConfig,
     handleToggleIncognitoMode,
+    handleToggleSplitView,
+    handleSetSplitPaneType,
     showToast,
   } = useApp();
   const { executionStatus, explorerOpen, activeUser, files, activeFileId, config } = state;
@@ -514,20 +517,37 @@ export default function Header() {
                   <kbd>F11</kbd>
                 </button>
                 <button
-                  className="dropdown-entry"
-                  onClick={() => closeMenuAndRun(() => dispatch({ type: 'TOGGLE_SPLIT_VIEW' }))}
+                  className={`dropdown-entry ${state.splitViewOpen && state.splitPaneType !== 'pdf' ? 'active' : ''}`}
+                  onClick={() => closeMenuAndRun(() => {
+                    if (state.splitViewOpen && state.splitPaneType === 'file') {
+                      handleToggleSplitView(false);
+                    } else {
+                      handleToggleSplitView(true);
+                      handleSetSplitPaneType('file');
+                    }
+                  })}
                 >
-                  <span>Toggle Split View (2 Files / Terminals)</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Columns2 size={14} />
+                    <span>Split View (2 Files / Terminals)</span>
+                  </div>
                   <kbd>Alt+\</kbd>
                 </button>
                 <button
-                  className="dropdown-entry"
+                  className={`dropdown-entry ${state.splitViewOpen && state.splitPaneType === 'pdf' ? 'active' : ''}`}
                   onClick={() => closeMenuAndRun(() => {
-                    dispatch({ type: 'SET_SPLIT_VIEW', payload: true });
-                    dispatch({ type: 'SET_SPLIT_PANE_TYPE', payload: 'pdf' });
+                    if (state.splitViewOpen && state.splitPaneType === 'pdf') {
+                      handleToggleSplitView(false);
+                    } else {
+                      handleToggleSplitView(true);
+                      handleSetSplitPaneType('pdf');
+                    }
                   })}
                 >
-                  <span>Open PDF in Split View</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <FileText size={14} />
+                    <span>Open PDF in Split View</span>
+                  </div>
                   <kbd>PDF</kbd>
                 </button>
                 <button
@@ -912,20 +932,17 @@ export default function Header() {
         </nav>
       </div>
 
-      {/* Right Controls: Workspace Pill, Language Selector, Run, Settings, Profile */}
+      {/* Right Controls: Workspace Symbol Button, Run, Settings, Profile */}
       <div className="header-right">
-        {/* Workspace Badge Pill */}
-        <div
-          className="workspace-badge-pill"
+        {/* Workspace Symbol Button */}
+        <button
+          type="button"
+          className="btn-icon-top btn-header-workspace"
           onClick={() => dispatch({ type: 'TOGGLE_WORKSPACES_MODAL' })}
-          title="Click to view and switch Saved Workspaces"
+          title={`Saved Workspaces: ${workspaceTitle} (Click to switch or save workspaces)`}
         >
-          <span className="workspace-badge-prefix">workspace /</span>
-          <span className="workspace-badge-name">{workspaceTitle}</span>
-        </div>
-
-        {/* Language Selector */}
-        <LanguageSelector />
+          <FolderKanban size={15} />
+        </button>
 
         {/* Live Collab Indicator if active */}
         {collabRoomId && (
