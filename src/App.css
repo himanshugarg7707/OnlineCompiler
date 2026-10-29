@@ -314,30 +314,33 @@ body.resizing-vertical * {
 /* ─── Floating Toast Notification (Compact Right-Bottom Green Tick Circle) ── */
 
 .toast-notification {
-  position: fixed;
-  bottom: 28px;
-  right: 14px;
-  width: 18px;
-  height: 18px;
-  padding: 0;
-  border-radius: 50%;
-  background: var(--bg-elevated, #161b22);
-  border: 1.5px solid #22c55e;
-  box-shadow: 0 0 8px rgba(34, 197, 94, 0.45);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #22c55e;
-  z-index: 99999;
-  pointer-events: auto;
-  cursor: default;
-  animation: toastFade 0.15s ease-out;
+  position: fixed !important;
+  bottom: 28px !important;
+  right: 18px !important;
+  left: auto !important;
+  top: auto !important;
+  width: 20px !important;
+  height: 20px !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  border-radius: 50% !important;
+  background: var(--bg-elevated, #161b22) !important;
+  border: 1.5px solid #22c55e !important;
+  box-shadow: 0 0 10px rgba(34, 197, 94, 0.45) !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  color: #22c55e !important;
+  z-index: 999999 !important;
+  pointer-events: auto !important;
+  cursor: default !important;
+  animation: toastFade 0.15s ease-out !important;
   transform: none !important;
 }
 
 .focus-mode-active .toast-notification {
-  bottom: 12px;
-  right: 12px;
+  bottom: 14px !important;
+  right: 14px !important;
 }
 
 .toast-tick-icon {
@@ -404,7 +407,7 @@ body.resizing-vertical * {
   border-right: none;
 }
 
-.app-container > * {
+.app-container > *:not(.toast-notification) {
   position: relative;
 }
 

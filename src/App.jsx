@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { AppProvider, useApp } from './context/AppContext';
 import Header from './components/Header';
 import CodeEditor from './components/CodeEditor';
@@ -759,14 +760,15 @@ function AppContent() {
       <StatusBar />
 
       {/* Floating Toast Notification (Compact Right-Bottom Green Tick Circle) */}
-      {toast && (
+      {toast && createPortal(
         <div
           className="toast-notification"
           title={typeof toast === 'string' ? toast : 'Success'}
           aria-label={typeof toast === 'string' ? toast : 'Success'}
         >
           <Check size={11} strokeWidth={3.5} className="toast-tick-icon" />
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Modals */}
