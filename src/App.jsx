@@ -765,7 +765,7 @@ function AppContent() {
           title={typeof toast === 'string' ? toast : 'Success'}
           aria-label={typeof toast === 'string' ? toast : 'Success'}
         >
-          <Check size={13} strokeWidth={3} className="toast-tick-icon" />
+          <Check size={11} strokeWidth={3.5} className="toast-tick-icon" />
         </div>
       )}
 

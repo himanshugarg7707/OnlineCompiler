@@ -1522,9 +1522,11 @@ export function AppProvider({ children }) {
     return () => window.removeEventListener('jupyter-cell-output', handleJupyterCellOutput);
   }, []);
 
-  const showToast = useCallback((message, duration = 3000) => {
+  const toastTimeoutRef = useRef(null);
+  const showToast = useCallback((message, duration = 2500) => {
+    if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
     dispatch({ type: 'SHOW_TOAST', payload: message });
-    setTimeout(() => {
+    toastTimeoutRef.current = setTimeout(() => {
       dispatch({ type: 'CLEAR_TOAST' });
     }, duration);
   }, []);

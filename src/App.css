@@ -315,23 +315,29 @@ body.resizing-vertical * {
 
 .toast-notification {
   position: fixed;
-  bottom: 34px;
-  right: 18px;
-  width: 22px;
-  height: 22px;
-  padding: 4px;
+  bottom: 28px;
+  right: 14px;
+  width: 18px;
+  height: 18px;
+  padding: 0;
   border-radius: 50%;
   background: var(--bg-elevated, #161b22);
   border: 1.5px solid #22c55e;
-  box-shadow: 0 0 10px rgba(34, 197, 94, 0.4);
+  box-shadow: 0 0 8px rgba(34, 197, 94, 0.45);
   display: flex;
   align-items: center;
   justify-content: center;
   color: #22c55e;
-  z-index: 9999;
+  z-index: 99999;
   pointer-events: auto;
   cursor: default;
-  animation: toastFade 0.18s ease-out;
+  animation: toastFade 0.15s ease-out;
+  transform: none !important;
+}
+
+.focus-mode-active .toast-notification {
+  bottom: 12px;
+  right: 12px;
 }
 
 .toast-tick-icon {
@@ -342,17 +348,15 @@ body.resizing-vertical * {
 [data-theme="baby-pink"] .toast-notification {
   background: #ffffff;
   border-color: #22c55e;
-  box-shadow: 0 0 10px rgba(34, 197, 94, 0.35);
+  box-shadow: 0 0 8px rgba(34, 197, 94, 0.35);
 }
 
 @keyframes toastFade {
   0% {
     opacity: 0;
-    transform: scale(0.85);
   }
   100% {
     opacity: 1;
-    transform: scale(1);
   }
 }
 
