@@ -51,7 +51,6 @@ export default function Header() {
     showToast,
   } = useApp();
   const { executionStatus, explorerOpen, activeUser, files, activeFileId, config } = state;
-  const isGoogleTheme = config?.theme === 'antigravity-google';
 
   const fileInputRef = useRef(null);
   const folderInputRef = useRef(null);
@@ -118,15 +117,6 @@ export default function Header() {
     } finally {
       e.target.value = '';
     }
-  };
-
-  const handleToggleGoogleTheme = () => {
-    if (handleUpdateConfig) {
-      handleUpdateConfig({ theme: 'antigravity-google' });
-    } else {
-      dispatch({ type: 'UPDATE_CONFIG', payload: { theme: 'antigravity-google' } });
-    }
-    showToast('🪐 Activated Antigravity Google Official Theme!');
   };
 
   const [activeMenu, setActiveMenu] = useState(null);
@@ -613,26 +603,33 @@ export default function Header() {
             </button>
             {activeMenu === 'More' && (
               <div className="menu-dropdown more-menu-dropdown animate-fade-in">
-                {/* Official Theme Quick Banner */}
-                <div className="more-theme-banner" onClick={() => closeMenuAndRun(handleToggleGoogleTheme)}>
-                  <div className="more-theme-banner-left">
-                    <div className="more-theme-icon-wrap">
-                      <span className="material-symbols-outlined more-theme-icon" style={{ fontVariationSettings: "'FILL' 1" }}>
-                        public
-                      </span>
-                    </div>
+                {/* Top: Live Room & About Full Code */}
+                <button
+                  className="dropdown-entry more-entry"
+                  onClick={() => closeMenuAndRun(() => dispatch({ type: 'TOGGLE_COLLAB_MODAL' }))}
+                >
+                  <div className="more-entry-left">
+                    <span className="material-symbols-outlined entry-icon text-green">groups</span>
                     <div>
-                      <div className="more-theme-banner-title">
-                        <span>Antigravity (Google Official)</span>
-                        {isGoogleTheme && <span className="more-active-tag">Active</span>}
-                      </div>
-                      <div className="more-theme-banner-sub">Google DeepMind dark obsidian & Material 3 palette</div>
+                      <div className="more-entry-title">Live Room Collaboration</div>
+                      <div className="more-entry-desc">Peer-to-peer real-time multi-user coding session</div>
                     </div>
                   </div>
-                  <button className={`btn-more-theme-toggle ${isGoogleTheme ? 'active' : ''}`}>
-                    {isGoogleTheme ? 'Selected' : 'Activate'}
-                  </button>
-                </div>
+                </button>
+                <button
+                  className="dropdown-entry more-entry"
+                  onClick={() => closeMenuAndRun(() => dispatch({ type: 'SET_WELCOME_MODAL', payload: true }))}
+                >
+                  <div className="more-entry-left">
+                    <span className="material-symbols-outlined entry-icon text-cyan" style={{ fontVariationSettings: "'FILL' 1" }}>
+                      bolt
+                    </span>
+                    <div>
+                      <div className="more-entry-title">About Full Code</div>
+                      <div className="more-entry-desc">Version 2.4.0 Core • Universal Cloud Workspace & Engine</div>
+                    </div>
+                  </div>
+                </button>
 
                 <div className="dropdown-divider" />
 
@@ -785,65 +782,6 @@ export default function Header() {
                     <div>
                       <div className="more-entry-title">Database & SQL Explorer</div>
                       <div className="more-entry-desc">In-browser SQLite relational database with visual tables</div>
-                    </div>
-                  </div>
-                </button>
-                <button
-                  className="dropdown-entry more-entry"
-                  onClick={() => closeMenuAndRun(() => dispatch({ type: 'TOGGLE_COLLAB_MODAL' }))}
-                >
-                  <div className="more-entry-left">
-                    <span className="material-symbols-outlined entry-icon text-green">groups</span>
-                    <div>
-                      <div className="more-entry-title">Live Room Collaboration</div>
-                      <div className="more-entry-desc">Peer-to-peer real-time multi-user coding session</div>
-                    </div>
-                  </div>
-                </button>
-
-                <div className="dropdown-divider" />
-
-                {/* Section: Preferences & Help */}
-                <div className="more-section-label">PREFERENCES & SYSTEM</div>
-                <button
-                  className="dropdown-entry more-entry"
-                  onClick={() => closeMenuAndRun(() => {
-                    window.location.hash = '#/settings?tab=themes';
-                    dispatch({ type: 'NAVIGATE_PAGE', payload: 'settings' });
-                  })}
-                >
-                  <div className="more-entry-left">
-                    <span className="material-symbols-outlined entry-icon text-blue">palette</span>
-                    <div>
-                      <div className="more-entry-title">Theme Selector & Customizer...</div>
-                      <div className="more-entry-desc">Choose from built-in themes or custom 3-color palette</div>
-                    </div>
-                  </div>
-                </button>
-                <button
-                  className="dropdown-entry more-entry"
-                  onClick={() => closeMenuAndRun(() => dispatch({ type: 'NAVIGATE_PAGE', payload: 'settings' }))}
-                >
-                  <div className="more-entry-left">
-                    <span className="material-symbols-outlined entry-icon">settings</span>
-                    <div>
-                      <div className="more-entry-title">Settings & Configuration</div>
-                      <div className="more-entry-desc">Editor font, line wrap, keybindings & compiler host</div>
-                    </div>
-                  </div>
-                  <kbd>Ctrl+,</kbd>
-                </button>
-                <button
-                  className="dropdown-entry more-entry"
-                  onClick={() => closeMenuAndRun(() => dispatch({ type: 'SET_WELCOME_MODAL', payload: true }))}
-                >
-                  <div className="more-entry-left">
-                    <span className="material-symbols-outlined entry-icon text-cyan" style={{ fontVariationSettings: "'FILL' 1" }}>
-                      bolt
-                    </span>
-                    <div>
-                      <div className="more-entry-title">About Full Code</div>
-                      <div className="more-entry-desc">Version 2.4.0 Core • Universal Cloud Workspace & Engine</div>
                     </div>
                   </div>
                 </button>
