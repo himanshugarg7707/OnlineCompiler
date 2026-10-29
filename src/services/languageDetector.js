@@ -1060,279 +1060,52 @@ ${trimmed.split('\n').map((line) => '    ' + line).join('\n')}
  */
 export function createDefaultNotebookJson(targetLang = 'python') {
   const langKey = String(targetLang).toLowerCase();
+  const isSlashComment =
+    langKey === 'java' ||
+    langKey === '62' ||
+    langKey === 'cpp' ||
+    langKey === 'c++' ||
+    langKey === '54' ||
+    langKey === 'javascript' ||
+    langKey === 'js' ||
+    langKey === '63';
+  const comment = isSlashComment ? '// Start here\n' : '# Start here\n';
 
-  // 1. JAVA NOTEBOOK
+  let kernelSpec = {
+    display_name: 'Python 3',
+    language: 'python',
+    name: 'python3',
+  };
+  let langInfo = { name: 'python', version: '3.12' };
+
   if (langKey === 'java' || langKey === '62') {
-    return JSON.stringify(
-      {
-        cells: [
-          {
-            cell_type: 'markdown',
-            metadata: {},
-            source: [
-              '# ☕ Java Interactive Notebook\n',
-              'Interactive Java computing environment with **JShell & OpenJDK** execution.\n',
-              '- Execute Java statements, methods, and classes interactively.\n',
-              '- Full support for **Collections**, **Streams**, and **OOP Architecture**.\n',
-              '- Built-in automated cell scaffolding for instant execution.'
-            ]
-          },
-          {
-            cell_type: 'code',
-            execution_count: null,
-            metadata: { language: 'java' },
-            outputs: [],
-            source: [
-              '// Cell 1: Java Collections, Streams & Modern Features\n',
-              'import java.util.*;\n',
-              'import java.util.stream.*;\n',
-              '\n',
-              'List<String> coreTopics = Arrays.asList(\n',
-              '    "Object-Oriented Programming",\n',
-              '    "Generics & Collections",\n',
-              '    "Functional Streams & Lambdas",\n',
-              '    "Exception Handling & I/O",\n',
-              '    "Multithreading & Concurrency"\n',
-              ');\n',
-              '\n',
-              'System.out.println("☕ Welcome to Java Interactive Notebook!");\n',
-              'System.out.println("============================================");\n',
-              'System.out.println("Total Core Topics: " + coreTopics.size());\n',
-              '\n',
-              '// Stream pipeline demo\n',
-              'System.out.println("\\nCurriculum Modules (Filtered & Uppercased):");\n',
-              'coreTopics.stream()\n',
-              '    .filter(topic -> topic.contains("OOP") || topic.contains("Streams") || topic.contains("Collections"))\n',
-              '    .map(String::toUpperCase)\n',
-              '    .forEach(topic -> System.out.println("  ➜ " + topic));\n'
-            ]
-          },
-          {
-            cell_type: 'code',
-            execution_count: null,
-            metadata: { language: 'java' },
-            outputs: [],
-            source: [
-              '// Cell 2: OOP Principles — Classes & Static Helper Methods\n',
-              'class MathUtils {\n',
-              '    public static long factorial(int n) {\n',
-              '        long result = 1;\n',
-              '        for (int i = 2; i <= n; i++) {\n',
-              '            result *= i;\n',
-              '        }\n',
-              '        return result;\n',
-              '    }\n',
-              '}\n',
-              '\n',
-              'System.out.println("Computing Factorials in Java Notebook:");\n',
-              'for (int i = 1; i <= 8; i++) {\n',
-              '    System.out.printf("  %d! = %d%n", i, MathUtils.factorial(i));\n',
-              '}\n'
-            ]
-          }
-        ],
-        metadata: {
-          language_info: {
-            name: 'java',
-            version: '17'
-          },
-          kernelspec: {
-            display_name: 'Java (OpenJDK / JShell Engine)',
-            language: 'java',
-            name: 'java'
-          }
-        },
-        nbformat: 4,
-        nbformat_minor: 5
-      },
-      null,
-      2
-    );
+    kernelSpec = { display_name: 'Java', language: 'java', name: 'java' };
+    langInfo = { name: 'java', version: '17' };
+  } else if (langKey === 'cpp' || langKey === '54' || langKey === 'c++') {
+    kernelSpec = { display_name: 'C++', language: 'cpp', name: 'cpp' };
+    langInfo = { name: 'cpp', version: '20' };
+  } else if (langKey === 'javascript' || langKey === 'js' || langKey === '63') {
+    kernelSpec = { display_name: 'JavaScript', language: 'javascript', name: 'javascript' };
+    langInfo = { name: 'javascript', version: 'ES2023' };
   }
 
-  // 2. C++ NOTEBOOK
-  if (langKey === 'cpp' || langKey === '54' || langKey === 'c++') {
-    return JSON.stringify(
-      {
-        cells: [
-          {
-            cell_type: 'markdown',
-            metadata: {},
-            source: [
-              '# ⚡ C++ Interactive Notebook\n',
-              'Interactive C++ computing environment powered by modern GCC/Clang.\n',
-              '- Direct execution of modern C++20 code, STL algorithms, and structures.\n',
-              '- Interactive cell statements automatically wrapped for convenience.'
-            ]
-          },
-          {
-            cell_type: 'code',
-            execution_count: null,
-            metadata: { language: 'cpp' },
-            outputs: [],
-            source: [
-              '#include <iostream>\n',
-              '#include <vector>\n',
-              '#include <numeric>\n',
-              '#include <algorithm>\n',
-              '\n',
-              'using namespace std;\n',
-              '\n',
-              'int main() {\n',
-              '    cout << "⚡ C++ Interactive Notebook Running!" << endl;\n',
-              '    vector<int> numbers = {10, 25, 30, 45, 60, 80};\n',
-              '    int total = accumulate(numbers.begin(), numbers.end(), 0);\n',
-              '    cout << "Total elements: " << numbers.size() << endl;\n',
-              '    cout << "Sum: " << total << ", Average: " << (double)total / numbers.size() << endl;\n',
-              '    return 0;\n',
-              '}\n'
-            ]
-          }
-        ],
-        metadata: {
-          language_info: {
-            name: 'cpp',
-            version: '20'
-          },
-          kernelspec: {
-            display_name: 'C++20 (GCC / Clang)',
-            language: 'cpp',
-            name: 'cpp'
-          }
-        },
-        nbformat: 4,
-        nbformat_minor: 5
-      },
-      null,
-      2
-    );
-  }
-
-  // 3. JAVASCRIPT NOTEBOOK
-  if (langKey === 'javascript' || langKey === 'js' || langKey === '63') {
-    return JSON.stringify(
-      {
-        cells: [
-          {
-            cell_type: 'markdown',
-            metadata: {},
-            source: [
-              '# 🟨 JavaScript Interactive Notebook\n',
-              'Interactive JavaScript computing environment running directly in the browser.\n',
-              '- Instant execution with console logs, object inspection, and table previews.\n',
-              '- Full ES2024 features: Async/Await, Array methods, and Math.'
-            ]
-          },
-          {
-            cell_type: 'code',
-            execution_count: null,
-            metadata: { language: 'javascript' },
-            outputs: [],
-            source: [
-              '// Interactive Data Operations in JavaScript\n',
-              'const languages = [\n',
-              '  { name: "Java", type: "Compiled / JVM", popularity: 88 },\n',
-              '  { name: "Python", type: "Interpreted / SciPy", popularity: 96 },\n',
-              '  { name: "JavaScript", type: "JIT / V8 Engine", popularity: 94 },\n',
-              '  { name: "C++", type: "Native Compiled", popularity: 82 }\n',
-              '];\n',
-              '\n',
-              'console.log("🟨 Welcome to JavaScript Notebook!");\n',
-              'console.table(languages);\n'
-            ]
-          }
-        ],
-        metadata: {
-          language_info: {
-            name: 'javascript',
-            version: 'ES2024'
-          },
-          kernelspec: {
-            display_name: 'JavaScript (Browser V8 Engine)',
-            language: 'javascript',
-            name: 'javascript'
-          }
-        },
-        nbformat: 4,
-        nbformat_minor: 5
-      },
-      null,
-      2
-    );
-  }
-
-  // 4. PYTHON NOTEBOOK (Google Colab Data Science Stack)
   return JSON.stringify(
     {
       cells: [
         {
-          cell_type: 'markdown',
-          metadata: {},
-          source: [
-            '# 🚀 Data Science Notebook (Google Colab Environment)\n',
-            'Interactive computing environment powered by Pyodide WebAssembly with **Pandas**, **NumPy**, **Matplotlib**, and **Scikit-learn**.\n',
-            '- 📊 **Interactive Data Tables**: Real-time search, sorting, pagination, and CSV/JSON export.\n',
-            '- 📈 **Rich Visualizations**: Inline Matplotlib and Seaborn figures.\n',
-            '- ⚡ **Colab Magics**: Support for `%pip install`, `!ls`, and `%time`.'
-          ]
-        },
-        {
           cell_type: 'code',
           execution_count: null,
-          metadata: { language: 'python' },
+          metadata: { language: langInfo.name },
           outputs: [],
-          source: [
-            '# 1. Load dataset from workspace and preview with Interactive Data Table\n',
-            'import numpy as np\n',
-            'import pandas as pd\n',
-            'import matplotlib.pyplot as plt\n',
-            '\n',
-            'df = pd.read_csv("sales_data.csv")\n',
-            'df.head(10)'
-          ]
+          source: [comment],
         },
-        {
-          cell_type: 'code',
-          execution_count: null,
-          metadata: { language: 'python' },
-          outputs: [],
-          source: [
-            '# 2. Visualize total revenue by product category\n',
-            'category_rev = df.groupby("category")["revenue"].sum().sort_values(ascending=False)\n',
-            '\n',
-            'plt.figure(figsize=(9, 4.2))\n',
-            'plt.bar(category_rev.index, category_rev.values, color="#38bdf8", edgecolor="#0284c7", width=0.55)\n',
-            'plt.title("Total Revenue by Product Category ($)", fontsize=13, fontweight="bold", pad=12)\n',
-            'plt.ylabel("Revenue ($)", fontsize=11)\n',
-            'plt.grid(axis="y", linestyle="--", alpha=0.3)\n',
-            'plt.tight_layout()\n',
-            'plt.show()'
-          ]
-        },
-        {
-          cell_type: 'code',
-          execution_count: null,
-          metadata: { language: 'python' },
-          outputs: [],
-          source: [
-            '# 3. Numerical Summary & Distribution\n',
-            'df.describe()'
-          ]
-        }
       ],
       metadata: {
-        language_info: {
-          name: 'python',
-          version: '3.12'
-        },
-        kernelspec: {
-          display_name: 'Python 3 (Pyodide WebAssembly)',
-          language: 'python',
-          name: 'python3'
-        }
+        language_info: langInfo,
+        kernelspec: kernelSpec,
       },
       nbformat: 4,
-      nbformat_minor: 5
+      nbformat_minor: 5,
     },
     null,
     2
@@ -1352,145 +1125,30 @@ export function getStarterTemplate(languageId, filename = '', notebookLang = '')
   }
 
   const templates = {
-    71: `# Start here
-`,
-    54: `#include <iostream>
-using namespace std;
-
-int main() {
-    // Start here
-    
-    return 0;
-}
-`,
-    50: `#include <stdio.h>
-
-int main() {
-    // Start here
-    
-    return 0;
-}
-`,
-    62: `import java.util.*;
-
-class Main {
-    public static void main(String[] args) {
-        // Start here
-        
-    }
-}
-`,
-    63: `// Start here
-`,
-    74: `// Start here
-`,
-    51: `using System;
-
-class Program {
-    static void Main(string[] args) {
-        // Start here
-        
-    }
-}
-`,
-    78: `fun main() {
-    // Start here
-    
-}
-`,
-    83: `import Foundation
-
-// Start here
-`,
-    60: `package main
-
-import "fmt"
-
-func main() {
-    // Start here
-    
-}
-`,
-    73: `fn main() {
-    // Start here
-    
-}
-`,
-    68: `<?php
-// Start here
-`,
-    72: `# Start here
-`,
-    80: `# Start here
-`,
-    85: `use strict;
-use warnings;
-
-# Start here
-`,
-    81: `object Main extends App {
-    // Start here
-    
-}
-`,
-    82: `-- Start here
-`,
-    0: `<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>My Page</title>
-</head>
-<body>
-    <!-- Start here -->
-    
-</body>
-</html>
-`,
-    1: `/* Start here */
-`,
-    99: `# 📝 Notes & Documentation
-
-Write your notes, explanations, ideas, or documentation here...
-
-- Note 1: 
-- Note 2: 
-`,
+    71: `# Start here\n`,
+    54: `// Start here\n`,
+    50: `// Start here\n`,
+    62: `// Start here\n`,
+    63: `// Start here\n`,
+    74: `// Start here\n`,
+    51: `// Start here\n`,
+    78: `// Start here\n`,
+    83: `// Start here\n`,
+    60: `// Start here\n`,
+    73: `// Start here\n`,
+    68: `// Start here\n`,
+    72: `# Start here\n`,
+    80: `# Start here\n`,
+    85: `# Start here\n`,
+    81: `// Start here\n`,
+    82: `-- Start here\n`,
+    0: `<!-- Start here -->\n`,
+    1: `/* Start here */\n`,
+    99: `# Start here\n`,
     710: createDefaultNotebookJson(nbTarget || 'python'),
-    711: `name: myenv
-channels:
-  - defaults
-  - conda-forge
-dependencies:
-  - python=3.11
-  - numpy
-  - pandas
-  - matplotlib
-  - pip:
-    - requests
-`,
-    712: (filename && filename.toLowerCase().includes('sales'))
-      ? `order_id,product_name,category,price,quantity,revenue,customer_city
-1001,MacBook Pro 16,Electronics,2499.00,2,4998.00,San Francisco
-1002,Sony WH-1000XM5,Electronics,399.50,4,1598.00,New York
-1003,Ergonomic Chair,Furniture,349.00,3,1047.00,Austin
-1004,Mechanical Keyboard,Accessories,149.00,8,1192.00,Seattle
-1005,4K Monitor 32-inch,Electronics,699.00,5,3495.00,Chicago
-1006,Standing Desk,Furniture,599.00,2,1198.00,Boston
-1007,Wireless Mouse,Accessories,79.90,12,958.80,Denver
-1008,USB-C Hub,Accessories,49.99,15,749.85,Austin
-1009,Noise Cancelling Earbuds,Electronics,199.00,6,1194.00,San Francisco
-1010,Coffee Maker Espresso,Appliances,289.00,3,867.00,Seattle
-`
-      : `id,name,category,value,status
-1,Item A,Category 1,120.50,active
-2,Item B,Category 2,85.00,active
-3,Item C,Category 1,230.75,pending
-4,Item D,Category 3,45.20,inactive
-5,Item E,Category 2,310.00,active
-`,
-    713: `{\n  "status": "success",\n  "data": []\n}\n`,
+    711: `# Start here\n`,
+    712: `# Start here\n`,
+    713: `// Start here\n`,
   };
 
   return templates[languageId] || templates[71];
@@ -1724,33 +1382,6 @@ export function getNextSequentialFilename(files = [], activeFileId = null, detec
  * Generate starter template matching sequential filename with valid language identifiers
  */
 export function getSequentialFileStarterContent(baseName, ext) {
-  if (ext === 'java') {
-    return `import java.util.*;\n\npublic class ${baseName} {\n    public static void main(String[] args) {\n        Scanner sc = new Scanner(System.in);\n        // Start coding in ${baseName}\n        System.out.println("Running ${baseName}...");\n    }\n}\n`;
-  }
-  if (ext === 'py') {
-    return `# ${baseName}.py\n# Start coding here\n\ndef main():\n    print("Running ${baseName}...")\n\nif __name__ == '__main__':\n    main()\n`;
-  }
-  if (ext === 'cpp') {
-    return `#include <iostream>\nusing namespace std;\n\nint main() {\n    // ${baseName}.cpp\n    cout << "Running ${baseName}..." << endl;\n    return 0;\n}\n`;
-  }
-  if (ext === 'c') {
-    return `#include <stdio.h>\n\nint main() {\n    // ${baseName}.c\n    printf("Running ${baseName}...\\n");\n    return 0;\n}\n`;
-  }
-  if (ext === 'js') {
-    return `// ${baseName}.js\nconsole.log("Running ${baseName}...");\n`;
-  }
-  if (ext === 'ts') {
-    return `// ${baseName}.ts\nconst message: string = "Running ${baseName}...";\nconsole.log(message);\n`;
-  }
-  if (ext === 'cs') {
-    return `using System;\n\npublic class ${baseName} {\n    public static void Main(string[] args) {\n        Console.WriteLine("Running ${baseName}...");\n    }\n}\n`;
-  }
-  if (ext === 'go') {
-    return `package main\n\nimport "fmt"\n\nfunc main() {\n    fmt.Println("Running ${baseName}...")\n}\n`;
-  }
-  if (ext === 'rs') {
-    return `fn main() {\n    // ${baseName}.rs\n    println!("Running ${baseName}...");\n}\n`;
-  }
   if (ext === 'ipynb') {
     const lower = (baseName || '').toLowerCase();
     if (lower.includes('java')) return createDefaultNotebookJson('java');
@@ -1758,10 +1389,23 @@ export function getSequentialFileStarterContent(baseName, ext) {
     if (lower.includes('js') || lower.includes('javascript')) return createDefaultNotebookJson('javascript');
     return createDefaultNotebookJson('python');
   }
-  if (ext === 'yml' || ext === 'yaml') {
-    return `name: myenv\nchannels:\n  - defaults\n  - conda-forge\ndependencies:\n  - python=3.11\n`;
+  if (['py', 'r', 'rb', 'pl', 'sh', 'bash', 'zsh', 'yml', 'yaml'].includes(ext)) {
+    return `# Start here\n`;
   }
-  return `// ${baseName}.${ext}\n`;
+  if (ext === 'sql') {
+    return `-- Start here\n`;
+  }
+  if (ext === 'html' || ext === 'htm') {
+    return `<!-- Start here -->\n`;
+  }
+  if (ext === 'css' || ext === 'scss' || ext === 'less') {
+    return `/* Start here */\n`;
+  }
+  if (ext === 'md') {
+    return `# Start here\n`;
+  }
+  // Java, C, C++, C#, JS, TS, Go, Rust, Kotlin, Swift, Scala, PHP, etc.
+  return `// Start here\n`;
 }
 
 /**

@@ -174,10 +174,38 @@ function normalizeLoadedFiles(files) {
     }
 
     const safeLang = resolveLanguage(f.language, f.name);
+    let content = f.content;
+
+    // Clean untouched default trash boilerplate if present
+    if (typeof content === 'string') {
+      const trimmed = content.trim();
+      const isJava = f.name?.endsWith('.java') || safeLang?.id === 62;
+      const isCpp = f.name?.endsWith('.cpp') || safeLang?.id === 54;
+
+      if (
+        isJava &&
+        (
+          (trimmed.includes('class Main') && trimmed.includes('public static void main') && trimmed.includes('// Start here') && !trimmed.includes('System.out') && !trimmed.includes('Scanner') && !trimmed.includes('=')) ||
+          (trimmed.includes('Scanner sc = new Scanner(System.in);') && trimmed.includes('System.out.println("Running '))
+        )
+      ) {
+        content = '// Start here\n';
+      } else if (
+        isCpp &&
+        (
+          (trimmed.includes('#include <iostream>') && trimmed.includes('using namespace std;') && trimmed.includes('int main()') && trimmed.includes('// Start here') && trimmed.includes('return 0;') && !trimmed.includes('cout') && !trimmed.includes('vector')) ||
+          (trimmed.includes('cout << "Running ') && trimmed.includes('return 0;'))
+        )
+      ) {
+        content = '// Start here\n';
+      }
+    }
+
     const isIpynb = f.name?.endsWith('.ipynb') || f.language?.id === 710 || f.language?.monacoLanguage === 'ipynb';
     if (!isIpynb) {
       return {
         ...f,
+        content,
         language: safeLang,
       };
     }
@@ -192,9 +220,17 @@ function normalizeLoadedFiles(files) {
     else if (hasCpp) targetLang = 'cpp';
     else if (hasJs) targetLang = 'javascript';
 
+    if (
+      typeof content === 'string' &&
+      (content.includes('Interactive Notebook') || content.includes('Google Colab Environment'))
+    ) {
+      content = createDefaultNotebookJson(targetLang || 'python');
+    }
+
     if (targetLang === 'java') {
       return {
         ...f,
+        content,
         language: {
           ...safeLang,
           id: 710,
@@ -209,6 +245,7 @@ function normalizeLoadedFiles(files) {
     } else if (targetLang === 'cpp') {
       return {
         ...f,
+        content,
         language: {
           ...safeLang,
           id: 710,
@@ -223,6 +260,7 @@ function normalizeLoadedFiles(files) {
     } else if (targetLang === 'javascript') {
       return {
         ...f,
+        content,
         language: {
           ...safeLang,
           id: 710,
@@ -237,6 +275,7 @@ function normalizeLoadedFiles(files) {
     }
     return {
       ...f,
+      content,
       language: safeLang,
     };
   });
