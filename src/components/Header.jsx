@@ -3,7 +3,6 @@ import { useApp } from '../context/AppContext';
 import {
   Play,
   Settings,
-  FolderTree,
   BookOpen,
   FolderKanban,
   AlignLeft,
@@ -205,13 +204,6 @@ export default function Header() {
     return (
       <header className="header app-header header-minimized">
         <div className="header-min-left">
-          <button
-            className={`btn-icon-min ${explorerOpen ? 'active' : ''}`}
-            onClick={() => dispatch({ type: 'TOGGLE_EXPLORER' })}
-            title="Toggle File Explorer (Ctrl+B)"
-          >
-            <span className="material-symbols-outlined text-xs">folder</span>
-          </button>
           <div
             className="brand-min"
             onClick={() => dispatch({ type: 'NAVIGATE_PAGE', payload: 'editor' })}
@@ -284,14 +276,6 @@ export default function Header() {
     <header className="header app-header antigravity-top-bar" ref={menuBarRef}>
       {/* Left: Brand & Menu Navigation */}
       <div className="header-left">
-        <button
-          className={`btn-sidebar-toggle ${explorerOpen ? 'active' : ''}`}
-          onClick={() => dispatch({ type: 'TOGGLE_EXPLORER' })}
-          title="Toggle File Explorer (Ctrl+B)"
-        >
-          <span className="material-symbols-outlined text-sm">folder</span>
-        </button>
-
         <div
           className="brand"
           onClick={() => dispatch({ type: 'NAVIGATE_PAGE', payload: 'editor' })}
