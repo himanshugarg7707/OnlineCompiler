@@ -29,7 +29,7 @@ import PracticePage from './pages/PracticePage';
 import GitPage from './pages/GitPage';
 import SplitPaneContainer from './components/SplitPaneContainer';
 import { getLanguageFromFilename } from './services/languageDetector';
-import { FolderTree, ChevronLeft, ChevronRight, Maximize2, Minimize2, Play, Columns2 } from 'lucide-react';
+import { FolderTree, ChevronLeft, ChevronRight, Maximize2, Minimize2, Play, Columns2, Check } from 'lucide-react';
 import './App.css';
 
 const SPLIT_STORAGE_KEY = 'fullcode_split_percent';
@@ -758,10 +758,14 @@ function AppContent() {
 
       <StatusBar />
 
-      {/* Floating Toast Notification */}
+      {/* Floating Toast Notification (Compact Right-Bottom Green Tick Circle) */}
       {toast && (
-        <div className="toast-notification animate-slide-up">
-          <span>{toast}</span>
+        <div
+          className="toast-notification"
+          title={typeof toast === 'string' ? toast : 'Success'}
+          aria-label={typeof toast === 'string' ? toast : 'Success'}
+        >
+          <Check size={13} strokeWidth={3} className="toast-tick-icon" />
         </div>
       )}
 

@@ -3,7 +3,6 @@ import Editor from '@monaco-editor/react';
 import { useApp } from '../context/AppContext';
 import { registerSnippets, recordVariablesFromCode } from '../services/snippets';
 import { validateCodeSyntax } from '../services/syntaxValidatorService';
-import ComplexityPanel from './ComplexityPanel';
 import { AlertCircle } from 'lucide-react';
 import FileTabs from './FileTabs';
 import JupyterNotebookEditor from './JupyterNotebookEditor';
@@ -673,9 +672,6 @@ export default function CodeEditor() {
                 </div>
               }
             />
-
-            {/* Floating Complexity Pill (Bottom Right) */}
-            <ComplexityPanel />
 
             {/* Floating Problems & Error Jumper Pill */}
             {liveErrors.length > 0 && (
