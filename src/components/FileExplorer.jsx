@@ -528,14 +528,14 @@ export default function FileExplorer() {
           title={`Folder: ${folderPath}/`}
         >
           <div className="folder-header-left">
-            <span className="folder-chevron">
-              {isCollapsed ? <ChevronRight size={13} /> : <ChevronDown size={13} />}
+            <span className={`folder-chevron ${isCollapsed ? 'collapsed' : 'expanded'}`}>
+              {isCollapsed ? <ChevronRight size={10} strokeWidth={2.5} /> : <ChevronDown size={10} strokeWidth={2.5} />}
             </span>
 
             {isCollapsed ? (
-              <Folder size={14} className="folder-icon" />
+              <Folder size={14} fill="currentColor" className="folder-icon" />
             ) : (
-              <FolderOpen size={14} className="folder-icon open" />
+              <FolderOpen size={14} fill="currentColor" className="folder-icon open" />
             )}
 
             {isEditing ? (
@@ -794,116 +794,92 @@ export default function FileExplorer() {
 
   return (
     <aside className="file-explorer file-explorer-sidebar antigravity-sidebar">
-      {/* Top Workspace & Project Root header */}
-      <div className="sidebar-workspace-header">
-        <span className="sidebar-workspace-label">WORKSPACE</span>
-        {state.incognitoMode ? (
-          <span className="sidebar-workspace-sub incognito-sub" title="Incognito Mode Active: Workspace data will vanish on refresh">
-            🕶️ INCOGNITO (VANISH ON REFRESH)
-          </span>
-        ) : (
-          <span className="sidebar-workspace-sub">PROJECT ROOT</span>
+      {/* Top Hierarchy Header */}
+      <div className="hierarchy-header">
+        <div className="hierarchy-title-group">
+          <div className="hierarchy-badge">
+            <ChevronDown size={11} strokeWidth={2.5} />
+          </div>
+          <span className="hierarchy-title">HIERARCHY</span>
+        </div>
+
+        <div className="hierarchy-header-actions">
+          <button
+            className="hierarchy-action-btn"
+            onClick={() => startAddFile('')}
+            title="New File (+)"
+            aria-label="New File"
+          >
+            <Plus size={14} />
+          </button>
+
+          <button
+            className="hierarchy-action-btn"
+            onClick={() => startAddFolder('')}
+            title="New Folder"
+            aria-label="New Folder"
+          >
+            <FolderPlus size={13} />
+          </button>
+
+          {state.clipboardFile && (
+            <button
+              className="hierarchy-action-btn"
+              onClick={() => handlePasteFile('')}
+              title={`Paste ${state.clipboardFile.name || 'file'}`}
+              aria-label="Paste File"
+            >
+              <ClipboardPaste size={13} style={{ color: '#10b981' }} />
+            </button>
+          )}
+
+          <button
+            className="hierarchy-action-btn"
+            onClick={() => {
+              if (window.confirm('Delete all files and reset to empty workspace?')) {
+                dispatch({ type: 'CLEAR_WORKSPACE' });
+              }
+            }}
+            title="Clear Workspace"
+            aria-label="Clear Workspace"
+          >
+            <Trash2 size={13} />
+          </button>
+
+          <button
+            className="hierarchy-action-btn"
+            onClick={() => dispatch({ type: 'TOGGLE_EXPLORER' })}
+            title="Close Sidebar"
+            aria-label="Close Sidebar"
+          >
+            <X size={13} />
+          </button>
+        </div>
+      </div>
+
+      {/* Hierarchy Search Bar */}
+      <div className="hierarchy-search">
+        <input
+          ref={searchInputRef}
+          type="text"
+          placeholder="Search"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="hierarchy-search-input"
+        />
+        <Search size={13} className="hierarchy-search-icon" />
+        {searchQuery && (
+          <button
+            className="btn-clear-search"
+            onClick={() => {
+              setSearchQuery('');
+              searchInputRef.current?.focus();
+            }}
+          >
+            <X size={11} />
+          </button>
         )}
       </div>
-
-      {/* Side Navigation Tabs (Explorer & Search for files) */}
-      <div className="sidebar-nav-tabs">
-        <div
-          className={`sidebar-nav-tab ${activeSidebarTab === 'explorer' ? 'active' : ''}`}
-          onClick={() => {
-            setActiveSidebarTab('explorer');
-          }}
-          title="File Tree Explorer"
-        >
-          <span className="material-symbols-outlined text-sm">folder</span>
-          <span className="sidebar-tab-title">Explorer</span>
-        </div>
-        <div
-          className={`sidebar-nav-tab ${activeSidebarTab === 'search' ? 'active' : ''}`}
-          onClick={() => {
-            setActiveSidebarTab('search');
-            setTimeout(() => searchInputRef.current?.focus(), 50);
-          }}
-          title="Search Workspace Files"
-        >
-          <span className="material-symbols-outlined text-sm">search</span>
-          <span className="sidebar-tab-title">Search for files</span>
-        </div>
-      </div>
-
-
-          {/* Explorer Header */}
-          <div className="explorer-header">
-            <div className="explorer-title-group">
-              <span className="explorer-title">EXPLORER</span>
-            </div>
-
-            <div className="explorer-header-actions">
-              <button
-                className="explorer-action-btn"
-                onClick={() => startAddFile('')}
-                title="New File"
-              >
-                <FilePlus size={14} />
-              </button>
-
-              <button
-                className="explorer-action-btn"
-                onClick={() => startAddFolder('')}
-                title="New Folder"
-              >
-                <FolderPlus size={14} />
-              </button>
-
-              {state.clipboardFile && (
-                <button
-                  className="explorer-action-btn"
-                  onClick={() => handlePasteFile('')}
-                  title={`Paste ${state.clipboardFile.name || 'file'} into workspace`}
-                >
-                  <ClipboardPaste size={14} style={{ color: '#10b981' }} />
-                </button>
-              )}
-
-              <button
-                className="explorer-action-btn"
-                onClick={() => dispatch({ type: 'TOGGLE_EXPLORER' })}
-                title="Close Explorer"
-              >
-                <X size={14} />
-              </button>
-            </div>
-          </div>
-
-          {/* Search Input */}
-          <div className={`explorer-search ${activeSidebarTab === 'search' ? 'active-search-highlight' : ''}`}>
-            <Search size={12} className="search-icon" />
-            <input
-              ref={searchInputRef}
-              type="text"
-              placeholder="Search for files..."
-              value={searchQuery}
-              onFocus={() => setActiveSidebarTab('search')}
-              onChange={(e) => {
-                setSearchQuery(e.target.value);
-                if (activeSidebarTab !== 'search') {
-                  setActiveSidebarTab('search');
-                }
-              }}
-              className="explorer-search-input"
-            />
-            {searchQuery && (
-              <button
-                className="btn-clear-search"
-                onClick={() => {
-                  setSearchQuery('');
-                  searchInputRef.current?.focus();
-                }}
-              >
-                <X size={11} />
-              </button>
-            )}
-          </div>
 
       {/* Recursive Files & Folders Tree */}
       <div

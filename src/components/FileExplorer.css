@@ -258,43 +258,117 @@
   color: var(--text-muted, #8b949e);
 }
 
-/* Search Box */
-.explorer-search {
-  width: 100%;
-  box-sizing: border-box;
-  padding: 6px 10px;
-  border-bottom: 1px solid var(--border-primary);
+/* ─── Hierarchy Header & Search ─────────────────────────────────────── */
+.hierarchy-header {
+  height: 38px;
+  min-height: 38px;
   display: flex;
   align-items: center;
-  gap: 6px;
-  background: rgba(0, 0, 0, 0.05);
-  transition: all 0.2s ease;
+  justify-content: space-between;
+  padding: 0 12px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-primary);
+  user-select: none;
+  box-sizing: border-box;
 }
 
-.explorer-search.active-search-highlight {
-  background: var(--glow-diffusion, rgba(173, 198, 255, 0.08));
-  border-bottom-color: var(--accent-purple, #adc6ff);
+.hierarchy-title-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
-.explorer-search .search-icon {
-  color: var(--text-muted);
+.hierarchy-badge {
+  width: 17px;
+  height: 17px;
+  border-radius: 50%;
+  border: 1.5px solid var(--hierarchy-accent, #f97316);
+  color: var(--hierarchy-accent, #f97316);
+  display: flex;
+  align-items: center;
+  justify-content: center;
   flex-shrink: 0;
 }
 
-.explorer-search-input {
-  flex: 1;
-  width: 100%;
-  background: transparent;
-  border: none;
-  outline: none;
-  font-size: 12px;
+.hierarchy-title {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
   color: var(--text-primary);
-  font-family: var(--font-ui);
+  text-transform: uppercase;
+  font-family: var(--font-ui), var(--font-sans);
 }
 
-.explorer-search-input::placeholder {
+.hierarchy-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.hierarchy-action-btn {
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-radius: 4px;
+  transition: color var(--transition-fast), background-color var(--transition-fast);
+  padding: 0;
+}
+
+.hierarchy-action-btn:hover {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.hierarchy-action-btn.danger:hover {
+  color: #f87171;
+}
+
+/* Hierarchy Search Box */
+.hierarchy-search {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.06));
+  display: flex;
+  align-items: center;
+  position: relative;
+  background: var(--bg-secondary);
+}
+
+.hierarchy-search-input {
+  width: 100%;
+  height: 26px;
+  background: rgba(0, 0, 0, 0.18);
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+  border-radius: 4px;
+  padding: 0 26px 0 8px;
+  font-size: 11.5px;
+  color: var(--text-primary);
+  outline: none;
+  font-family: var(--font-ui), var(--font-sans);
+  transition: border-color var(--transition-fast);
+}
+
+.hierarchy-search-input::placeholder {
   color: var(--text-muted);
   font-size: 11px;
+}
+
+.hierarchy-search-input:focus {
+  border-color: var(--accent-cyan);
+}
+
+.hierarchy-search-icon {
+  position: absolute;
+  right: 18px;
+  color: var(--text-muted);
+  pointer-events: none;
 }
 
 .btn-clear-search {
@@ -332,39 +406,39 @@
   display: flex;
   flex-direction: column;
   width: 100%;
+  position: relative;
 }
 
 .explorer-folder-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 5px 8px 5px 6px;
+  padding: 4px 8px 4px 6px;
   cursor: pointer;
   position: relative;
-  transition: all var(--transition-fast);
-  color: var(--text-primary);
-  font-size: 13px;
+  transition: background-color var(--transition-fast), color var(--transition-fast);
+  color: var(--text-secondary);
+  font-size: 12px;
   user-select: none;
-  border-radius: 6px;
-  margin: 3px 4px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 4px;
+  margin: 1px 4px;
+  background: transparent;
+  border: 1px solid transparent;
 }
 
 .explorer-folder-header:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-primary);
+}
+
+.explorer-folder-header:not(.collapsed) {
   background: rgba(255, 255, 255, 0.08);
-  border-color: rgba(255, 255, 255, 0.15);
+  color: #ffffff;
 }
 
-[data-theme="baby-pink"] .explorer-folder-header {
-  background: rgba(244, 114, 182, 0.12);
-  border-color: rgba(244, 114, 182, 0.28);
+[data-theme="baby-pink"] .explorer-folder-header:not(.collapsed) {
+  background: rgba(244, 114, 182, 0.2);
   color: #831843;
-}
-
-[data-theme="baby-pink"] .explorer-folder-header:hover {
-  background: rgba(244, 114, 182, 0.22);
-  border-color: rgba(244, 114, 182, 0.45);
 }
 
 .folder-header-left {
@@ -378,7 +452,7 @@
 .folder-header-right {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 3px;
   margin-left: 6px;
   flex-shrink: 0;
 }
@@ -388,53 +462,58 @@
   align-items: center;
   justify-content: center;
   color: var(--text-muted);
-  width: 16px;
-  height: 16px;
+  width: 14px;
+  height: 14px;
   flex-shrink: 0;
-  transition: transform var(--transition-fast);
+  transition: transform var(--transition-fast), color var(--transition-fast);
+}
+
+.folder-chevron.expanded {
+  color: var(--hierarchy-accent, #f97316);
 }
 
 .folder-icon {
-  color: #f59e0b;
+  color: var(--text-muted);
   flex-shrink: 0;
+  opacity: 0.85;
+  transition: color var(--transition-fast), opacity var(--transition-fast);
 }
 
 .folder-icon.open {
-  color: #fbbf24;
-}
-
-[data-theme="baby-pink"] .folder-icon {
-  color: #ec4899;
+  color: #ffffff;
+  opacity: 1;
 }
 
 [data-theme="baby-pink"] .folder-icon.open {
-  color: #db2777;
+  color: #ec4899;
 }
 
 .folder-name {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-family: var(--font-ui), var(--font-mono);
-  font-size: 12.5px;
-  font-weight: 700;
-  letter-spacing: 0.25px;
+  font-family: var(--font-ui), var(--font-sans);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.explorer-folder-header:not(.collapsed) .folder-name {
+  font-weight: 600;
+  color: #ffffff;
+}
+
+[data-theme="baby-pink"] .explorer-folder-header:not(.collapsed) .folder-name {
+  color: #831843;
 }
 
 .folder-badge {
   font-size: 9px;
-  padding: 1px 6px;
+  padding: 1px 5px;
   border-radius: var(--radius-full);
   background: var(--bg-tertiary);
   color: var(--text-muted);
-  font-weight: 700;
-  border: 1px solid var(--border-primary);
-}
-
-[data-theme="baby-pink"] .folder-badge {
-  background: rgba(244, 114, 182, 0.25);
-  color: #831843;
-  border-color: rgba(244, 114, 182, 0.4);
+  font-weight: 600;
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
 }
 
 .folder-actions {
@@ -451,52 +530,56 @@
   display: none;
 }
 
-/* ─── Tree Guide Lines (Indent Guides) ─── */
+/* ─── Tree Guide Lines (Indent Guides / Lines UI) ─── */
 .folder-children-group {
   display: flex;
   flex-direction: column;
   position: relative;
-  border-left: 1.5px solid rgba(255, 255, 255, 0.2);
-  margin-left: 18px; /* sits precisely beneath center of the 16px chevron */
+  border-left: 1px solid var(--tree-line, rgba(255, 255, 255, 0.16));
+  margin-left: 15px;
   padding-left: 0;
   transition: border-color 0.2s ease;
 }
 
 .folder-children-group:hover {
-  border-left-color: rgba(0, 212, 255, 0.7);
+  border-left-color: var(--tree-line-hover, rgba(0, 212, 255, 0.5));
 }
 
 [data-theme="baby-pink"] .folder-children-group {
-  border-left-color: rgba(219, 39, 119, 0.55);
+  border-left-color: rgba(219, 39, 119, 0.35);
 }
 
 [data-theme="baby-pink"] .folder-children-group:hover {
-  border-left-color: rgba(219, 39, 119, 0.95);
+  border-left-color: rgba(219, 39, 119, 0.85);
 }
 
-/* Branch connector notch from vertical tree line to each child item */
-.folder-children-group > .explorer-file-item::before {
+/* Branch connector notch from vertical tree line to each child file & folder */
+.folder-children-group > .explorer-file-item::before,
+.folder-children-group > .explorer-folder-node > .explorer-folder-header::before {
   content: '';
   position: absolute;
   left: 0;
   top: 50%;
-  width: 9px;
-  height: 1.5px;
-  background: rgba(255, 255, 255, 0.2);
+  width: 10px;
+  height: 1px;
+  background: var(--tree-line, rgba(255, 255, 255, 0.16));
   pointer-events: none;
   transition: background-color 0.2s ease;
 }
 
-[data-theme="baby-pink"] .folder-children-group > .explorer-file-item::before {
-  background: rgba(219, 39, 119, 0.55);
+.folder-children-group:hover > .explorer-file-item::before,
+.folder-children-group:hover > .explorer-folder-node > .explorer-folder-header::before {
+  background: var(--tree-line-hover, rgba(0, 212, 255, 0.5));
 }
 
-.folder-children-group:hover > .explorer-file-item::before {
-  background: rgba(0, 212, 255, 0.7);
+[data-theme="baby-pink"] .folder-children-group > .explorer-file-item::before,
+[data-theme="baby-pink"] .folder-children-group > .explorer-folder-node > .explorer-folder-header::before {
+  background: rgba(219, 39, 119, 0.35);
 }
 
-[data-theme="baby-pink"] .folder-children-group:hover > .explorer-file-item::before {
-  background: rgba(219, 39, 119, 0.95);
+[data-theme="baby-pink"] .folder-children-group:hover > .explorer-file-item::before,
+[data-theme="baby-pink"] .folder-children-group:hover > .explorer-folder-node > .explorer-folder-header::before {
+  background: rgba(219, 39, 119, 0.85);
 }
 
 .explorer-empty-folder-hint {
@@ -518,15 +601,15 @@
   display: flex;
   align-items: center;
   gap: 7px;
-  padding: 5px 8px 5px 28px; /* Default for root files: aligns with folder icon! */
+  padding: 4px 8px 4px 26px; /* Root files: aligned with folder icon */
   margin: 1px 4px;
-  border-radius: 5px;
+  border-radius: 4px;
   cursor: pointer;
   position: relative;
-  transition: all var(--transition-fast);
+  transition: background-color var(--transition-fast), color var(--transition-fast);
   color: var(--text-secondary);
-  font-size: 12.5px;
-  font-family: var(--font-mono);
+  font-size: 12px;
+  font-family: var(--font-ui), var(--font-sans);
   width: calc(100% - 8px);
   box-sizing: border-box;
   min-width: 0;
@@ -541,7 +624,7 @@
   cursor: grabbing;
 }
 
-/* Nested files inside a folder: snug padding right next to the tree guide line */
+/* Nested files inside a folder: snug padding right next to the branch line */
 .explorer-file-item.child {
   padding-left: 14px;
 }
@@ -549,7 +632,6 @@
 .explorer-file-item:hover {
   background: rgba(255, 255, 255, 0.05);
   color: var(--text-primary);
-  border-color: rgba(255, 255, 255, 0.08);
 }
 
 [data-theme="baby-pink"] .explorer-file-item:hover {
@@ -559,19 +641,16 @@
 }
 
 .explorer-file-item.active {
-  background: rgba(173, 198, 255, 0.12);
-  color: var(--text-primary, #dae2fd);
-  font-weight: 600;
-  box-shadow: inset 3px 0 0 var(--accent-purple, #adc6ff);
-  border-color: rgba(173, 198, 255, 0.25);
+  background: rgba(0, 212, 255, 0.12);
+  border-color: rgba(0, 212, 255, 0.25);
+  color: var(--text-primary);
+  font-weight: 500;
 }
 
 [data-theme="baby-pink"] .explorer-file-item.active {
-  background: rgba(236, 72, 153, 0.2);
+  background: rgba(244, 114, 182, 0.2);
+  border-color: rgba(244, 114, 182, 0.4);
   color: #831843;
-  font-weight: 600;
-  box-shadow: inset 3px 0 0 #ec4899;
-  border-color: rgba(236, 72, 153, 0.35);
 }
 
 .file-icon {
