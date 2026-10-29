@@ -5,6 +5,7 @@ import dbRoutes from './routes/dbRoutes.js';
 import executeRoutes from './routes/executeRoutes.js';
 import collabRoutes from './routes/collabRoutes.js';
 import terminalRoutes from './routes/terminalRoutes.js';
+import fsRoutes from './routes/fsRoutes.js';
 import { seedSampleDatabases } from './dbManager.js';
 
 dotenv.config();
@@ -31,6 +32,7 @@ app.use(['/api/db', '/db'], dbRoutes);
 app.use(['/api/execute', '/execute'], executeRoutes);
 app.use(['/api/terminal', '/terminal'], terminalRoutes);
 app.use(['/api/collab', '/collab'], collabRoutes);
+app.use(['/api/fs', '/fs'], fsRoutes);
 
 // Seed sample databases and start server for local dev
 if (!process.env.VERCEL) {

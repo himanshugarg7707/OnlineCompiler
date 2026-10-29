@@ -1206,6 +1206,32 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigati
         case "open_terminal":
             handleOpenMacOSTerminal()
 
+        case "open_mac_section":
+            if let section = dict["section"] as? String {
+                let home = FileManager.default.homeDirectoryForCurrentUser
+                var targetUrl: URL?
+                switch section {
+                case "documents":
+                    targetUrl = home.appendingPathComponent("Documents")
+                case "desktop":
+                    targetUrl = home.appendingPathComponent("Desktop")
+                case "downloads":
+                    targetUrl = home.appendingPathComponent("Downloads")
+                case "home":
+                    targetUrl = home
+                case "workspace":
+                    targetUrl = URL(fileURLWithPath: self.projectDirectory)
+                default:
+                    if let rawPath = dict["path"] as? String {
+                        targetUrl = URL(fileURLWithPath: rawPath)
+                    }
+                }
+                if let folderUrl = targetUrl, FileManager.default.fileExists(atPath: folderUrl.path) {
+                    self.activeWorkspacePath = folderUrl.path
+                    self.loadDirectoryIntoWorkspace(folderUrl: folderUrl)
+                }
+            }
+
         case "reveal_in_finder":
             handleRevealInFinder()
 

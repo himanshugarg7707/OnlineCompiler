@@ -94,6 +94,7 @@ function runProcess(command, args, options = {}, stdinData = '') {
         cwd: options.cwd || os.tmpdir(),
         env: {
           ...process.env,
+          PATH: `/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:${process.env.PATH || ''}`,
           PYTHONUNBUFFERED: '1',
           NODE_NO_WARNINGS: '1',
         },

@@ -286,6 +286,15 @@ export async function executeCode(code, languageId, stdin = '', allFiles = [], f
         return await executeCode(prepared, 50, stdin, allFiles);
       }
 
+      if (isLocalEnvironment() && !isCloudForced) {
+        try {
+          const localPy = await tryLocalExecution(combinedCode, 71, stdin, 'notebook_cell.py', allFiles);
+          if (localPy && (localPy.isLocal || localPy.engine === 'local')) {
+            return withCompilerMeta(localPy);
+          }
+        } catch (_) {}
+      }
+
       return await executePythonInBrowser(combinedCode, stdin, allFiles);
     } catch (e) {
       return {

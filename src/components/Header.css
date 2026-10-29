@@ -84,6 +84,13 @@
 }
 
 /* Header sections */
+.mac-traffic-lights-spacer {
+  width: 72px;
+  height: 24px;
+  flex-shrink: 0;
+  pointer-events: none;
+}
+
 .header-left {
   display: flex;
   align-items: center;

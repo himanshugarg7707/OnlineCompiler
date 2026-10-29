@@ -11,7 +11,9 @@ echo "⚡️ Building $APP_NAME for macOS…"
 # ── 1. Generate AppIcon.icns if needed ───────────────────────────
 if [ ! -f "$SCRIPT_DIR/AppIcon.icns" ]; then
   echo "🎨 Generating high-resolution macOS squircle AppIcon…"
-  swift "$SCRIPT_DIR/generate-icon.swift"
+  SWIFT_BIN="/Library/Developer/CommandLineTools/usr/bin/swift"
+  [ ! -x "$SWIFT_BIN" ] && SWIFT_BIN="swift"
+  $SWIFT_BIN "$SCRIPT_DIR/generate-icon.swift"
   iconutil -c icns /tmp/AppIcon.iconset -o "$SCRIPT_DIR/AppIcon.icns"
 fi
 
@@ -26,7 +28,18 @@ cp "$SCRIPT_DIR/AppIcon.icns" "$APP_BUNDLE/Contents/Resources/AppIcon.icns"
 
 # ── 3. Compile Swift Native Application ──────────────────────────
 echo "🔨 Compiling Swift native runtime…"
-swiftc \
+SWIFTC_BIN="/Library/Developer/CommandLineTools/usr/bin/swiftc"
+SDK_FLAG=""
+if [ -d "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk" ]; then
+  SDK_FLAG="-sdk /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk"
+fi
+
+if [ ! -x "$SWIFTC_BIN" ]; then
+  SWIFTC_BIN="swiftc"
+fi
+
+$SWIFTC_BIN \
+  $SDK_FLAG \
   -o "$APP_BUNDLE/Contents/MacOS/FullCode" \
   "$SCRIPT_DIR/main.swift" \
   -framework Cocoa \

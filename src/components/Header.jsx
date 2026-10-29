@@ -125,7 +125,9 @@ export default function Header() {
   const isLocalHost = isLocalEnvironment();
 
   const [engineMode, setEngineMode] = useState(() => {
-    return isLocalHost && localStorage.getItem('fullcode_engine_mode') === 'local' ? 'local' : 'cloud';
+    if (!isLocalHost) return 'cloud';
+    const stored = localStorage.getItem('fullcode_engine_mode');
+    return stored === 'cloud' ? 'cloud' : 'local';
   });
 
   useEffect(() => {
@@ -204,6 +206,7 @@ export default function Header() {
     return (
       <header className="header app-header header-minimized">
         <div className="header-min-left">
+          {isNativeApp && <div className="mac-traffic-lights-spacer" />}
           <div
             className="brand-min"
             onClick={() => dispatch({ type: 'NAVIGATE_PAGE', payload: 'editor' })}
@@ -276,6 +279,7 @@ export default function Header() {
     <header className="header app-header antigravity-top-bar" ref={menuBarRef}>
       {/* Left: Brand & Menu Navigation */}
       <div className="header-left">
+        {isNativeApp && <div className="mac-traffic-lights-spacer" />}
         <div
           className="brand"
           onClick={() => dispatch({ type: 'NAVIGATE_PAGE', payload: 'editor' })}
