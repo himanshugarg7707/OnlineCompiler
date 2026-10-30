@@ -12,6 +12,20 @@
  */
 
 /**
+ * Known standard Java types that commonly collide with beginner/DSA class names.
+ * When a user names their top-level class after one of these (e.g. class PriorityQueue),
+ * Java's type scoping shadows java.util.*, causing generic instantiations like
+ * PriorityQueue<Integer> q = new PriorityQueue<>() to fail.
+ */
+export const JAVA_SHADOWING_TYPES = new Set([
+  'PriorityQueue', 'Queue', 'Deque', 'ArrayDeque', 'Stack', 'List', 'ArrayList', 'LinkedList', 'Vector',
+  'Map', 'HashMap', 'LinkedHashMap', 'TreeMap', 'Set', 'HashSet', 'LinkedHashSet', 'TreeSet',
+  'Scanner', 'Iterator', 'Collection', 'Arrays', 'Collections', 'Objects', 'Optional',
+  'String', 'Integer', 'Double', 'Float', 'Long', 'Boolean', 'Character', 'Byte', 'Short',
+  'Math', 'System', 'Thread', 'Object', 'Class', 'Exception'
+]);
+
+/**
  * Safely replaces whole-word identifier tokens in source code while preserving
  * string literals, character literals, single-line comments, and multi-line comments.
  */
@@ -272,7 +286,16 @@ export function prepareJavaForExecution(code) {
     if (existingMain) {
       clean = clean.replace(/\bclass\s+Main\b/g, 'class OldMain');
     }
-    clean = replaceJavaIdentifierSafely(clean, targetClassName, 'Main');
+    if (JAVA_SHADOWING_TYPES.has(targetClassName)) {
+      // User named their class after a standard Java type (e.g. class PriorityQueue, class Stack).
+      // Only rename the class declaration itself and any explicit constructors to Main.
+      // Do NOT replace generic type usages like PriorityQueue<Integer> or new PriorityQueue<>()
+      // so java.util.* types resolve cleanly without shadowing!
+      clean = clean.replace(new RegExp(`\\bclass\\s+${targetClassName}\\b`, 'g'), 'class Main');
+      clean = clean.replace(new RegExp(`(\\b(?:public|protected|private)\\s+)${targetClassName}(\\s*\\()`, 'g'), '$1Main$2');
+    } else {
+      clean = replaceJavaIdentifierSafely(clean, targetClassName, 'Main');
+    }
   }
 
   // Ensure class Main contains canonical static main entry point

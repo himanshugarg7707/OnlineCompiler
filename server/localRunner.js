@@ -201,9 +201,12 @@ async function _executeCodeLocallyInternal({ code, languageId, stdin = '', filen
 
   // Write auxiliary workspace files (e.g. sales_data.csv, text files) into execution directory
   if (Array.isArray(files) && files.length > 0) {
+    const activeExt = cleanFilename ? path.extname(cleanFilename) : '';
     for (const f of files) {
       if (!f || !f.name || f.name.endsWith('.ipynb')) continue;
       const clean = path.basename(f.name);
+      // Skip active file or conflicting source files of the same language to avoid duplicate class collisions
+      if (clean === cleanFilename || clean === 'Main.java' || (activeExt && clean.endsWith(activeExt))) continue;
       try {
         fs.writeFileSync(path.join(tempDir, clean), f.content || '', 'utf8');
       } catch (_) {}
@@ -402,6 +405,23 @@ async function _executeCodeLocallyInternal({ code, languageId, stdin = '', filen
             className = anyClassMatch[1];
           }
         }
+      }
+
+      // If className matches a standard Java type (e.g. PriorityQueue, Stack, HashMap),
+      // Java's scoping shadows java.util.* and causes generic instantiations to fail.
+      // Automatically normalize the class declaration to Main so javac compiles cleanly!
+      const JAVA_SHADOWING_TYPES = new Set([
+        'PriorityQueue', 'Queue', 'Deque', 'ArrayDeque', 'Stack', 'List', 'ArrayList', 'LinkedList', 'Vector',
+        'Map', 'HashMap', 'LinkedHashMap', 'TreeMap', 'Set', 'HashSet', 'LinkedHashSet', 'TreeSet',
+        'Scanner', 'Iterator', 'Collection', 'Arrays', 'Collections', 'Objects', 'Optional',
+        'String', 'Integer', 'Double', 'Float', 'Long', 'Boolean', 'Character', 'Byte', 'Short',
+        'Math', 'System', 'Thread', 'Object', 'Class', 'Exception'
+      ]);
+
+      if (JAVA_SHADOWING_TYPES.has(className)) {
+        code = code.replace(new RegExp(`\\bclass\\s+${className}\\b`, 'g'), 'class Main');
+        code = code.replace(new RegExp(`(\\b(?:public|protected|private)\\s+)${className}(\\s*\\()`, 'g'), '$1Main$2');
+        className = 'Main';
       }
 
       // Create package directory structure if needed
