@@ -2,6 +2,9 @@
 
 .file-explorer,
 .file-explorer-sidebar {
+  zoom: var(--workspace-ui-scale, 1);
+  width: calc(100% / var(--workspace-ui-scale, 1));
+  height: calc(100% / var(--workspace-ui-scale, 1));
   display: flex;
   flex-direction: column;
   height: 100%;

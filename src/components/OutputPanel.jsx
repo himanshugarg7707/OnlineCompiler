@@ -2,27 +2,23 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { useApp } from '../context/AppContext';
+import { apiFetch } from '../services/apiClient';
 import {
   Terminal,
   Keyboard,
   BrainCircuit,
   Sparkles,
-  Database,
   TerminalSquare,
-  Globe,
   Minus,
   ChevronDown,
+  PanelBottom,
+  PanelRight,
   FileCode,
-  Play,
   CheckCircle2,
   Activity,
   AlertCircle,
-  FlaskConical,
 } from 'lucide-react';
-import DatabasePanel from './DatabasePanel';
-import WebPreviewPanel from './WebPreviewPanel';
 import ComplexityTab from './ComplexityTab';
-import TestCaseSuitePanel from './TestCaseSuitePanel';
 import LanguageIcon from './LanguageIcon';
 import { getFriendlyLanguageName, getCompilationIdentifier } from '../services/languageDetector';
 import { isLocalEnvironment } from '../services/judge0Service';
@@ -32,11 +28,8 @@ const TABS = [
   { id: 'output', label: 'Program Output', icon: Terminal },
   { id: 'input', label: 'Custom Input (stdin)', icon: Keyboard },
   { id: 'terminal', label: 'Terminal / Shell', icon: TerminalSquare },
-  { id: 'tests', label: 'Test Case Suite', icon: FlaskConical },
   { id: 'problems', label: 'Problems & Errors', icon: AlertCircle },
   { id: 'complexity', label: 'Complexity Analyzer', icon: Activity },
-  { id: 'web', label: 'Web Preview', icon: Globe },
-  { id: 'database', label: 'Database Explorer', icon: Database },
   { id: 'explanation', label: 'AI Explanation', icon: BrainCircuit },
 ];
 
@@ -449,7 +442,7 @@ function TerminalTab() {
       return;
     }
 
-    fetch('/api/terminal/info')
+    apiFetch('/api/terminal/info')
       .then((r) => r.json())
       .then((data) => {
         if (data.isLocal) {
@@ -574,7 +567,7 @@ function TerminalTab() {
       const startTime = performance.now();
 
       try {
-        const response = await fetch('/api/terminal/exec', {
+        const response = await apiFetch('/api/terminal/exec', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ command: trimmed, cwd: localCwd }),
@@ -777,7 +770,6 @@ export default function OutputPanel({
   isSplitTerminal = false,
   overrideFile = null,
   overrideState = null,
-  onRun = null,
   terminalTitle = '',
 } = {}) {
   const {
@@ -787,16 +779,15 @@ export default function OutputPanel({
     handleGenerateInputs,
     handleExplainCode,
     handleToggleTerminal,
+    handleUpdateConfig,
     handleSelectFile,
-    handleRunCode,
   } = useApp();
 
   const handleHide = handleToggleTerminal;
 
-  const activeTab = state.activeTerminalTab || 'output';
+  const activeTab = state.activeTerminalTab === 'web' ? 'output' : (state.activeTerminalTab || 'output');
   const setActiveTab = (tabId) => dispatch({ type: 'SET_TERMINAL_TAB', payload: tabId });
   const generateInputFn = handleGenerateInput || handleGenerateInputs;
-  const runCodeFn = onRun || handleRunCode;
 
   const handleAutoGenerateInputAndRun = async () => {
     setActiveTab('output');
@@ -862,7 +853,7 @@ export default function OutputPanel({
     return activeCompilerInfo?.compilerName || 'javac Main.java';
   }, [isSplitTerminal, overrideState?.compilerCommand, state.compilerCommand, activeCompilerInfo, activeFile?.name]);
 
-  // If user selects SQL language, auto-show database tab option
+  // SQL tools live in SQL Studio; keep normal program output behavior here.
   useEffect(() => {
     if (detectedLanguage?.id === 82 && activeTab === 'input') {
       setActiveTab('output');
@@ -915,18 +906,6 @@ export default function OutputPanel({
             <strong className="unified-filename">{activeFile?.name || 'File'}</strong>
           </div>
 
-          {/* Quick Run Action in Terminal Navbar */}
-          <button
-            className="btn-unified-action btn-run"
-            onClick={runCodeFn}
-            disabled={isRunning}
-            title={`Run ${activeFile?.name || 'Code'}`}
-            data-tooltip="Run Code"
-            aria-label="Run Code"
-          >
-            <Play size={11} fill="currentColor" />
-          </button>
-
           {/* Status indicator & Controls */}
           <div className="execution-status">
             {isRunning && (
@@ -957,6 +936,18 @@ export default function OutputPanel({
             )}
 
             {/* Maximize / Restore Terminal Button — removed */}
+
+            {!isSplitTerminal && (
+              <button
+                type="button"
+                className="btn-terminal-dock-toggle"
+                onClick={() => handleUpdateConfig({ terminalPosition: state.config?.terminalPosition === 'right' ? 'bottom' : 'right' })}
+                title={`Move terminal to the ${state.config?.terminalPosition === 'right' ? 'bottom' : 'right'}`}
+                aria-label={`Move terminal to the ${state.config?.terminalPosition === 'right' ? 'bottom' : 'right'}`}
+              >
+                {state.config?.terminalPosition === 'right' ? <PanelBottom size={14} /> : <PanelRight size={14} />}
+              </button>
+            )}
 
             {/* Hide / Collapse Terminal Button */}
             <button
@@ -1151,7 +1142,6 @@ export default function OutputPanel({
           </div>
         )}
         {/* Test Suite & Stress Tester Tab */}
-        {activeTab === 'tests' && <TestCaseSuitePanel />}
 
         {/* Complexity Tab */}
         {activeTab === 'complexity' && <ComplexityTab />}
@@ -1160,10 +1150,7 @@ export default function OutputPanel({
         {activeTab === 'terminal' && <TerminalTab />}
 
         {/* Web Sandbox Live Preview Tab */}
-        {activeTab === 'web' && <WebPreviewPanel />}
 
-        {/* Database Explorer Tab */}
-        {activeTab === 'database' && <DatabasePanel />}
 
         {/* Input Tab */}
         {activeTab === 'input' && (

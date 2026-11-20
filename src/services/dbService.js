@@ -3,6 +3,7 @@
 // with 100% offline & client-side in-browser fallback for Vercel/serverless environments.
 
 import { executeSqlInBrowser, generateTableDdl } from './sqlRunner';
+import { apiFetch } from './apiClient';
 
 const STORAGE_PREFIX = 'codeforge_sql_db_';
 const DB_LIST_KEY = 'codeforge_sql_dbs_list';
@@ -39,7 +40,7 @@ function saveLocalDbData(dbName, data) {
  */
 export async function getDatabasesList() {
   try {
-    const res = await fetch('/api/db/list');
+    const res = await apiFetch('/api/db/list');
     if (res.ok) {
       const data = await res.json();
       if (data.databases && data.databases.length > 0) return data.databases;
@@ -68,7 +69,7 @@ export async function createNewDatabase(name) {
   const cleanName = name.trim().replace(/[^a-zA-Z0-9_-]/g, '_').toLowerCase();
 
   try {
-    const res = await fetch('/api/db/create', {
+    const res = await apiFetch('/api/db/create', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name: cleanName }),
@@ -96,7 +97,7 @@ export async function deleteExistingDatabase(name) {
   const cleanName = name.trim().toLowerCase();
 
   try {
-    const res = await fetch(`/api/db/${encodeURIComponent(cleanName)}`, {
+    const res = await apiFetch(`/api/db/${encodeURIComponent(cleanName)}`, {
       method: 'DELETE',
     });
     if (res.ok) return res.json();
@@ -115,7 +116,7 @@ export async function deleteExistingDatabase(name) {
  */
 export async function executeSql(database, query) {
   try {
-    const res = await fetch('/api/db/query', {
+    const res = await apiFetch('/api/db/query', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ database, query }),
@@ -139,7 +140,7 @@ export async function executeSql(database, query) {
  */
 export async function getDatabaseSchema(database) {
   try {
-    const res = await fetch(`/api/db/schema/${encodeURIComponent(database)}`);
+    const res = await apiFetch(`/api/db/schema/${encodeURIComponent(database)}`);
     if (res.ok) {
       const data = await res.json();
       if (data.schema && data.schema.tables) {
@@ -195,7 +196,7 @@ export async function getDatabaseSchema(database) {
  */
 export async function getTableRows(database, table, limit = 50, offset = 0) {
   try {
-    const res = await fetch(
+    const res = await apiFetch(
       `/api/db/table-data/${encodeURIComponent(database)}/${encodeURIComponent(table)}?limit=${limit}&offset=${offset}`
     );
     if (res.ok) return res.json();

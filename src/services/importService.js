@@ -23,6 +23,7 @@ export function shouldIgnorePath(path) {
 
 // Read File as text
 export function readFileAsText(file) {
+  if (typeof file.text === 'function') return file.text();
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(reader.result);
@@ -31,33 +32,49 @@ export function readFileAsText(file) {
   });
 }
 
-// Process standard files array (from `<input type="file" multiple />`)
-export async function processFileList(fileList) {
-  const results = [];
-  const files = Array.from(fileList);
+async function mapWithConcurrency(items, limit, mapper) {
+  const results = new Array(items.length);
+  let nextIndex = 0;
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (nextIndex < items.length) {
+      const index = nextIndex++;
+      results[index] = await mapper(items[index], index);
+    }
+  });
+  await Promise.all(workers);
+  return results;
+}
 
-  for (const file of files) {
-    const relativePath = file.webkitRelativePath || file.name;
-    if (shouldIgnorePath(relativePath)) continue;
+// Process standard files array (from `<input type="file" multiple />`)
+export async function processNamedFiles(fileEntries) {
+  const files = Array.from(fileEntries);
+  const processed = await mapWithConcurrency(files, 6, async ({ file, path: relativePath = file.name }) => {
+    if (shouldIgnorePath(relativePath)) return null;
 
     try {
       const content = await readFileAsText(file);
       const language = getLanguageFromFilename(relativePath) || fallbackLang;
-
-      results.push({
+      return {
         id: `import_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
         path: relativePath,
         name: relativePath,
         content: content,
         size: file.size,
         language: language,
-      });
+      };
     } catch (err) {
       console.warn(`Could not read file "${relativePath}":`, err);
+      return null;
     }
-  }
+  });
+  return processed.filter(Boolean);
+}
 
-  return results;
+export async function processFileList(fileList) {
+  return processNamedFiles(Array.from(fileList, (file) => ({
+    file,
+    path: file.webkitRelativePath || file.name,
+  })));
 }
 
 // Recursive helper for FileSystemEntry (drag and drop folder support)
@@ -86,15 +103,16 @@ async function readEntry(entry, currentPath = '') {
     }
   } else if (entry.isDirectory) {
     const dirReader = entry.createReader();
-    const subEntries = await new Promise((resolve, reject) => {
-      dirReader.readEntries(resolve, reject);
-    });
+    const subEntries = [];
+    while (true) {
+      const batch = await new Promise((resolve, reject) => dirReader.readEntries(resolve, reject));
+      if (batch.length === 0) break;
+      subEntries.push(...batch);
+    }
 
     const nextPath = currentPath ? `${currentPath}/${entry.name}` : entry.name;
-    for (const sub of subEntries) {
-      const subResults = await readEntry(sub, nextPath);
-      results.push(...subResults);
-    }
+    const childResults = await mapWithConcurrency(subEntries, 4, (sub) => readEntry(sub, nextPath));
+    childResults.forEach((subResults) => results.push(...subResults));
   }
 
   return results;
@@ -102,57 +120,43 @@ async function readEntry(entry, currentPath = '') {
 
 // Process drag-and-drop DataTransfer items (handles both dropped folders & files)
 export async function processDataTransferItems(items) {
-  const results = [];
-
-  for (let i = 0; i < items.length; i++) {
-    const item = items[i];
-    if (item.kind !== 'file') continue;
-
+  const fileItems = Array.from(items).filter((item) => item.kind === 'file');
+  const nestedResults = await mapWithConcurrency(fileItems, 4, async (item) => {
     const entry = item.webkitGetAsEntry ? item.webkitGetAsEntry() : null;
     if (entry) {
-      const entryResults = await readEntry(entry);
-      results.push(...entryResults);
-    } else {
-      // Fallback for standard files
-      const file = item.getAsFile();
-      if (file) {
-        const fileResults = await processFileList([file]);
-        results.push(...fileResults);
-      }
+      return readEntry(entry);
     }
-  }
-
-  return results;
+    const file = item.getAsFile();
+    return file ? processFileList([file]) : [];
+  });
+  return nestedResults.flat();
 }
 
 // Unpack ZIP archive into normalized file items
 export async function unpackZipFile(zipBlobOrFile) {
   const zip = new JSZip();
   const loadedZip = await zip.loadAsync(zipBlobOrFile);
-  const results = [];
   const entries = Object.keys(loadedZip.files);
-
-  for (const relativePath of entries) {
-    if (shouldIgnorePath(relativePath)) continue;
+  const processed = await mapWithConcurrency(entries, 4, async (relativePath) => {
+    if (shouldIgnorePath(relativePath)) return null;
     const zipEntry = loadedZip.files[relativePath];
 
-    if (!zipEntry.dir) {
-      try {
-        const text = await zipEntry.async('text');
-        const language = getLanguageFromFilename(relativePath) || fallbackLang;
-        results.push({
-          id: `import_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
-          path: relativePath,
-          name: relativePath,
-          content: text,
-          size: text.length,
-          language: language,
-        });
-      } catch (err) {
-        console.warn(`Failed extracting zip entry "${relativePath}":`, err);
-      }
+    if (zipEntry.dir) return null;
+    try {
+      const text = await zipEntry.async('text');
+      const language = getLanguageFromFilename(relativePath) || fallbackLang;
+      return {
+        id: `import_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+        path: relativePath,
+        name: relativePath,
+        content: text,
+        size: text.length,
+        language: language,
+      };
+    } catch (err) {
+      console.warn(`Failed extracting zip entry "${relativePath}":`, err);
+      return null;
     }
-  }
-
-  return results;
+  });
+  return processed.filter(Boolean);
 }

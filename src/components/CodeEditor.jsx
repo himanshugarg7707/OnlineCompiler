@@ -574,14 +574,14 @@ export default function CodeEditor() {
     },
     // ── Autocomplete: Enter applies suggestions ──
     fixedOverflowWidgets: true,
-    suggestOnTriggerCharacters: true,
+    suggestOnTriggerCharacters: config.suggestionsWhileTyping !== false,
     // Enter applies suggestions instead of Tab
     acceptSuggestionOnEnter: 'on',
     // Tab does not accept suggestions
     tabCompletion: 'off',
     acceptSuggestionOnCommitCharacter: true,
     // Instant autocomplete without artificial delays
-    quickSuggestions: {
+    quickSuggestions: config.suggestionsWhileTyping === false ? false : {
       other: true,
       comments: false,
       strings: false,
@@ -608,6 +608,17 @@ export default function CodeEditor() {
     wordBasedSuggestionsMode: 'currentDocument',
 
   };
+
+  // Monaco's React wrapper does not reliably reapply typography options when
+  // settings are changed in another page, so update the live editor explicitly.
+  useEffect(() => {
+    if (!editorRef.current) return;
+    editorRef.current.updateOptions({
+      fontSize: Number(config.fontSize) || 16,
+      fontFamily: config.fontFamily || "'JetBrains Mono', 'Fira Code', monospace",
+      tabSize: Number(config.tabSize) || 4,
+    });
+  }, [config.fontSize, config.fontFamily, config.tabSize]);
 
   const handleEditorChange = (value) => {
     const newCode = value || '';

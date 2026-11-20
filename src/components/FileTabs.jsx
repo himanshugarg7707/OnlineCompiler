@@ -11,6 +11,7 @@ import {
   ZoomOut,
   ChevronLeft,
   ChevronRight,
+  Globe,
 } from 'lucide-react';
 import { isItemProtected, isItemUnlocked } from '../services/securityService';
 import PasswordPromptModal from './PasswordPromptModal';
@@ -36,6 +37,8 @@ export default function FileTabs() {
   const { files, openFileIds, activeFileId, config } = state;
 
   const currentFontSize = config?.fontSize || 16;
+  const activeFile = files.find((file) => file.id === activeFileId);
+  const isHtmlActive = Boolean(activeFile && (/\.(html?|xhtml)$/i.test(activeFile.name) || activeFile.language?.monacoLanguage === 'html'));
 
   const openFiles = (openFileIds || [])
     .map((id) => files.find((f) => f.id === id))
@@ -427,6 +430,18 @@ export default function FileTabs() {
       </div>
 
       <div className="file-tabs-right-actions">
+        {isHtmlActive && !state.splitViewOpen && (
+          <button
+            type="button"
+            className={`btn-new-file btn-web-preview-toggle ${state.webPreviewOpen ? 'active' : ''}`}
+            onClick={() => dispatch({ type: 'SET_WEB_PREVIEW_OPEN', payload: !state.webPreviewOpen })}
+            title={state.webPreviewOpen ? 'Close Web Sandbox Preview' : 'Open Web Sandbox Preview to the Side'}
+            aria-label={state.webPreviewOpen ? 'Close Web Sandbox Preview' : 'Open Web Sandbox Preview to the Side'}
+            aria-pressed={Boolean(state.webPreviewOpen)}
+          >
+            <Globe size={14} />
+          </button>
+        )}
         <button
           className="btn-new-file"
           onClick={handleStartAdd}

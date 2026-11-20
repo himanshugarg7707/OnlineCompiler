@@ -1,6 +1,7 @@
 /* ─── Database Panel Layout ─────────────────────────────────────────────── */
 
 .database-panel {
+  position: relative;
   display: flex;
   height: 100%;
   width: 100%;
@@ -12,14 +13,55 @@
 /* ─── Sidebar (Databases & Tables) ───────────────────────────────────────── */
 
 .db-sidebar {
-  width: 280px;
-  min-width: 240px;
+  width: var(--db-sidebar-width, 280px);
+  min-width: 200px;
+  max-width: 45vw;
+  flex: 0 0 var(--db-sidebar-width, 280px);
   background: var(--bg-secondary);
   border-right: 1px solid var(--border-primary);
   display: flex;
   flex-direction: column;
   overflow: hidden;
 }
+
+.db-pane-resize {
+  position: relative;
+  z-index: 5;
+  flex: 0 0 auto;
+  background: transparent;
+  touch-action: none;
+  user-select: none;
+}
+
+.db-sidebar-resize {
+  width: 8px;
+  margin-left: -4px;
+  margin-right: -4px;
+  cursor: col-resize;
+}
+
+.db-query-resize {
+  height: 8px;
+  margin-top: -4px;
+  margin-bottom: -4px;
+  cursor: row-resize;
+}
+
+.db-pane-resize::after {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  background: transparent;
+  content: '';
+  transition: background 0.15s ease;
+}
+
+.db-sidebar-resize::after { width: 2px; }
+.db-query-resize::after { height: 2px; }
+.db-pane-resize:hover::after,
+.db-pane-resize:focus-visible::after,
+.database-panel.is-resizing .db-pane-resize::after { background: var(--accent-cyan); }
+.database-panel.is-resizing { cursor: inherit; user-select: none; }
 
 .db-header-bar {
   display: flex;
@@ -308,13 +350,15 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  min-width: 0;
   background: var(--bg-primary);
 }
 
 .table-viewer-wrapper {
   display: flex;
   flex-direction: column;
-  height: 100%;
+  flex: 1 1 0;
+  min-height: 0;
   overflow: hidden;
 }
 
@@ -527,6 +571,8 @@
 /* No Table Selected State */
 .db-no-table-selected {
   display: flex;
+  flex: 1 1 0;
+  min-height: 0;
   flex-direction: column;
   align-items: center;
   justify-content: center;
@@ -855,3 +901,9 @@
   color: var(--accent-cyan);
   transform: translateY(-1px);
 }
+.sql-query-workbench{display:flex;flex-direction:column;flex:0 0 var(--sql-query-pane-height, 36vh);min-height:180px;border-bottom:1px solid var(--border-primary);background:var(--bg-primary)}
+.sql-query-workbench-head{height:42px;flex:none;display:flex;align-items:center;gap:12px;padding:0 14px;border-bottom:1px solid var(--border-primary);background:var(--bg-secondary)}
+.sql-query-workbench-head strong{font-size:13px}.sql-query-workbench-head span{font:12px monospace;color:var(--text-secondary);margin-right:auto}
+.sql-query-workbench-head button{border:0;border-radius:6px;padding:7px 12px;background:var(--accent-cyan);color:#07111c;font-weight:700;cursor:pointer}.sql-query-workbench-head button:disabled{opacity:.6;cursor:wait}
+.sql-query-workbench textarea{flex:1;min-height:100px;resize:none;border:0;outline:0;padding:13px 16px;background:var(--bg-primary);color:var(--text-primary);font:13px/1.55 'JetBrains Mono','Fira Code',monospace;tab-size:2}
+.sql-query-result{max-height:48%;overflow:auto;border-top:1px solid var(--border-primary);padding:8px 12px}.sql-query-result pre{margin:0;color:var(--text-primary);white-space:pre-wrap}.sql-query-result.error{color:var(--accent-red,#ff6b6b)}.sql-result-table-wrap{max-height:220px;overflow:auto}

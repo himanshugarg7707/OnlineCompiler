@@ -5,6 +5,7 @@
 // for C, C++, Java, C#, Go, Rust, Ruby, PHP, R, Perl, Scala, Swift, Kotlin, TypeScript
 
 import { getConfig } from './configService.js';
+import { apiFetch } from './apiClient.js';
 import { executePythonInBrowser } from './pythonRunner.js';
 import { executeJavaScriptInBrowser } from './jsRunner.js';
 import { executeSqlInBrowser } from './sqlRunner.js';
@@ -105,7 +106,7 @@ export async function checkLocalServerStatus(forceRefresh = false) {
   try {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 1200);
-    const res = await fetch('/api/execute/status', { signal: controller.signal });
+    const res = await apiFetch('/api/execute/status', { signal: controller.signal });
     clearTimeout(timeoutId);
     if (res.ok) {
       const data = await res.json();
@@ -142,7 +143,7 @@ async function tryLocalExecution(code, languageId, stdin = '', filename = '', fi
   try {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 8000);
-    const response = await fetch('/api/execute', {
+    const response = await apiFetch('/api/execute', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({

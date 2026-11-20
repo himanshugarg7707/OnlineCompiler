@@ -1,19 +1,75 @@
 // AI Service
-// Mock mode returns intelligent simulated responses; swap to real Claude API by setting mockAI=false
+// Lucia uses Gemini when configured; local heuristic responses remain available without a key.
 
 import { getConfig } from './configService';
+
+function getAssistantPrompt(config = getConfig()) {
+  const name = String(config.aiAssistantName || 'Lucia').trim().slice(0, 40) || 'Lucia';
+  const mode = config.aiConversationMode === 'general' ? 'general conversation' : 'code focused assistance';
+  const style = config.luciaResponseStyle === 'balanced' ? 'Give brief, balanced explanations.' : 'Prefer concise, code first answers for programming requests.';
+  const tone = ({ friendly: 'Use a friendly, supportive tone.', professional: 'Use a clear, professional tone.', direct: 'Use a direct, no-frills tone.' })[config.aiTone] || 'Use a friendly, supportive tone.';
+  const detail = ({ concise: 'Keep answers concise and focused.', balanced: 'Use a balanced level of detail.', detailed: 'Explain reasoning and important edge cases in detail.' })[config.aiDetailLevel] || 'Use a balanced level of detail.';
+  const teaching = ({ beginner: 'Explain concepts for a beginner and define unfamiliar terms.', intermediate: 'Assume basic programming knowledge.', advanced: 'Assume advanced knowledge and focus on tradeoffs and edge cases.', adaptive: 'Adapt explanations to the user and the question.' })[config.aiTeachingLevel] || 'Adapt explanations to the user and the question.';
+  const format = config.aiResponseFormat === 'plain' ? 'Prefer plain text; use code fences only for code.' : 'Use clear Markdown headings, lists, and code fences when helpful.';
+  const custom = String(config.aiCustomInstructions || '').trim().slice(0, 1200);
+  return `You are ${name}, the assistant built into this online compiler. Your default mode is ${mode}. Help with the user's request, using supplied code, language, and output when relevant. Never claim to have run code unless compiler output confirms it. ${style} ${tone} ${detail} ${teaching} ${format}${custom ? ` Follow these user preferences when relevant: ${custom}` : ''}`;
+}
+const CODE_FIRST_CHAT_RULES = 'For requests to write, complete, or modify code, put the complete runnable code first in one fenced code block, with at most one short note after it. Do not add a long explanation unless explicitly requested. For debugging, show the corrected code or smallest useful patch first. For questions without a code request, answer directly in no more than three concise bullets. Keep prose under 100 words unless the user asks for detail.';
+const BRIEF_CHAT_RULES = 'Answer directly and briefly. For code requests, provide a complete code block first and limit the explanation to two short bullets. Keep prose under 180 words unless the user asks for detail.';
+
+function usesGemini(config) {
+  return config.aiProvider === 'gemini';
+}
+
+async function requestGemini(systemPrompt, prompt, apiKey, options = {}) {
+  if (!apiKey?.trim()) throw new Error('Add your Gemini API key in Settings → AI & Diagnostics to use Lucia AI.');
+  const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey.trim() },
+    body: JSON.stringify({
+      system_instruction: { parts: [{ text: systemPrompt }] },
+      contents: [{ role: 'user', parts: [{ text: prompt }] }],
+      generationConfig: { temperature: options.temperature ?? 0.35, maxOutputTokens: options.maxOutputTokens ?? 8192 },
+    }),
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(`Lucia could not reach Gemini: ${payload?.error?.message || `HTTP ${response.status}`}`);
+  const candidate = payload?.candidates?.[0];
+  const text = candidate?.content?.parts
+    ?.map((part) => typeof part?.text === 'string' ? part.text : '')
+    .filter(Boolean)
+    .join('')
+    .trim();
+  if (!text) throw new Error('Lucia received an empty response from Gemini. Check the key and try again.');
+  return candidate?.finishReason === 'MAX_TOKENS'
+    ? `${text}\n\n*This reply reached Gemini’s response limit. Ask “continue” for the rest.*`
+    : text;
+}
+
+function codeContext(code, language, extra = '') {
+  return `Language: ${typeof language === 'object' ? language?.name : language || 'unknown'}\nSource code:\n${String(code || '(empty)').slice(0, 16000)}${extra ? `\n\n${extra}` : ''}`;
+}
+
+function parseJsonResponse(text) {
+  const cleaned = text.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
+  try { return JSON.parse(cleaned); } catch { return null; }
+}
+
+export async function testGeminiConnection(apiKey) {
+  return requestGemini(getAssistantPrompt(), 'Reply with exactly: Connected.', apiKey, { maxOutputTokens: 32 });
+}
 
 // ─── Error Explanation ──────────────────────────────────────────────────────
 
 export async function explainError(code, error, language) {
   const config = getConfig();
 
-  if (!config.mockAI && config.claudeApiKey) {
-    try {
-      return await realAICall('explain_error', { code, error, language }, config);
-    } catch (err) {
-      console.warn('Real AI call failed, falling back to built-in tutor:', err);
-    }
+  if (usesGemini(config)) {
+    return requestGemini(
+      `${getAssistantPrompt(config)} Explain compiler/runtime errors in plain language, identify likely source locations, and give a concrete fix.`,
+      `${codeContext(code, language, `Compiler/runtime error:\n${error || '(no error text)'}`)}\n\nExplain the error and suggest a fix.`,
+      config.geminiApiKey
+    );
   }
 
   return mockExplainError(code, error, language);
@@ -105,13 +161,12 @@ ${errStr.includes('print') ? "Change `print \"hello\"` to `print(\"hello\")`" : 
 export async function explainCode(code, language) {
   const config = getConfig();
 
-  if (!config.mockAI && config.claudeApiKey) {
-    try {
-      const res = await realAICall('explain_code', { code, language }, config);
-      return typeof res === 'string' ? res : (res?.content || res?.text || '');
-    } catch (err) {
-      console.warn('Real AI call failed, falling back to built-in tutor:', err);
-    }
+  if (usesGemini(config)) {
+    return requestGemini(
+      `${getAssistantPrompt(config)} Explain the code's purpose, execution flow, important variables, and likely edge cases.`,
+      `${codeContext(code, language)}\n\nExplain this code clearly, including a short walkthrough.`,
+      config.geminiApiKey
+    );
   }
 
   return mockExplainCode(code, language);
@@ -268,11 +323,20 @@ ${hasGetOrDefault ? '- **Idiomatic Map Usage**: `map.getOrDefault(key, 0) + 1` i
 export async function generateInputs(code, language) {
   const config = getConfig();
 
-  if (config.mockAI) {
-    return mockGenerateInputs(code, language);
+  if (usesGemini(config)) {
+    const response = await requestGemini(
+      `${getAssistantPrompt(config)} Create valid standard input for the supplied program. Return only JSON with string fields "input" and "description".`,
+      `${codeContext(code, language)}\n\nGenerate a realistic sample input that matches this program.`,
+      config.geminiApiKey,
+      { temperature: 0.2 }
+    );
+    const parsed = parseJsonResponse(response);
+    return parsed?.input !== undefined
+      ? { input: String(parsed.input), description: String(parsed.description || 'Generated by Lucia AI') }
+      : { input: response, description: 'Generated by Lucia AI' };
   }
 
-  return realAICall('generate_inputs', { code, language }, config);
+  return mockGenerateInputs(code, language);
 }
 
 function mockGenerateInputs(code, language) {
@@ -378,11 +442,24 @@ function mockGenerateInputs(code, language) {
 export async function getLogicHint(code, language, hintLevel = 1) {
   const config = getConfig();
 
-  if (config.mockAI) {
-    return mockGetHint(code, language, hintLevel);
+  if (usesGemini(config)) {
+    const response = await requestGemini(
+      `${getAssistantPrompt(config)} Give one useful programming hint at the requested level. Avoid giving a complete solution unless the student asks. Return JSON with string fields "title" and "content".`,
+      `${codeContext(code, language)}\n\nGive hint level ${hintLevel} for understanding or improving this code.`,
+      config.geminiApiKey,
+      { temperature: 0.4 }
+    );
+    const parsed = parseJsonResponse(response);
+    return {
+      level: hintLevel,
+      title: String(parsed?.title || `Lucia Hint ${hintLevel}`),
+      content: String(parsed?.content || response),
+      totalHints: 3,
+      hasNext: hintLevel < 3,
+    };
   }
 
-  return realAICall('logic_hint', { code, language, hintLevel }, config);
+  return mockGetHint(code, language, hintLevel);
 }
 
 function mockGetHint(code, language, hintLevel) {
@@ -494,46 +571,71 @@ function mockGetHint(code, language, hintLevel) {
 
 // ─── Chat ───────────────────────────────────────────────────────────────────
 
-export async function chatWithAI(messages, code, language) {
+export async function chatWithAI(messages, code, language, output = '', error = '', history = []) {
   const config = getConfig();
 
-  if (config.mockAI) {
-    return mockChat(messages, code, language);
+  if (usesGemini(config)) {
+    const question = typeof messages === 'string' ? messages : messages?.at(-1)?.content || '';
+    const turns = history.slice(-10).map((turn) => `${turn.role === 'assistant' ? 'Lucia' : 'User'}: ${toPlainText(turn.content)}`).join('\n\n');
+    const context = [
+      codeContext(code, language, [output ? `Latest output:\n${String(output).slice(0, 4000)}` : '', error ? `Latest error:\n${String(error).slice(0, 4000)}` : ''].filter(Boolean).join('\n\n')),
+      turns ? `Recent conversation:\n${turns}` : '',
+      `User question:\n${question}`,
+    ].filter(Boolean).join('\n\n');
+    const responseRules = config.luciaResponseStyle === 'balanced' ? BRIEF_CHAT_RULES : CODE_FIRST_CHAT_RULES;
+    return requestGemini(`${getAssistantPrompt(config)} ${responseRules}`, context, config.geminiApiKey, { maxOutputTokens: 3072, temperature: 0.25 });
   }
 
-  return realAICall('chat', { messages, code, language }, config);
+  return mockChat(messages, code, language);
+}
+
+export function toPlainText(value) {
+  if (typeof value === 'string') return value;
+  if (value == null) return '';
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  if (Array.isArray(value)) return value.map(toPlainText).filter(Boolean).join('\n');
+  if (typeof value === 'object') {
+    for (const key of ['text', 'content', 'markdown', 'message', 'explanation']) {
+      if (value[key] != null) return toPlainText(value[key]);
+    }
+    return JSON.stringify(value, null, 2);
+  }
+  return String(value);
 }
 
 function mockChat(messages, code, language) {
+  const chatMessages = Array.isArray(messages) ? messages : [{ content: String(messages || '') }];
+  const codeText = String(code || '');
+  const languageName = typeof language === 'object' ? (language?.name || 'Code') : (language || 'Code');
   return new Promise((resolve) => {
     setTimeout(() => {
-      const lastMessage = messages[messages.length - 1]?.content?.toLowerCase() || '';
+      const lastMessage = chatMessages.at(-1)?.content?.toLowerCase() || '';
 
       let response = '';
 
       if (lastMessage.includes('explain') || lastMessage.includes('what does')) {
         response = `## Code Explanation 📖
 
-I can see you're writing **${language.name}** code. Here's what your code does at a high level:
+I can see you're writing **${languageName}** code. Here's what your code does at a high level:
 
 1. **Input Phase**: Your code reads input data (likely from stdin)
 2. **Processing**: It performs some computation on the data
 3. **Output**: Results are printed to stdout
 
 **Key observations:**
-- You have ${code.split('\n').length} lines of code
-- The code uses ${language.name} standard patterns
-- ${/for|while/.test(code) ? "There are **loops** for iteration" : "No loops detected — consider if you need iteration"}
+- You have ${codeText.split('\n').length} lines of code
+- The code uses ${languageName} standard patterns
+- ${/for|while/.test(codeText) ? "There are **loops** for iteration" : "No loops detected — consider if you need iteration"}
 
 Would you like me to explain a specific part in more detail? 🤔`;
       } else if (lastMessage.includes('bug') || lastMessage.includes('fix') || lastMessage.includes('error') || lastMessage.includes('wrong')) {
         response = `## Bug Analysis 🐛
 
-Let me analyze your ${language.name} code for potential issues:
+Let me analyze your ${languageName} code for potential issues:
 
 **Possible issues I noticed:**
-${/for.*for/.test(code) ? "- ⚠️ **Nested loops detected** — make sure loop variables don't shadow each other" : ""}
-${!/return/.test(code) && language.name !== 'Python 3' ? "- ⚠️ **No return statement** — make sure your function returns the expected value" : ""}
+${/for.*for/.test(codeText) ? "- ⚠️ **Nested loops detected** — make sure loop variables don't shadow each other" : ""}
+${!/return/.test(codeText) && languageName !== 'Python 3' ? "- ⚠️ **No return statement** — make sure your function returns the expected value" : ""}
 - 🔍 Check boundary conditions (array limits, edge cases like 0 or negative numbers)
 - 🔍 Verify variable initialization before use
 
@@ -555,9 +657,9 @@ Read the problem carefully. What exactly is given? What do you need to produce?
 Try solving it for the smallest possible input by hand. What steps did you take?
 
 **Step 3 — Pattern recognition:**
-${/sort/.test(code) ? "This looks like a sorting problem. Consider: what comparison determines the order?" : ""}
-${/matrix|grid/.test(code) ? "This involves a 2D structure. Think about row-by-row or column-by-column processing." : ""}
-${!/sort|matrix|grid/.test(code) ? "Think about what data structure naturally fits this problem. Array? Map? Stack?" : ""}
+${/sort/.test(codeText) ? "This looks like a sorting problem. Consider: what comparison determines the order?" : ""}
+${/matrix|grid/.test(codeText) ? "This involves a 2D structure. Think about row-by-row or column-by-column processing." : ""}
+${!/sort|matrix|grid/.test(codeText) ? "Think about what data structure naturally fits this problem. Array? Map? Stack?" : ""}
 
 **Step 4 — Code it up:**
 Start with the brute force. Get it working. Then optimize.
@@ -567,18 +669,18 @@ Need a more specific hint? Tell me what part you're stuck on! 🚀`;
         response = `## ⚡ Optimization Analysis
 
 **Current complexity estimate:**
-${/for.*for/.test(code) ? "- **Time:** O(n²) — you have nested loops" : /for|while/.test(code) ? "- **Time:** O(n) — single loop detected" : "- **Time:** O(1) — no loops detected"}
-- **Space:** ${/vector|list|array|arr|dict|map|hash/.test(code) ? "O(n) — using additional data structures" : "O(1) — constant space"}
+${/for.*for/.test(codeText) ? "- **Time:** O(n²) — you have nested loops" : /for|while/.test(codeText) ? "- **Time:** O(n) — single loop detected" : "- **Time:** O(1) — no loops detected"}
+- **Space:** ${/vector|list|array|arr|dict|map|hash/.test(codeText) ? "O(n) — using additional data structures" : "O(1) — constant space"}
 
 **Optimization ideas:**
-${/for.*for/.test(code) ? "1. Can you replace the inner loop with a **hash map lookup** (O(1) instead of O(n))?\n2. If data is sorted, consider **binary search** for the inner operation\n3. Could a **two-pointer technique** eliminate the nested loop?" : ""}
-${!/for.*for/.test(code) ? "1. Your code looks fairly efficient already!\n2. Consider if you can reduce the number of operations inside the loop\n3. Can you precompute any values before the main processing?" : ""}
+${/for.*for/.test(codeText) ? "1. Can you replace the inner loop with a **hash map lookup** (O(1) instead of O(n))?\n2. If data is sorted, consider **binary search** for the inner operation\n3. Could a **two-pointer technique** eliminate the nested loop?" : ""}
+${!/for.*for/.test(codeText) ? "1. Your code looks fairly efficient already!\n2. Consider if you can reduce the number of operations inside the loop\n3. Can you precompute any values before the main processing?" : ""}
 
 **Remember:** Optimize for readability first, speed second — unless performance is critical! 📊`;
       } else if (lastMessage.includes('hello') || lastMessage.includes('hi') || lastMessage.includes('hey')) {
         response = `## Hey there! 👋
 
-I'm your **CodeForge AI** assistant! I'm here to help you with your ${language.name} code.
+I'm **Lucia**, your coding assistant! I'm here to help you with your ${languageName} code.
 
 **What I can do:**
 - 📖 **Explain** your code or concepts
@@ -591,9 +693,9 @@ Just ask me anything about your code! You can also use the quick action buttons 
       } else {
         response = `## 🤖 Here's my analysis
 
-Looking at your ${language.name} code (${code.split('\n').length} lines):
+Looking at your ${languageName} code (${codeText.split('\n').length} lines):
 
-${code.trim().length > 0 ? `Your code appears to be working with ${/input|scanf|cin|scan|read/.test(code) ? "user input" : "static data"} and ${/print|cout|printf|fmt|println|console/.test(code) ? "producing output" : "processing silently"}.` : "It looks like you haven't written any code yet. Start typing and I'll be here to help!"}
+${codeText.trim().length > 0 ? `Your code appears to be working with ${/input|scanf|cin|scan|read/.test(codeText) ? "user input" : "static data"} and ${/print|cout|printf|fmt|println|console/.test(codeText) ? "producing output" : "processing silently"}.` : "It looks like you haven't written any code yet. Start typing and I'll be here to help!"}
 
 **I can help you with:**
 - Understanding errors (just paste the error message)
@@ -604,53 +706,7 @@ ${code.trim().length > 0 ? `Your code appears to be working with ${/input|scanf|
 What would you like to know? 💬`;
       }
 
-      resolve({ content: response });
+      resolve(response);
     }, 800 + Math.random() * 1200);
   });
-}
-
-// ─── Real Claude API Call ───────────────────────────────────────────────────
-
-async function realAICall(action, data, config) {
-  // Claude API integration point
-  // When ready, set mockAI=false and provide claudeApiKey in settings
-
-  const systemPrompts = {
-    explain_error:
-      'You are a coding tutor. Explain the following compiler/runtime error in plain English. Identify the exact line number. Give a clear fix. Be encouraging.',
-    explain_code:
-      'You are an expert computer science tutor and code mentor. Explain the provided code deeply and practically. DO NOT merely recite theoretical CS definitions or textbook theorems. Instead, provide: 1) Purpose and what the code achieves, 2) Line-by-line runtime execution walkthrough, 3) Step-by-step dry run simulation table with sample inputs, variable states, and outputs, 4) Potential edge case traps and gotchas (boundary conditions, null pointers, overflow, infinite loops), 5) Concrete clean-code refactoring suggestions. Format cleanly in GitHub Markdown.',
-    generate_inputs:
-      'Analyze the code and determine what inputs it expects (type, format, quantity). Generate realistic test inputs. Return as plain text that can be used as stdin.',
-    logic_hint:
-      'You are a coding mentor. Give a hint about the approach to solve this problem WITHOUT giving the full code. Be Socratic — guide the student to discover the answer.',
-    chat: 'You are CodeForge AI, a friendly and knowledgeable coding assistant. Help the user with their code. Be concise but thorough. Use markdown formatting.',
-  };
-
-  const response = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': config.claudeApiKey,
-      'anthropic-version': '2023-06-01',
-    },
-    body: JSON.stringify({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: 1024,
-      system: systemPrompts[action],
-      messages: [
-        {
-          role: 'user',
-          content: JSON.stringify(data),
-        },
-      ],
-    }),
-  });
-
-  if (!response.ok) {
-    throw new Error(`Claude API error: ${response.status}`);
-  }
-
-  const result = await response.json();
-  return { content: result.content[0].text };
 }

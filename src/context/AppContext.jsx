@@ -29,6 +29,15 @@ import {
   saveActiveWorkspace,
 } from '../services/workspaceService';
 import {
+  estimateWorkspaceBytes,
+  isIndexedWorkspaceManifest,
+  loadLocalWorkspaceSnapshot,
+  saveLocalWorkspaceSnapshot,
+  shouldUseIndexedDb,
+} from '../services/localWorkspaceStore';
+import { loadCloudWorkspace, scheduleCloudWorkspaceSave } from '../services/workspaceCloudService';
+import { loadChatHistory, persistChatHistory } from '../services/chatHistoryService';
+import {
   ensureGitBaselines,
   getCurrentBranch,
   getSyncStatus,
@@ -96,6 +105,8 @@ function getInitialPage() {
   try {
     if (typeof window !== 'undefined') {
       const hash = window.location.hash || '';
+      if (hash.includes('test-suite')) return 'test-suite';
+      if (hash.includes('/sql')) return 'sql';
       // If user had settings in hash, clear it on refresh so they don't get trapped in settings
       if (hash.includes('settings')) {
         window.history.replaceState(null, '', window.location.pathname + window.location.search);
@@ -112,7 +123,7 @@ function getInitialPage() {
 
     // Check last used page from memory
     const savedLastPage = localStorage.getItem(STORAGE_LAST_PAGE_KEY);
-    const validPages = ['editor', 'notebook-setup', 'exam', 'templates', 'practice'];
+    const validPages = ['editor', 'notebook-setup', 'exam', 'templates', 'practice', 'sql', 'test-suite'];
     if (savedLastPage && validPages.includes(savedLastPage) && savedLastPage !== 'settings') {
       return savedLastPage;
     }
@@ -423,6 +434,9 @@ if (!initialWsMeta && !isIncognitoActive()) {
   setCurrentWorkspaceMeta({ id: defaultWsId, name: defaultWsName, subjectId: null });
 }
 
+const initialChatHistory = loadChatHistory();
+const initialChat = initialChatHistory.chats.find((chat) => chat.id === initialChatHistory.activeChatId);
+
 const initialState = {
   activeUser: initialUser,
   currentWorkspaceId: initialWsMeta?.id || defaultWsId,
@@ -451,7 +465,9 @@ const initialState = {
   stdin: initialStdin,
   inputDescription: '',
   aiExplanation: '',
-  chatMessages: [],
+  chatMessages: initialChat?.messages || [],
+  chatHistories: initialChatHistory.chats,
+  activeChatId: initialChat?.id || null,
   sidebarOpen: false,
   explorerOpen: initialConfig.explorerOpen ?? true,
   explorerWidth: initialConfig.explorerWidth ?? 240,
@@ -491,6 +507,7 @@ const initialState = {
   })(),
   terminalHidden: false,
   activeTerminalTab: 'output',
+  webPreviewOpen: false,
   currentPage: getInitialPage(),
   fileErrors: {},
   gitBranch: getCurrentBranch(),
@@ -524,6 +541,43 @@ function saveStateToStorage(files, activeFileId, stdin, folders, openFileIds, cu
     return;
   }
   try {
+    const wsId = currentWorkspaceId || getCurrentWorkspaceMeta()?.id || 'ws_default';
+    const wsName = currentWorkspaceName || getCurrentWorkspaceMeta()?.name || 'Default Workspace';
+    const subId = subjectId !== undefined ? subjectId : (getCurrentWorkspaceMeta()?.subjectId || null);
+    scheduleCloudWorkspaceSave(wsId, {
+      name: wsName,
+      files,
+      folders: folders || [],
+      activeFileId: activeFileId || files?.[0]?.id || null,
+      openFileIds: openFileIds || [],
+      stdin: stdin || '',
+      subjectId: subId,
+      incognito: false,
+    });
+
+    if (files && shouldUseIndexedDb(files)) {
+      const snapshot = {
+        files,
+        folders: folders || [],
+        activeFileId: activeFileId || files[0]?.id || null,
+        openFileIds: openFileIds || [],
+        stdin: stdin || '',
+        workspaceName: wsName,
+        subjectId: subId,
+      };
+      saveLocalWorkspaceSnapshot(wsId, snapshot).then(() => {
+        localStorage.setItem(STORAGE_FILES_KEY, JSON.stringify({ storage: 'indexeddb', version: 1, count: files.length, bytes: estimateWorkspaceBytes(files) }));
+        if (activeFileId) localStorage.setItem(STORAGE_ACTIVE_KEY, activeFileId);
+        if (stdin !== undefined) localStorage.setItem(STORAGE_STDIN_KEY, stdin);
+        if (folders) localStorage.setItem(STORAGE_FOLDERS_KEY, JSON.stringify(folders));
+        if (openFileIds) localStorage.setItem(STORAGE_OPEN_TABS_KEY, JSON.stringify(openFileIds));
+        setCurrentWorkspaceMeta({ id: wsId, name: wsName, subjectId: subId });
+      }).catch((error) => {
+        console.warn('IndexedDB workspace persistence failed; keeping the previous local copy:', error);
+      });
+      return;
+    }
+
     if (files) localStorage.setItem(STORAGE_FILES_KEY, JSON.stringify(files));
     if (activeFileId) localStorage.setItem(STORAGE_ACTIVE_KEY, activeFileId);
     if (stdin !== undefined) localStorage.setItem(STORAGE_STDIN_KEY, stdin);
@@ -531,9 +585,6 @@ function saveStateToStorage(files, activeFileId, stdin, folders, openFileIds, cu
     if (openFileIds) localStorage.setItem(STORAGE_OPEN_TABS_KEY, JSON.stringify(openFileIds));
 
     // Auto-sync active workspace so switching workspaces or refreshing never loses data
-    const wsId = currentWorkspaceId || getCurrentWorkspaceMeta()?.id || 'ws_default';
-    const wsName = currentWorkspaceName || getCurrentWorkspaceMeta()?.name || 'Default Workspace';
-    const subId = subjectId !== undefined ? subjectId : (getCurrentWorkspaceMeta()?.subjectId || null);
     if (wsId && files && files.length > 0) {
       saveActiveWorkspace(wsId, wsName, files, folders, activeFileId, stdin, null, subId);
     }
@@ -831,6 +882,77 @@ function reducer(state, action) {
       };
     }
 
+    case 'IMPORT_FILES_BATCH': {
+      const { files: incomingFiles = [], mode = 'append', folders: incomingFolders = [], stdin } = action.payload || {};
+      if (!Array.isArray(incomingFiles) || incomingFiles.length === 0) return state;
+
+      const replace = mode === 'replace';
+      const existingFiles = replace ? [] : state.files;
+      const existingNames = new Set(existingFiles.map((file) => file.name));
+      const importedFiles = incomingFiles.map((file, index) => {
+        const initialName = file.path || file.name || `imported_${index + 1}.txt`;
+        const { sanitizedPath } = sanitizeFilenameIdentifier(initialName);
+        let name = sanitizedPath;
+        let suffix = 1;
+        while (existingNames.has(name)) {
+          const dotIndex = sanitizedPath.lastIndexOf('.');
+          name = dotIndex > 0
+            ? `${sanitizedPath.slice(0, dotIndex)}_${suffix}${sanitizedPath.slice(dotIndex)}`
+            : `${sanitizedPath}_${suffix}`;
+          suffix += 1;
+        }
+        existingNames.add(name);
+        return {
+          ...file,
+          id: file.id || `import_${Date.now()}_${index}_${Math.random().toString(36).slice(2, 7)}`,
+          name,
+          content: typeof file.content === 'string' ? file.content : String(file.content ?? ''),
+          language: resolveLanguage(file.language, name),
+        };
+      });
+
+      const nextFiles = replace ? importedFiles : [...existingFiles, ...importedFiles];
+      const folderSet = new Set(replace ? [] : state.folders);
+      [...incomingFolders, ...nextFiles.map((file) => file.name)].forEach((filePath) => {
+        if (!String(filePath).includes('/')) return;
+        const parts = String(filePath).split('/');
+        parts.pop();
+        let folderPath = '';
+        parts.forEach((part) => {
+          folderPath = folderPath ? `${folderPath}/${part}` : part;
+          folderSet.add(folderPath);
+        });
+      });
+      const nextFolders = Array.from(folderSet);
+      const nextActiveId = importedFiles[0].id;
+      const nextOpenIds = replace
+        ? [nextActiveId]
+        : [...new Set([...(state.openFileIds || []), nextActiveId])];
+      const nextStdin = stdin !== undefined ? stdin : state.stdin;
+
+      saveStateToStorage(
+        nextFiles,
+        nextActiveId,
+        nextStdin,
+        nextFolders,
+        nextOpenIds,
+        state.currentWorkspaceId,
+        state.currentWorkspaceName,
+        state.subjectId
+      );
+
+      return {
+        ...state,
+        files: nextFiles,
+        folders: nextFolders,
+        activeFileId: nextActiveId,
+        openFileIds: nextOpenIds,
+        code: importedFiles[0].content,
+        detectedLanguage: resolveLanguage(importedFiles[0].language, importedFiles[0].name),
+        stdin: nextStdin,
+      };
+    }
+
     case 'CLOSE_TAB': {
       const fileIdToClose = action.payload;
       const filteredOpenIds = state.openFileIds.filter((id) => id !== fileIdToClose);
@@ -1076,9 +1198,38 @@ function reducer(state, action) {
     case 'SET_AI_EXPLANATION':
       return { ...state, aiExplanation: action.payload };
     case 'ADD_CHAT_MESSAGE':
+      {
+        const activeChatId = state.activeChatId || `lucia-${Date.now()}`;
+        const chatMessages = [...state.chatMessages, action.payload];
+        const existing = state.chatHistories.find((chat) => chat.id === activeChatId);
+        const firstUserMessage = chatMessages.find((message) => message.role === 'user');
+        const generatedTitle = String(firstUserMessage?.content || 'New Lucia chat').replace(/\s+/g, ' ').trim().slice(0, 54);
+        const updatedChat = {
+          id: activeChatId,
+          title: existing?.title || generatedTitle || 'New Lucia chat',
+          messages: chatMessages,
+          updatedAt: Date.now(),
+        };
+        const chatHistories = [updatedChat, ...state.chatHistories.filter((chat) => chat.id !== activeChatId)].slice(0, 40);
+        return { ...state, chatMessages, chatHistories, activeChatId };
+      }
+    case 'NEW_LUCIA_CHAT':
+      return { ...state, activeChatId: null, chatMessages: [], chatTyping: false };
+    case 'OPEN_LUCIA_CHAT': {
+      const chat = state.chatHistories.find((item) => item.id === action.payload);
+      return chat ? { ...state, activeChatId: chat.id, chatMessages: chat.messages, chatTyping: false } : state;
+    }
+    case 'DELETE_LUCIA_CHAT': {
+      const chatHistories = state.chatHistories.filter((chat) => chat.id !== action.payload);
+      const isActive = state.activeChatId === action.payload;
+      return { ...state, chatHistories, activeChatId: isActive ? null : state.activeChatId, chatMessages: isActive ? [] : state.chatMessages };
+    }
+    case 'RENAME_LUCIA_CHAT':
       return {
         ...state,
-        chatMessages: [...state.chatMessages, action.payload],
+        chatHistories: state.chatHistories.map((chat) => chat.id === action.payload.id
+          ? { ...chat, title: String(action.payload.title || '').trim().slice(0, 54) || chat.title }
+          : chat),
       };
     case 'SET_CHAT_TYPING':
       return { ...state, chatTyping: action.payload };
@@ -1125,6 +1276,8 @@ function reducer(state, action) {
       return { ...state, templatesModalOpen: action.payload };
     case 'SET_TERMINAL_TAB':
       return { ...state, activeTerminalTab: action.payload, terminalHidden: false };
+    case 'SET_WEB_PREVIEW_OPEN':
+      return { ...state, webPreviewOpen: Boolean(action.payload) };
     case 'SET_WELCOME_MODAL':
       return { ...state, welcomeModalOpen: action.payload };
     case 'SET_CURRENT_WORKSPACE_META': {
@@ -1142,7 +1295,10 @@ function reducer(state, action) {
       const validFiles = Array.isArray(files) && files.length > 0 ? normalizeLoadedFiles(files) : state.files;
       const nextActiveId = activeFileId || validFiles[0]?.id;
       const nextActiveFile = validFiles.find((f) => f.id === nextActiveId) || validFiles[0];
-      const openIds = validFiles.map((f) => f.id);
+      const requestedOpenIds = Array.isArray(action.payload.openFileIds)
+        ? action.payload.openFileIds.filter((fileId) => validFiles.some((file) => file.id === fileId))
+        : null;
+      const openIds = requestedOpenIds?.length ? requestedOpenIds : validFiles.map((f) => f.id);
       const nextWsId = currentWorkspaceId || id || state.currentWorkspaceId;
       const nextWsName = currentWorkspaceName || name || state.currentWorkspaceName;
       const nextSubjectId = subjectId !== undefined ? subjectId : (action.payload.subjectId || state.subjectId || null);
@@ -1458,6 +1614,63 @@ function reducer(state, action) {
 export function AppProvider({ children }) {
   const [state, dispatch] = useReducer(reducer, initialState);
 
+  useEffect(() => {
+    if (isIncognitoActive()) return;
+    persistChatHistory(state.chatHistories, state.activeChatId);
+  }, [state.chatHistories, state.activeChatId]);
+
+  useEffect(() => {
+    if (isIncognitoActive()) return;
+    try {
+      const raw = localStorage.getItem(STORAGE_FILES_KEY);
+      const manifest = raw ? JSON.parse(raw) : null;
+      if (!isIndexedWorkspaceManifest(manifest)) return;
+      const workspaceId = getCurrentWorkspaceMeta()?.id || 'ws_default';
+      loadLocalWorkspaceSnapshot(workspaceId).then((snapshot) => {
+        if (!snapshot || !Array.isArray(snapshot.files) || snapshot.files.length === 0) return;
+        dispatch({
+          type: 'LOAD_WORKSPACE_STATE',
+          payload: {
+            files: snapshot.files,
+            folders: snapshot.folders || [],
+            activeFileId: snapshot.activeFileId,
+            openFileIds: snapshot.openFileIds,
+            stdin: snapshot.stdin || '',
+            currentWorkspaceId: workspaceId,
+            currentWorkspaceName: snapshot.workspaceName,
+            subjectId: snapshot.subjectId,
+          },
+        });
+      }).catch((error) => {
+        console.warn('Could not restore the IndexedDB workspace snapshot:', error);
+      });
+    } catch (error) {
+      console.warn('Could not read the IndexedDB workspace pointer:', error);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (isIncognitoActive() || sharedPayload) return;
+    if (localStorage.getItem(STORAGE_FILES_KEY)) return;
+    const workspaceId = getCurrentWorkspaceMeta()?.id || 'ws_default';
+    loadCloudWorkspace(workspaceId).then((workspace) => {
+      if (!workspace || !Array.isArray(workspace.files) || workspace.files.length === 0) return;
+      dispatch({
+        type: 'LOAD_WORKSPACE_STATE',
+        payload: {
+          files: workspace.files,
+          folders: workspace.folders || [],
+          activeFileId: workspace.activeFileId,
+          openFileIds: workspace.openFileIds,
+          stdin: workspace.stdin || '',
+          id: workspace.id,
+          name: workspace.name,
+          subjectId: workspace.subjectId,
+        },
+      });
+    });
+  }, []);
+
   // Synchronize CSS data-theme and custom 3-color palette
   useEffect(() => {
     const theme = state.config?.theme || 'antigravity-google';
@@ -1484,6 +1697,8 @@ export function AppProvider({ children }) {
       const hash = window.location.hash;
       let page = 'editor';
       if (hash.includes('settings')) page = 'settings';
+      else if (hash.includes('test-suite')) page = 'test-suite';
+      else if (hash.includes('/sql')) page = 'sql';
       else if (hash.includes('notebooks') || hash.includes('setup')) page = 'notebook-setup';
       else if (hash.includes('exam') || hash.includes('test')) page = 'exam';
       else if (hash.includes('templates')) page = 'templates';
@@ -1543,6 +1758,10 @@ export function AppProvider({ children }) {
       type: 'ADD_FILE',
       payload: { name, content, folder, openTab },
     });
+  }, []);
+
+  const handleImportFiles = useCallback((files, options = {}) => {
+    dispatch({ type: 'IMPORT_FILES_BATCH', payload: { files, ...options } });
   }, []);
 
   // Create sequential file (e.g. file_01.java, file_02.java) via Ctrl+N / Cmd+N
@@ -2280,7 +2499,8 @@ export function AppProvider({ children }) {
           activeFile.content,
           state.detectedLanguage?.name || 'Python 3',
           state.output,
-          state.stderr
+          state.stderr,
+          state.chatMessages
         );
 
         dispatch({
@@ -2300,7 +2520,7 @@ export function AppProvider({ children }) {
         dispatch({ type: 'SET_CHAT_TYPING', payload: false });
       }
     },
-    [state.files, state.activeFileId, state.detectedLanguage, state.output, state.stderr]
+    [state.files, state.activeFileId, state.detectedLanguage, state.output, state.stderr, state.chatMessages]
   );
 
   // Collab state references to avoid stale closure in message events
@@ -2650,20 +2870,28 @@ export function AppProvider({ children }) {
     showToast('✨ Incognito Session Vanished! Workspace reset to clean slate.');
   }, [showToast]);
 
-  const handleRestoreSavedWorkspace = useCallback(() => {
+  const handleRestoreSavedWorkspace = useCallback(async () => {
     try {
       const rawFiles = localStorage.getItem(STORAGE_FILES_KEY);
       if (!rawFiles) {
         showToast('No previously saved workspace found in disk memory.');
         return;
       }
-      const parsedFiles = normalizeLoadedFiles(JSON.parse(rawFiles));
+      const storedFiles = JSON.parse(rawFiles);
+      const storedSnapshot = isIndexedWorkspaceManifest(storedFiles)
+        ? await loadLocalWorkspaceSnapshot(getCurrentWorkspaceMeta()?.id || 'ws_default')
+        : null;
+      if (isIndexedWorkspaceManifest(storedFiles) && !storedSnapshot) {
+        showToast('The large workspace snapshot could not be found in browser storage.');
+        return;
+      }
+      const parsedFiles = normalizeLoadedFiles(storedSnapshot?.files || storedFiles);
       const rawFolders = localStorage.getItem(STORAGE_FOLDERS_KEY);
-      const parsedFolders = rawFolders ? JSON.parse(rawFolders) : [];
-      const savedActive = localStorage.getItem(STORAGE_ACTIVE_KEY) || parsedFiles[0]?.id;
+      const parsedFolders = storedSnapshot?.folders || (rawFolders ? JSON.parse(rawFolders) : []);
+      const savedActive = storedSnapshot?.activeFileId || localStorage.getItem(STORAGE_ACTIVE_KEY) || parsedFiles[0]?.id;
       const rawTabs = localStorage.getItem(STORAGE_OPEN_TABS_KEY);
-      const parsedTabs = rawTabs ? JSON.parse(rawTabs) : [savedActive];
-      const savedStdin = localStorage.getItem(STORAGE_STDIN_KEY) || '';
+      const parsedTabs = storedSnapshot?.openFileIds || (rawTabs ? JSON.parse(rawTabs) : [savedActive]);
+      const savedStdin = storedSnapshot?.stdin || localStorage.getItem(STORAGE_STDIN_KEY) || '';
 
       dispatch({
         type: 'LOAD_WORKSPACE_STATE',
@@ -2747,6 +2975,7 @@ export function AppProvider({ children }) {
     handleGitSync,
     handleSelectLanguage,
     handleAddFile,
+    handleImportFiles,
     handleCreateSequentialFile,
     handleSelectFile,
     handleCloseTab,
@@ -2841,6 +3070,8 @@ export function AppProvider({ children }) {
           'templates': '#/templates',
           'practice': '#/practice',
           'git': '#/git',
+          'sql': '#/sql',
+          'test-suite': '#/test-suite',
           'source-control': '#/git',
           'editor': '#/',
         };

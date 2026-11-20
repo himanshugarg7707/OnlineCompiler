@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useApp } from '../context/AppContext';
 import {
   getDatabasesList,
@@ -25,9 +25,10 @@ import {
   Terminal,
 } from 'lucide-react';
 import './DatabasePanel.css';
+import { executeCode } from '../services/judge0Service';
 
 export default function DatabasePanel() {
-  const { handleCodeChange, handleSelectLanguage, handleAddFile } = useApp();
+  const { handleCodeChange, handleSelectLanguage } = useApp();
 
   const [databases, setDatabases] = useState([]);
   const [selectedDb, setSelectedDb] = useState('ecommerce_db');
@@ -42,6 +43,60 @@ export default function DatabasePanel() {
   const [copiedDdl, setCopiedDdl] = useState(false);
   const [connectorLang, setConnectorLang] = useState('python');
   const [viewMode, setViewMode] = useState('data'); // 'data' | 'schema'
+  const [query, setQuery] = useState('-- Write SQL here\nSELECT * FROM customers LIMIT 10;');
+  const [queryResult, setQueryResult] = useState(null);
+  const [queryRunning, setQueryRunning] = useState(false);
+  const [sidebarWidth, setSidebarWidth] = useState(() => {
+    try {
+      const saved = Number(localStorage.getItem('fullcode_sql_sidebar_width'));
+      return Number.isFinite(saved) && saved >= 200 ? Math.min(saved, window.innerWidth * 0.45, 700) : 280;
+    } catch { return 280; }
+  });
+  const [queryPaneHeight, setQueryPaneHeight] = useState(() => {
+    try {
+      const saved = Number(localStorage.getItem('fullcode_sql_query_pane_height'));
+      return Number.isFinite(saved) && saved >= 180 ? saved : Math.round(window.innerHeight * 0.36);
+    } catch { return Math.round(window.innerHeight * 0.36); }
+  });
+  const [isResizing, setIsResizing] = useState(false);
+  const resizeRef = useRef(null);
+  const layoutRef = useRef({ sidebarWidth, queryPaneHeight });
+  layoutRef.current = { sidebarWidth, queryPaneHeight };
+
+  useEffect(() => {
+    if (!isResizing) return undefined;
+    const onPointerMove = (event) => {
+      const drag = resizeRef.current;
+      if (!drag) return;
+      if (drag.axis === 'x') {
+        const max = Math.min(700, window.innerWidth * 0.45);
+        setSidebarWidth(Math.round(Math.max(200, Math.min(max, drag.startValue + event.clientX - drag.startPoint))));
+      } else {
+        const max = Math.max(300, window.innerHeight * 0.76);
+        setQueryPaneHeight(Math.round(Math.max(180, Math.min(max, drag.startValue + event.clientY - drag.startPoint))));
+      }
+    };
+    const onPointerUp = () => {
+      resizeRef.current = null;
+      setIsResizing(false);
+      try {
+        localStorage.setItem('fullcode_sql_sidebar_width', String(layoutRef.current.sidebarWidth));
+        localStorage.setItem('fullcode_sql_query_pane_height', String(layoutRef.current.queryPaneHeight));
+      } catch {}
+    };
+    window.addEventListener('pointermove', onPointerMove);
+    window.addEventListener('pointerup', onPointerUp);
+    return () => {
+      window.removeEventListener('pointermove', onPointerMove);
+      window.removeEventListener('pointerup', onPointerUp);
+    };
+  }, [isResizing]);
+
+  const startResize = (event, axis, startValue) => {
+    event.preventDefault();
+    resizeRef.current = { axis, startPoint: axis === 'x' ? event.clientX : event.clientY, startValue };
+    setIsResizing(true);
+  };
 
   // Load databases list
   const refreshDatabases = useCallback(async () => {
@@ -165,7 +220,21 @@ export default function DatabasePanel() {
   };
 
   const handleOpenQueryInEditor = (sql) => {
-    handleAddFile('query.sql', sql);
+    setQuery(sql);
+  };
+
+  const runQuery = async () => {
+    setQueryRunning(true);
+    try {
+      localStorage.setItem('fullcode_active_db', selectedDb);
+      const result = await executeCode(query, 82, '', [], 'query.sql');
+      setQueryResult(result);
+      window.dispatchEvent(new CustomEvent('database-updated', { detail: { database: selectedDb } }));
+    } catch (error) {
+      setQueryResult({ success: false, error: error.message, output: error.message });
+    } finally {
+      setQueryRunning(false);
+    }
   };
 
   const getConnectorSnippet = () => {
@@ -221,7 +290,7 @@ SELECT * FROM ${selectedTable || 'customers'} LIMIT 10;`;
   };
 
   return (
-    <div className="database-panel">
+    <div className={`database-panel ${isResizing ? 'is-resizing' : ''}`} style={{ '--db-sidebar-width': `${sidebarWidth}px`, '--sql-query-pane-height': `${queryPaneHeight}px` }}>
       {/* Sidebar: Databases & Tables */}
       <div className="db-sidebar">
         {/* Database Selector Bar */}
@@ -369,8 +438,56 @@ SELECT * FROM ${selectedTable || 'customers'} LIMIT 10;`;
         </div>
       </div>
 
+      <div
+        className="db-pane-resize db-sidebar-resize"
+        role="separator"
+        aria-label="Resize database and tables sidebar"
+        aria-orientation="vertical"
+        aria-valuemin={200}
+        aria-valuemax={700}
+        aria-valuenow={sidebarWidth}
+        tabIndex={0}
+        onPointerDown={(event) => startResize(event, 'x', sidebarWidth)}
+        onKeyDown={(event) => {
+          if (!['ArrowLeft', 'ArrowRight'].includes(event.key)) return;
+          event.preventDefault();
+          setSidebarWidth((width) => {
+            const next = Math.max(200, Math.min(700, width + (event.key === 'ArrowRight' ? 16 : -16)));
+            try { localStorage.setItem('fullcode_sql_sidebar_width', String(next)); } catch {}
+            return next;
+          });
+        }}
+      />
+
       {/* Main Area: Visual Table Data Viewer & SQL Runner */}
       <div className="db-main-content">
+        <section className="sql-query-workbench">
+          <div className="sql-query-workbench-head"><strong>SQL Query</strong><span>{selectedDb}</span><button type="button" onClick={runQuery} disabled={queryRunning}>{queryRunning ? 'Running…' : '▶ Run query'}</button></div>
+          <textarea aria-label="SQL query editor" spellCheck="false" value={query} onChange={(event) => setQuery(event.target.value)} onKeyDown={(event) => { if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') { event.preventDefault(); runQuery(); } }} />
+          {queryResult && <div className={`sql-query-result ${queryResult.success === false ? 'error' : ''}`}>
+            {queryResult.sqlData?.columns?.length ? <div className="sql-result-table-wrap"><table className="db-data-table"><thead><tr>{queryResult.sqlData.columns.map((column) => <th key={column}>{column}</th>)}</tr></thead><tbody>{(queryResult.sqlData.rows || []).map((row, rowIndex) => <tr key={rowIndex}>{queryResult.sqlData.columns.map((column) => <td key={column}>{row[column] == null ? 'NULL' : String(row[column])}</td>)}</tr>)}</tbody></table></div> : <pre>{queryResult.error || queryResult.output || 'Query completed.'}</pre>}
+          </div>}
+        </section>
+        <div
+          className="db-pane-resize db-query-resize"
+          role="separator"
+          aria-label="Resize SQL query and results panes"
+          aria-orientation="horizontal"
+          aria-valuemin={180}
+          aria-valuemax={Math.round(typeof window === 'undefined' ? 900 : window.innerHeight * 0.76)}
+          aria-valuenow={queryPaneHeight}
+          tabIndex={0}
+          onPointerDown={(event) => startResize(event, 'y', queryPaneHeight)}
+          onKeyDown={(event) => {
+            if (!['ArrowUp', 'ArrowDown'].includes(event.key)) return;
+            event.preventDefault();
+            setQueryPaneHeight((height) => {
+              const next = Math.max(180, Math.min(window.innerHeight * 0.76, height + (event.key === 'ArrowDown' ? 16 : -16)));
+              try { localStorage.setItem('fullcode_sql_query_pane_height', String(next)); } catch {}
+              return next;
+            });
+          }}
+        />
         {selectedTable && tableData ? (
           <div className="table-viewer-wrapper">
             {/* Table Viewer Toolbar */}
@@ -534,7 +651,7 @@ SELECT * FROM ${selectedTable || 'customers'} LIMIT 10;`;
                         }
                       >
                         <Code size={12} />
-                        <span>Open in Editor</span>
+                        <span>Load Query</span>
                       </button>
                     </div>
                   </div>

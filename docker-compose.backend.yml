@@ -1,0 +1,33 @@
+services:
+  database:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: fullcode
+      POSTGRES_USER: fullcode
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-fullcode_dev_only}
+    volumes:
+      - fullcode_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fullcode -d fullcode"]
+      interval: 5s
+      timeout: 5s
+      retries: 15
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    restart: unless-stopped
+    environment:
+      PORT: 5001
+      DATABASE_URL: postgres://fullcode:${POSTGRES_PASSWORD:-fullcode_dev_only}@database:5432/fullcode
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:5173}
+    ports:
+      - "5001:5001"
+    depends_on:
+      database:
+        condition: service_healthy
+
+volumes:
+  fullcode_postgres_data:

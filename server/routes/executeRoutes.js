@@ -4,9 +4,6 @@ import { detectLocalCompilers, executeCodeLocally } from '../localRunner.js';
 
 const router = Router();
 
-// In-memory cache for ultra-fast repeated responses
-const executionCache = new Map();
-
 // GET /api/execute/status - Check local compiler availability and system environment
 router.get(['/status', '/local-status'], async (req, res) => {
   try {
@@ -96,10 +93,6 @@ router.post('/', async (req, res) => {
         isLocal: true,
         engine: 'sqlite',
       };
-
-      if (asciiOutput.length < 50000) {
-        executionCache.set(cacheKey, responsePayload);
-      }
 
       return res.json(responsePayload);
     } catch (err) {

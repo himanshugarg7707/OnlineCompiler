@@ -14,6 +14,15 @@ const DEFAULT_CONFIG = {
 
   // API Keys (Optional)
   claudeApiKey: '',
+  geminiApiKey: '',
+  luciaResponseStyle: 'code-first',
+  aiAssistantName: 'Lucia',
+  aiConversationMode: 'code',
+  aiCustomInstructions: '',
+  aiTone: 'friendly',
+  aiDetailLevel: 'balanced',
+  aiTeachingLevel: 'adaptive',
+  aiResponseFormat: 'markdown',
   judge0ApiKey: '',
   judge0Host: 'judge0-ce.p.rapidapi.com',
 
@@ -26,6 +35,8 @@ const DEFAULT_CONFIG = {
   minimap: true,
   wordWrap: 'off',
   lineNumbers: true,
+  suggestionsWhileTyping: true,
+  workspaceUiScale: 'medium',
 
   // Terminal settings ('bottom' | 'right')
   terminalPosition: 'bottom',
@@ -49,6 +60,8 @@ export function getConfig() {
     const stored = localStorage.getItem(CONFIG_KEY);
     if (stored) {
       const parsed = JSON.parse(stored);
+      if (parsed.aiProvider === 'lucia') parsed.aiProvider = 'gemini';
+      if (parsed.aiProvider && !['mock', 'gemini'].includes(parsed.aiProvider)) parsed.aiProvider = 'mock';
       // Upgrade legacy or baby-pink themes to official Google Antigravity theme
       if ((parsed.theme === 'baby-pink' || !parsed.theme) && !localStorage.getItem('fullcode_antigravity_official_v4')) {
         localStorage.setItem('fullcode_antigravity_official_v4', 'true');
@@ -94,7 +107,7 @@ export function resetConfig() {
  */
 export function isAIReady() {
   const config = getConfig();
-  return !config.mockAI && config.claudeApiKey.length > 0;
+  return config.aiProvider === 'gemini' && Boolean(config.geminiApiKey);
 }
 
 export function isExecutionReady() {

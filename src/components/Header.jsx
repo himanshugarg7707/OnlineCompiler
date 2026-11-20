@@ -28,6 +28,7 @@ import {
   Brain,
   Columns2,
   FileText,
+  Bot,
 } from 'lucide-react';
 import LanguageIcon from './LanguageIcon';
 import { isLocalEnvironment } from '../services/judge0Service';
@@ -667,42 +668,6 @@ export default function Header() {
 
                 <div className="dropdown-divider" />
 
-                {/* Section: Intelligent AI & Analysis */}
-                <div className="more-section-label">INTELLIGENT TOOLS & AI</div>
-                <button
-                  className="dropdown-entry more-entry"
-                  onClick={() => closeMenuAndRun(() => {
-                    dispatch({ type: 'SET_TERMINAL_HIDDEN', payload: false });
-                    dispatch({ type: 'SET_TERMINAL_TAB', payload: 'explanation' });
-                  })}
-                >
-                  <div className="more-entry-left">
-                    <span className="material-symbols-outlined entry-icon text-cyan">auto_awesome</span>
-                    <div>
-                      <div className="more-entry-title">Antigravity AI Copilot</div>
-                      <div className="more-entry-desc">Code explanation, bug detection & logic suggestions</div>
-                    </div>
-                  </div>
-                  <kbd>Ctrl+Shift+E</kbd>
-                </button>
-                <button
-                  className="dropdown-entry more-entry"
-                  onClick={() => closeMenuAndRun(() => {
-                    dispatch({ type: 'SET_TERMINAL_HIDDEN', payload: false });
-                    dispatch({ type: 'SET_TERMINAL_TAB', payload: 'complexity' });
-                  })}
-                >
-                  <div className="more-entry-left">
-                    <span className="material-symbols-outlined entry-icon text-green">speed</span>
-                    <div>
-                      <div className="more-entry-title">Complexity Analyzer</div>
-                      <div className="more-entry-desc">Static Big-O asymptotic runtime & memory scaling</div>
-                    </div>
-                  </div>
-                </button>
-
-                <div className="dropdown-divider" />
-
                 {/* Section: Academic & DSA Hub */}
                 <div className="more-section-label">ACADEMIC & LEARNING SUITE</div>
                 <button
@@ -771,44 +736,28 @@ export default function Header() {
 
                 <div className="dropdown-divider" />
 
-                {/* Section: Panels & Preview */}
-                <div className="more-section-label">DEVTOOLS & PANELS</div>
+                {/* Dedicated workspaces */}
+                <div className="more-section-label">WORKSPACES & TESTING</div>
                 <button
                   className="dropdown-entry more-entry"
                   onClick={() => closeMenuAndRun(() => {
-                    dispatch({ type: 'SET_TERMINAL_HIDDEN', payload: false });
-                    dispatch({ type: 'SET_TERMINAL_TAB', payload: 'tests' });
-                    showToast('🧪 Test Case Suite & Stress Tester opened');
+                    dispatch({ type: 'NAVIGATE_PAGE', payload: 'test-suite' });
+                    window.location.hash = '#/test-suite';
                   })}
                 >
                   <div className="more-entry-left">
                     <span className="material-symbols-outlined entry-icon text-pink">science</span>
                     <div>
-                      <div className="more-entry-title">Test Suite & Stress Tester</div>
-                      <div className="more-entry-desc">Batch I/O, diff checker & edge-case stress generator</div>
+                      <div className="more-entry-title">Test Case Suite & Stress Tester</div>
+                      <div className="more-entry-desc">Run custom cases, compare output, and find edge cases</div>
                     </div>
                   </div>
                 </button>
                 <button
                   className="dropdown-entry more-entry"
                   onClick={() => closeMenuAndRun(() => {
-                    dispatch({ type: 'SET_TERMINAL_HIDDEN', payload: false });
-                    dispatch({ type: 'SET_TERMINAL_TAB', payload: 'web' });
-                  })}
-                >
-                  <div className="more-entry-left">
-                    <span className="material-symbols-outlined entry-icon text-cyan">language</span>
-                    <div>
-                      <div className="more-entry-title">Web Preview & DevTools</div>
-                      <div className="more-entry-desc">Live browser engine DOM & console inspect</div>
-                    </div>
-                  </div>
-                </button>
-                <button
-                  className="dropdown-entry more-entry"
-                  onClick={() => closeMenuAndRun(() => {
-                    dispatch({ type: 'SET_TERMINAL_HIDDEN', payload: false });
-                    dispatch({ type: 'SET_TERMINAL_TAB', payload: 'database' });
+                    dispatch({ type: 'NAVIGATE_PAGE', payload: 'sql' });
+                    window.location.hash = '#/sql';
                   })}
                 >
                   <div className="more-entry-left">
@@ -829,6 +778,16 @@ export default function Header() {
       {/* Right Controls: Workspace Symbol Button, Run, Settings, Profile */}
       <div className="header-right">
         {/* Workspace Symbol Button */}
+        <button
+          type="button"
+          className="btn-icon-top btn-header-ai"
+          onClick={() => dispatch({ type: 'SET_SIDEBAR', payload: !state.sidebarOpen })}
+          title="Open Lucia AI chat"
+          aria-label="Open Lucia AI chat"
+        >
+          <span className="lucia-nav-mark" aria-hidden="true"><Bot size={14} /><i /></span>
+          <span>Lucia</span>
+        </button>
         <button
           type="button"
           className="btn-icon-top btn-header-workspace"

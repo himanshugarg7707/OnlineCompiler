@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { AppProvider, useApp } from './context/AppContext';
 import Header from './components/Header';
+import ChatSidebar from './components/ChatSidebar';
 import CodeEditor from './components/CodeEditor';
 import OutputPanel from './components/OutputPanel';
 import FileExplorer from './components/FileExplorer';
@@ -28,9 +29,12 @@ import ExamTestPage from './pages/ExamTestPage';
 import TemplatesPage from './pages/TemplatesPage';
 import PracticePage from './pages/PracticePage';
 import GitPage from './pages/GitPage';
+import SqlWorkspacePage from './pages/SqlWorkspacePage';
+import TestSuiteWorkspacePage from './pages/TestSuiteWorkspacePage';
 import SplitPaneContainer from './components/SplitPaneContainer';
+import WebPreviewPanel from './components/WebPreviewPanel';
 import { getLanguageFromFilename } from './services/languageDetector';
-import { FolderTree, ChevronLeft, ChevronRight, Maximize2, Minimize2, Play, Columns2, Check } from 'lucide-react';
+import { FolderTree, ChevronLeft, ChevronRight, Maximize2, Minimize2, Play, Check, BookOpen, Code2, Timer, Braces, BrainCircuit, Database, Users, Info, FlaskConical } from 'lucide-react';
 import './App.css';
 
 const SPLIT_STORAGE_KEY = 'fullcode_split_percent';
@@ -56,8 +60,80 @@ function AppContent() {
     showToast,
   } = useApp();
   const { explorerOpen, practiceOpen, toast, terminalHidden } = state;
+  const initialDevicePixelRatioRef = useRef(window.devicePixelRatio || 1);
+  const [zoomCompensation, setZoomCompensation] = useState(1);
+  const [webPreviewWidth, setWebPreviewWidth] = useState(() => {
+    try {
+      const saved = Number(localStorage.getItem('fullcode_web_preview_width'));
+      return Number.isFinite(saved) ? Math.max(25, Math.min(75, saved)) : 45;
+    } catch { return 45; }
+  });
+  const [isWebPreviewResizing, setIsWebPreviewResizing] = useState(false);
+  const webPreviewDrag = useRef(null);
+
+  useEffect(() => {
+    const updateZoomCompensation = () => {
+      const currentRatio = window.devicePixelRatio || initialDevicePixelRatioRef.current;
+      setZoomCompensation(initialDevicePixelRatioRef.current / currentRatio);
+    };
+
+    window.addEventListener('resize', updateZoomCompensation);
+    window.visualViewport?.addEventListener('resize', updateZoomCompensation);
+    updateZoomCompensation();
+    return () => {
+      window.removeEventListener('resize', updateZoomCompensation);
+      window.visualViewport?.removeEventListener('resize', updateZoomCompensation);
+    };
+  }, []);
 
   const activeFile = state.files.find((f) => f.id === state.activeFileId) || state.files[0];
+  const isHtmlActive = Boolean(activeFile && (/\.(html?|xhtml)$/i.test(activeFile.name) || activeFile.language?.monacoLanguage === 'html'));
+
+  useEffect(() => {
+    if (!isWebPreviewResizing) return undefined;
+    const onPointerMove = (event) => {
+      if (!webPreviewDrag.current) return;
+      const drag = webPreviewDrag.current;
+      const deltaPercent = ((event.clientX - drag.x) / drag.containerWidth) * 100;
+      setWebPreviewWidth(Math.max(25, Math.min(75, drag.width - deltaPercent)));
+    };
+    const onPointerUp = () => {
+      webPreviewDrag.current = null;
+      setIsWebPreviewResizing(false);
+      try { localStorage.setItem('fullcode_web_preview_width', String(webPreviewWidth)); } catch {}
+    };
+    window.addEventListener('pointermove', onPointerMove);
+    window.addEventListener('pointerup', onPointerUp);
+    return () => {
+      window.removeEventListener('pointermove', onPointerMove);
+      window.removeEventListener('pointerup', onPointerUp);
+    };
+  }, [isWebPreviewResizing, webPreviewWidth]);
+  const runCollapsedRailAction = (action) => {
+    switch (action) {
+      case 'collaboration': dispatch({ type: 'TOGGLE_COLLAB_MODAL' }); break;
+      case 'about': dispatch({ type: 'SET_WELCOME_MODAL', payload: true }); break;
+      case 'notebooks': dispatch({ type: 'NAVIGATE_PAGE', payload: 'notebook-setup' }); break;
+      case 'practice': dispatch({ type: 'NAVIGATE_PAGE', payload: 'practice' }); break;
+      case 'exam': dispatch({ type: 'NAVIGATE_PAGE', payload: 'exam' }); break;
+      case 'templates': dispatch({ type: 'NAVIGATE_PAGE', payload: 'templates' }); break;
+      case 'visualizer': window.dispatchEvent(new CustomEvent('open-dsa-visualizer')); break;
+      case 'database': dispatch({ type: 'NAVIGATE_PAGE', payload: 'sql' }); window.location.hash = '#/sql'; break;
+      case 'test-suite': dispatch({ type: 'NAVIGATE_PAGE', payload: 'test-suite' }); window.location.hash = '#/test-suite'; break;
+      default: break;
+    }
+  };
+  const collapsedMoreShortcuts = [
+    { title: 'Live Room Collaboration', action: 'collaboration', Icon: Users },
+    { title: 'About Full Code', action: 'about', Icon: Info },
+    { title: 'Subject Course Notebooks', action: 'notebooks', Icon: BookOpen },
+    { title: 'DSA Practice Lab', action: 'practice', Icon: Code2 },
+    { title: 'Proctored Exam & Tests', action: 'exam', Icon: Timer },
+    { title: 'Code Templates & Snippets', action: 'templates', Icon: Braces },
+    { title: 'DSA & Memory Visualizer', action: 'visualizer', Icon: BrainCircuit },
+    { title: 'Database & SQL Explorer', action: 'database', Icon: Database },
+    { title: 'Test Case Suite & Stress Tester', action: 'test-suite', Icon: FlaskConical },
+  ];
   const isNotebookActive = Boolean(
     activeFile?.name?.endsWith('.ipynb') ||
     state.detectedLanguage?.monacoLanguage === 'ipynb' ||
@@ -349,8 +425,11 @@ function AppContent() {
           showToast('Terminal cleared 🧹');
           break;
         case 'toggle-web-preview':
-          dispatch({ type: 'SET_TERMINAL_HIDDEN', payload: false });
-          dispatch({ type: 'SET_TERMINAL_TAB', payload: 'web' });
+          if (isHtmlActive && !state.splitViewOpen) {
+            dispatch({ type: 'SET_WEB_PREVIEW_OPEN', payload: !state.webPreviewOpen });
+          } else {
+            showToast('Open an HTML file to use the Web Sandbox preview.');
+          }
           break;
         case 'toggle-explorer':
           dispatch({ type: 'TOGGLE_EXPLORER' });
@@ -420,13 +499,12 @@ function AppContent() {
           window.dispatchEvent(new CustomEvent('open-dsa-visualizer'));
           break;
         case 'open-testsuite':
-          dispatch({ type: 'SET_TERMINAL_HIDDEN', payload: false });
-          dispatch({ type: 'SET_TERMINAL_TAB', payload: 'tests' });
-          showToast('🧪 Test Suite opened');
+          dispatch({ type: 'NAVIGATE_PAGE', payload: 'test-suite' });
+          window.location.hash = '#/test-suite';
           break;
         case 'open-database':
-          dispatch({ type: 'SET_TERMINAL_HIDDEN', payload: false });
-          dispatch({ type: 'SET_TERMINAL_TAB', payload: 'database' });
+          dispatch({ type: 'NAVIGATE_PAGE', payload: 'sql' });
+          window.location.hash = '#/sql';
           break;
         case 'open-collab':
           dispatch({ type: 'TOGGLE_COLLAB_MODAL' });
@@ -676,9 +754,17 @@ function AppContent() {
 
   return (
     <div
-      className={`app-container ${state.focusMode ? 'focus-mode-active' : ''} ${
+      className={`app-container workspace-scale-${state.config?.workspaceUiScale || 'medium'} ${state.focusMode ? 'focus-mode-active' : ''} ${
         state.navbarMinimized ? 'navbar-is-minimized' : ''
       } ${isNotebookActive ? 'notebook-active' : 'simple-file-active'}`}
+      style={{
+        '--zoom-compensation': zoomCompensation,
+        '--workspace-ui-scale': (() => {
+          const scale = state.config?.workspaceUiScale;
+          if (typeof scale === 'number' && Number.isFinite(scale)) return `${Math.min(1.2, Math.max(0.85, scale))}`;
+          return ({ small: '0.9', medium: '1', zoomed: '1.12' })[scale] || '1';
+        })(),
+      }}
     >
       <Header />
       <SharedWorkspaceBanner />
@@ -720,6 +806,20 @@ function AppContent() {
           >
             <FolderTree size={15} className="rail-folder-icon" />
             <span className="rail-vertical-text">EXPLORER</span>
+            <div className="collapsed-rail-actions" onClick={(event) => event.stopPropagation()}>
+              {collapsedMoreShortcuts.map(({ title, action, Icon }) => (
+                <button
+                  key={action}
+                  type="button"
+                  className="collapsed-rail-action"
+                  title={title}
+                  aria-label={title}
+                  onClick={() => runCollapsedRailAction(action)}
+                >
+                  <Icon size={15} />
+                </button>
+              ))}
+            </div>
             <ChevronRight size={12} className="rail-expand-arrow" />
           </div>
         )}
@@ -795,7 +895,39 @@ function AppContent() {
                       }
                 }
               >
-                <CodeEditor />
+                <div className={`editor-preview-layout ${isWebPreviewResizing ? 'resizing' : ''}`} style={{ '--web-preview-width': `${webPreviewWidth}%` }}>
+                  <div className="editor-preview-code"><CodeEditor /></div>
+                  {isHtmlActive && state.webPreviewOpen && (
+                    <>
+                      <div
+                        className="web-preview-resizer"
+                        role="separator"
+                        aria-label="Resize HTML preview"
+                        aria-orientation="vertical"
+                        aria-valuemin={25}
+                        aria-valuemax={75}
+                        aria-valuenow={Math.round(webPreviewWidth)}
+                        tabIndex={0}
+                        onPointerDown={(event) => {
+                          event.preventDefault();
+                          const bounds = event.currentTarget.parentElement.getBoundingClientRect();
+                          webPreviewDrag.current = { x: event.clientX, width: webPreviewWidth, containerWidth: bounds.width };
+                          setIsWebPreviewResizing(true);
+                        }}
+                        onKeyDown={(event) => {
+                          if (!['ArrowLeft', 'ArrowRight'].includes(event.key)) return;
+                          event.preventDefault();
+                          setWebPreviewWidth((width) => {
+                            const next = Math.max(25, Math.min(75, width + (event.key === 'ArrowLeft' ? 3 : -3)));
+                            try { localStorage.setItem('fullcode_web_preview_width', String(next)); } catch {}
+                            return next;
+                          });
+                        }}
+                      />
+                      <div className="editor-preview-side"><WebPreviewPanel onClose={() => dispatch({ type: 'SET_WEB_PREVIEW_OPEN', payload: false })} /></div>
+                    </>
+                  )}
+                </div>
               </div>
 
               {!effectiveTerminalHidden && (
@@ -832,6 +964,7 @@ function AppContent() {
             </>
           )}
         </div>
+        <ChatSidebar />
 
         {/* Right Adjustable Practice Sidebar */}
         {practiceOpen && (
@@ -948,6 +1081,8 @@ function AppRouter() {
   if (state.currentPage === 'git' || state.currentPage === 'source-control') {
     return <GitPage />;
   }
+  if (state.currentPage === 'sql') return <SqlWorkspacePage />;
+  if (state.currentPage === 'test-suite') return <TestSuiteWorkspacePage />;
   return <AppContent />;
 }
 

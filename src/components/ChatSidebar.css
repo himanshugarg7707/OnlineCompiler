@@ -1,6 +1,9 @@
 .chat-sidebar {
-  width: var(--sidebar-width);
-  min-width: var(--sidebar-width);
+  position: relative;
+  width: var(--lucia-sidebar-width, var(--sidebar-width));
+  min-width: 280px;
+  max-width: 70vw;
+  flex: 0 0 var(--lucia-sidebar-width, var(--sidebar-width));
   height: 100%;
   background: var(--bg-secondary);
   border-left: 1px solid var(--border-primary);
@@ -8,6 +11,39 @@
   flex-direction: column;
   animation: slide-in-right 0.3s ease-out;
   overflow: hidden;
+}
+
+.chat-sidebar-resize-handle {
+  position: absolute;
+  z-index: 20;
+  top: 0;
+  bottom: 0;
+  left: -4px;
+  width: 8px;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.chat-sidebar-resize-handle::after {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 3px;
+  width: 2px;
+  background: transparent;
+  content: '';
+  transition: background 0.15s ease;
+}
+
+.chat-sidebar-resize-handle:hover::after,
+.chat-sidebar-resize-handle:focus-visible::after,
+.chat-sidebar.resizing .chat-sidebar-resize-handle::after {
+  background: var(--accent-cyan);
+}
+
+.chat-sidebar.resizing {
+  transition: none;
+  user-select: none;
 }
 
 /* Header */
@@ -19,6 +55,9 @@
   border-bottom: 1px solid var(--border-primary);
   min-height: 48px;
 }
+
+.sidebar-header-actions { display: flex; align-items: center; gap: 3px; }
+.sidebar-header-actions .btn-icon.active { color: var(--accent-cyan); background: color-mix(in srgb, var(--accent-cyan) 12%, transparent); }
 
 .sidebar-title {
   display: flex;
@@ -32,9 +71,11 @@
 .sidebar-icon {
   color: var(--accent-purple);
 }
+.lucia-sidebar-mark { width: 27px; height: 27px; flex-basis: 27px; border-radius: 9px; }
 
 /* Messages */
 .chat-messages {
+  position: relative;
   flex: 1;
   overflow-y: auto;
   padding: var(--sp-4);

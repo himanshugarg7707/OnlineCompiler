@@ -406,7 +406,6 @@ export default function SplitPaneContainer() {
               <OutputPanel
                 isSplitTerminal={false}
                 overrideFile={leftFile}
-                onRun={handleRunCode}
                 terminalTitle="Terminal 1:"
                 onToggleHide={() => setLeftTerminalHidden(true)}
               />
@@ -614,7 +613,6 @@ export default function SplitPaneContainer() {
                   isSplitTerminal={true}
                   overrideFile={splitFile}
                   overrideState={state.splitExecution}
-                  onRun={handleRunSplitCode}
                   terminalTitle="Terminal 2:"
                   onToggleHide={() => setRightTerminalHidden(true)}
                 />

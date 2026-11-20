@@ -27,8 +27,8 @@ import { isItemProtected, isItemUnlocked } from '../services/securityService';
 import { sanitizeFilenameIdentifier } from '../services/identifierSanitizer';
 import PasswordPromptModal from './PasswordPromptModal';
 import LanguageIcon from './LanguageIcon';
-import { createDefaultNotebookJson, setupFileDragDataTransfer, getLanguageFromFilename } from '../services/languageDetector';
-import { processFileList } from '../services/importService';
+import { createDefaultNotebookJson, setupFileDragDataTransfer } from '../services/languageDetector';
+import { processFileList, processNamedFiles } from '../services/importService';
 import { recordSnapshot } from '../services/historyService';
 import FileOptionsMenu from './FileOptionsMenu';
 import './FileExplorer.css';
@@ -118,6 +118,7 @@ export default function FileExplorer() {
   const {
     state,
     handleAddFile,
+    handleImportFiles,
     handleSelectFile,
     handleCreateSequentialFile,
     handleCloseFile,
@@ -199,9 +200,7 @@ export default function FileExplorer() {
         return;
       }
 
-      processed.forEach((f) => {
-        handleAddFile(f.path || f.name, f.content, null, true);
-      });
+      handleImportFiles(processed, { mode: 'append' });
       showToast(`Imported ${processed.length} file(s) into workspace 📄`);
     } catch (err) {
       console.error(err);
@@ -220,7 +219,7 @@ export default function FileExplorer() {
     if (typeof window !== 'undefined' && 'showDirectoryPicker' in window) {
       try {
         const dirHandle = await window.showDirectoryPicker();
-        const loadedFiles = [];
+    const discoveredFiles = [];
         const ignored = new Set(['.git', 'node_modules', 'dist', '.DS_Store', '__pycache__', '.vercel', 'scratch']);
 
         async function scanDir(handle, currentPath = '') {
@@ -229,11 +228,8 @@ export default function FileExplorer() {
             if (entry.kind === 'file') {
               try {
                 const file = await entry.getFile();
-                if (file.size < 1_500_000) {
-                  const text = await file.text();
-                  const relPath = currentPath ? `${currentPath}/${entry.name}` : entry.name;
-                  loadedFiles.push({ name: relPath, content: text });
-                }
+                const relPath = currentPath ? `${currentPath}/${entry.name}` : entry.name;
+                discoveredFiles.push({ file, path: relPath });
               } catch {}
             } else if (entry.kind === 'directory') {
               const subPath = currentPath ? `${currentPath}/${entry.name}` : entry.name;
@@ -243,27 +239,16 @@ export default function FileExplorer() {
         }
 
         await scanDir(dirHandle);
+        const loadedFiles = await processNamedFiles(discoveredFiles);
 
         if (loadedFiles.length > 0) {
-          const newFiles = loadedFiles.map((f, idx) => ({
-            id: `local-${Date.now()}-${idx}`,
-            name: f.name,
-            content: f.content,
-            language: getLanguageFromFilename(f.name),
-          }));
+          const newFiles = loadedFiles.map((f, idx) => ({ ...f, id: f.id || `local-${Date.now()}-${idx}` }));
           const detectedFolders = [...new Set(
             newFiles
               .filter((f) => f.name.includes('/'))
               .map((f) => f.name.substring(0, f.name.lastIndexOf('/')))
           )];
-          dispatch({
-            type: 'LOAD_WORKSPACE_STATE',
-            payload: {
-              files: newFiles,
-              folders: detectedFolders,
-              activeFileId: newFiles[0].id,
-            },
-          });
+          handleImportFiles(newFiles, { mode: 'replace', folders: detectedFolders });
           showToast(`Opened folder "${dirHandle.name}" (${newFiles.length} files) 📂`);
         }
       } catch (err) {
@@ -407,6 +392,21 @@ export default function FileExplorer() {
       window.removeEventListener('editor-new-folder', handleNewFolderEvent);
     };
   }, []);
+
+  useEffect(() => {
+    const handleRenameActiveFileEvent = () => {
+      const file = files.find((item) => item.id === activeFileId);
+      if (!file) return;
+      if (isItemProtected(file.name) && !isItemUnlocked(file.name)) {
+        showToast('Cannot rename a locked file 🔒');
+        return;
+      }
+      setEditingFileId(file.id);
+      setEditingFileName(file.name.includes('/') ? file.name.split('/').pop() : file.name);
+    };
+    window.addEventListener('editor-rename-active-file', handleRenameActiveFileEvent);
+    return () => window.removeEventListener('editor-rename-active-file', handleRenameActiveFileEvent);
+  }, [files, activeFileId, showToast]);
 
   const finishAdd = () => {
     if (!creationTarget) return;

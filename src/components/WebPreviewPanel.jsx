@@ -1,9 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
 import { useApp } from '../context/AppContext';
-import { RotateCw, ExternalLink, Globe, Terminal, Trash2 } from 'lucide-react';
+import { RotateCw, ExternalLink, Globe, Terminal, Trash2, X } from 'lucide-react';
 import './WebPreviewPanel.css';
 
-export default function WebPreviewPanel() {
+export default function WebPreviewPanel({ onClose }) {
   const { state } = useApp();
   const { files, code, activeFileId } = state;
 
@@ -12,7 +12,8 @@ export default function WebPreviewPanel() {
   const iframeRef = useRef(null);
 
   // Find HTML, CSS, and JS content from workspace
-  const htmlFile = files.find((f) => f.name.endsWith('.html')) || (activeFileId && files.find((f) => f.id === activeFileId)?.name.endsWith('.html') ? files.find((f) => f.id === activeFileId) : null);
+  const activeFile = files.find((f) => f.id === activeFileId);
+  const htmlFile = activeFile && (/\.(html?|xhtml)$/i.test(activeFile.name) || activeFile.language?.monacoLanguage === 'html') ? activeFile : null;
   const cssFiles = files.filter((f) => f.name.endsWith('.css'));
   const jsFiles = files.filter((f) => f.name.endsWith('.js'));
 
@@ -141,6 +142,7 @@ export default function WebPreviewPanel() {
             <ExternalLink size={13} />
             <span>New Tab</span>
           </button>
+          {onClose && <button className="btn-web-action btn-web-close" onClick={onClose} title="Close Preview" aria-label="Close Web Sandbox Preview"><X size={13} /></button>}
         </div>
       </div>
 

@@ -1,29 +1,45 @@
+import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
-import dotenv from 'dotenv';
 import dbRoutes from './routes/dbRoutes.js';
 import executeRoutes from './routes/executeRoutes.js';
 import collabRoutes from './routes/collabRoutes.js';
 import terminalRoutes from './routes/terminalRoutes.js';
 import fsRoutes from './routes/fsRoutes.js';
+import workspaceRoutes from './routes/workspaceRoutes.js';
 import { seedSampleDatabases } from './dbManager.js';
-
-dotenv.config();
+import { checkWorkspaceDatabase, isWorkspaceDatabaseConfigured } from './workspaceStore.js';
 
 const app = express();
 const PORT = process.env.PORT || 5001;
+const allowedOrigins = String(process.env.CORS_ORIGIN || '')
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean);
 
 // Middleware
-app.use(cors());
-app.use(express.json({ limit: '10mb' }));
+app.use(cors({
+  origin(origin, callback) {
+    const allowed = !origin || allowedOrigins.length === 0 || allowedOrigins.includes(origin) ||
+      (origin.endsWith('.vercel.app') && allowedOrigins.includes('https://*.vercel.app'));
+    callback(allowed ? null : new Error('This origin is not allowed to access the compiler API.'), allowed);
+  },
+  allowedHeaders: ['Content-Type', 'X-FullCode-Client-ID'],
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+}));
+app.use(express.json({ limit: process.env.API_BODY_LIMIT || '50mb' }));
 app.use(express.urlencoded({ extended: true }));
 
 // Healthcheck
-app.get(['/api/health', '/health'], (req, res) => {
+app.get(['/api/health', '/health'], async (req, res) => {
+  const workspaceDatabase = isWorkspaceDatabaseConfigured()
+    ? await checkWorkspaceDatabase()
+    : { configured: false, connected: false };
   res.json({
     status: 'ok',
     timestamp: new Date().toISOString(),
-    service: 'Full Code AI Backend',
+    service: 'Full Code Backend',
+    workspaceDatabase,
   });
 });
 
@@ -33,6 +49,7 @@ app.use(['/api/execute', '/execute'], executeRoutes);
 app.use(['/api/terminal', '/terminal'], terminalRoutes);
 app.use(['/api/collab', '/collab'], collabRoutes);
 app.use(['/api/fs', '/fs'], fsRoutes);
+app.use(['/api/workspaces', '/workspaces'], workspaceRoutes);
 
 // Seed sample databases and start server for local dev
 if (!process.env.VERCEL) {

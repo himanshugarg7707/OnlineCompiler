@@ -1,4 +1,7 @@
 .output-panel {
+  zoom: var(--workspace-ui-scale, 1);
+  width: calc(100% / var(--workspace-ui-scale, 1));
+  height: calc(100% / var(--workspace-ui-scale, 1));
   container-type: inline-size;
   container-name: output-panel;
   display: flex;
@@ -12,6 +15,7 @@
 
 /* Tab Bar */
 .output-tabs {
+  zoom: var(--zoom-compensation, 1);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -21,6 +25,8 @@
   border-bottom: 1px solid var(--border-primary);
   background: var(--bg-tertiary);
   gap: 8px;
+  flex: 0 0 38px;
+  box-sizing: border-box;
 }
 
 .tab-list {
@@ -175,6 +181,29 @@
   margin-left: 2px;
   flex-shrink: 0;
   opacity: 0.7;
+}
+
+.btn-terminal-dock-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  margin-left: 2px;
+  padding: 0;
+  color: var(--text-muted);
+  background: transparent;
+  border: 0;
+  border-radius: 5px;
+  cursor: pointer;
+  opacity: 0.75;
+  transition: color var(--transition-fast), background var(--transition-fast), opacity var(--transition-fast);
+}
+
+.btn-terminal-dock-toggle:hover {
+  color: var(--accent-cyan);
+  background: color-mix(in srgb, var(--accent-cyan) 10%, transparent);
+  opacity: 1;
 }
 
 .btn-hide-terminal:hover {
@@ -588,9 +617,11 @@
 .terminal-options-area {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   flex-shrink: 0;
   margin-left: auto;
+  padding-left: 10px;
+  border-left: 1px solid var(--border-primary);
 }
 
 .terminal-file-binding-badge {
@@ -679,15 +710,21 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 3px 8px;
-  background: rgba(255, 255, 255, 0.04);
+  padding: 4px 10px;
+  background: color-mix(in srgb, var(--bg-secondary) 72%, transparent);
   border: 1px solid var(--border-primary, rgba(255, 255, 255, 0.08));
-  border-radius: var(--radius-sm, 4px);
+  border-radius: 999px;
   max-width: 200px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   user-select: none;
+}
+
+.terminal-navbar-filename .in-use-dot {
+  width: 7px;
+  height: 7px;
+  flex: 0 0 7px;
 }
 
 .terminal-navbar-filename .unified-filename {
@@ -790,19 +827,6 @@
   background: rgba(0, 212, 255, 0.1);
   border-color: var(--accent-cyan);
   color: var(--accent-cyan);
-}
-
-.btn-unified-action.btn-run {
-  background: rgba(16, 185, 129, 0.15);
-  border-color: rgba(16, 185, 129, 0.4);
-  color: #34d399;
-  font-weight: 600;
-}
-
-.btn-unified-action.btn-run:hover:not(:disabled) {
-  background: rgba(16, 185, 129, 0.28);
-  color: #ffffff;
-  border-color: #34d399;
 }
 
 .terminal-in-use-banner {
@@ -963,6 +987,7 @@
   .terminal-options-area {
     gap: 4px;
     margin-left: 4px;
+    padding-left: 6px;
   }
   .terminal-file-binding-badge {
     padding: 2px 6px;

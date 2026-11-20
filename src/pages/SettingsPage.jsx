@@ -22,7 +22,7 @@ import {
   Eye,
   Paintbrush,
   RotateCcw,
-  History,
+  History as HistoryIcon,
   Clock,
   CheckCircle2,
   GitCompare,
@@ -46,8 +46,14 @@ import {
   Glasses,
   Ghost,
   BookOpen,
+  Send,
+  BrainCircuit,
+  History,
+  MessageSquarePlus,
 } from 'lucide-react';
 import MemoryLearningLab from '../components/MemoryLearningLab';
+import MarkdownWithCopy from '../components/MarkdownWithCopy';
+import LuciaChatHistoryPanel from '../components/LuciaChatHistoryPanel';
 import {
   getGitHubConfig,
   saveGitHubConfig,
@@ -79,8 +85,28 @@ import {
   unpackZipFile,
 } from '../services/importService';
 import { convertJavaFilesToNotebook } from '../services/languageDetector';
+import { testGeminiConnection } from '../services/aiService';
+import { toPlainText } from '../services/aiService';
 import './SettingsPage.css';
 
+
+const SETTINGS_SEARCH_ITEMS = [
+  { tab: 'editor', title: 'Workspace UI Scale', detail: 'Small, medium, or zoomed explorer and terminal', keywords: 'ui size density panel zoom explorer terminal' },
+  { tab: 'editor', title: 'Terminal Position', detail: 'Dock the terminal at the bottom or right', keywords: 'layout dock position panel' },
+  { tab: 'editor', title: 'Suggestions While Typing', detail: 'Code completion in the editor', keywords: 'autocomplete completion suggestions' },
+  { tab: 'editor', title: 'Font Size & Family', detail: 'Editor typography and tab size', keywords: 'text font code editor' },
+  { tab: 'editor', title: 'Minimap & Word Wrap', detail: 'Editor display options', keywords: 'overview wrap lines' },
+  { tab: 'themes', title: 'Themes & Colors', detail: 'Choose a theme or custom colors', keywords: 'appearance palette background accent' },
+  { tab: 'ai', title: 'AI & Diagnostics', detail: 'Gemini key and compiler AI actions', keywords: 'provider gemini api key lucia lint errors explanation' },
+  { tab: 'ai-chat', title: 'Customize AI', detail: 'Name, conversation mode, and custom instructions for all AI tools', keywords: 'customize assistant name personality prompt general code' },
+  { tab: 'security', title: 'Security & Storage', detail: 'File locks, cookies, and storage', keywords: 'privacy password quota backup' },
+  { tab: 'git', title: 'Git & GitHub', detail: 'Repository connection and sync', keywords: 'source control remote branch' },
+  { tab: 'import', title: 'Import Files & Folders', detail: 'Bring files and projects into the workspace', keywords: 'upload zip folder' },
+  { tab: 'zip', title: 'Export & ZIP Archive', detail: 'Download or share the workspace', keywords: 'download archive project backup' },
+  { tab: 'history', title: 'Version History', detail: 'Browse snapshots and restore changes', keywords: 'snapshot diff rollback restore' },
+  { tab: 'learning', title: 'Memory & DSA Lab', detail: 'Learning tools and visualizers', keywords: 'stack heap queue pointers algorithm' },
+  { tab: 'incognito', title: 'Incognito Mode', detail: 'Temporary workspace privacy settings', keywords: 'ephemeral vanish private' },
+];
 
 
 const QUICK_PALETTES = [
@@ -93,6 +119,11 @@ const QUICK_PALETTES = [
   { name: 'Cyber Rose', bg: '#1a0818', primary: '#f43f5e', secondary: '#ec4899', icon: '🌸' },
   { name: 'Amber Gold', bg: '#140f05', primary: '#f59e0b', secondary: '#fbbf24', icon: '👑' },
 ];
+
+function getWorkspaceScaleValue(value) {
+  if (typeof value === 'number' && Number.isFinite(value)) return Math.min(1.2, Math.max(0.85, value));
+  return ({ small: 0.9, medium: 1, zoomed: 1.12 })[value] || 1;
+}
 
 const THEMES = [
   {
@@ -187,9 +218,10 @@ export default function SettingsPage() {
     handleDownloadWorkspace,
     handleImportZip,
     handleUpdateConfig,
+    handleSendMessage,
     handleCodeChange,
     handleAddFile,
-    handleLoadWorkspaceState,
+    handleImportFiles,
     handleToggleIncognitoMode,
     handleVanishIncognitoData,
     handleRestoreSavedWorkspace,
@@ -213,9 +245,25 @@ export default function SettingsPage() {
     }
     return 'themes'; // Default to themes & custom color palette
   });
+  const [settingsSearch, setSettingsSearch] = useState('');
+  const [apiKeyVisible, setApiKeyVisible] = useState(false);
+  const [geminiConnectionStatus, setGeminiConnectionStatus] = useState('');
+  const [compilerChatDraft, setCompilerChatDraft] = useState('');
+  const [aiHistoryOpen, setAiHistoryOpen] = useState(false);
+  const compilerChatEndRef = useRef(null);
   const [localConfig, setLocalConfig] = useState(config);
   const [storageInfo, setStorageInfo] = useState(null);
   const [copiedLink, setCopiedLink] = useState(false);
+  const matchingSettings = useMemo(() => {
+    const query = settingsSearch.trim().toLowerCase();
+    if (!query) return [];
+    return SETTINGS_SEARCH_ITEMS.filter((item) =>
+      `${item.title} ${item.detail} ${item.keywords}`.toLowerCase().includes(query)
+    );
+  }, [settingsSearch]);
+  useEffect(() => {
+    if (activeTab === 'ai-chat') compilerChatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [activeTab, state.chatMessages, state.chatTyping]);
 
   // Git & GitHub Remote State
   const [gitConfig, setGitConfig] = useState(() => getGitHubConfig());
@@ -475,6 +523,9 @@ export default function SettingsPage() {
 
   const handleConfigChange = (key, value) => {
     const updated = { ...localConfig, [key]: value };
+    // Preserve the selected provider while editing/clearing the key. This lets
+    // Lucia show a useful missing-key error instead of silently switching to heuristics.
+    if (key === 'geminiApiKey' && value.trim()) updated.aiProvider = 'gemini';
     setLocalConfig(updated);
     handleUpdateConfig(updated);
 
@@ -491,6 +542,26 @@ export default function SettingsPage() {
       }
       showToast(`Theme changed to ${value === 'custom' ? 'Custom 3-Color' : value} 🎨`);
     }
+  };
+
+  const handleTestGeminiConnection = async () => {
+    setGeminiConnectionStatus('Checking Gemini key…');
+    try {
+      await testGeminiConnection(localConfig.geminiApiKey);
+      setGeminiConnectionStatus('Connected. Lucia is ready to use Gemini.');
+      showToast('Gemini connected. Lucia is ready ✓');
+    } catch (error) {
+      setGeminiConnectionStatus(error.message || 'Could not connect to Gemini.');
+      showToast(error.message || 'Could not connect to Gemini.');
+    }
+  };
+
+  const handleCompilerChatSubmit = (event) => {
+    event.preventDefault();
+    const message = compilerChatDraft.trim();
+    if (!message || state.chatTyping) return;
+    setCompilerChatDraft('');
+    handleSendMessage(message);
   };
 
   const handleLiveColorChange = (key, value) => {
@@ -780,12 +851,7 @@ export default function SettingsPage() {
         language: sf.language,
       }));
       const newFolders = extractFoldersFromPaths(newFiles.map((f) => f.name));
-      handleLoadWorkspaceState({
-        files: newFiles,
-        folders: newFolders,
-        activeFileId: newFiles[0]?.id,
-        stdin: state.stdin,
-      });
+      handleImportFiles(newFiles, { mode: 'replace', folders: newFolders, stdin: state.stdin });
       setImportSuccessCount(newFiles.length);
       setStagedFiles([]);
       if (isConvertingToJavaNotebook) {
@@ -823,15 +889,9 @@ export default function SettingsPage() {
       const extractedFolders = extractFoldersFromPaths(addedFiles.map((f) => f.name));
       extractedFolders.forEach((fld) => existingFolders.add(fld));
 
-      const combinedFiles = [...state.files, ...addedFiles];
       const combinedFolders = Array.from(existingFolders);
 
-      handleLoadWorkspaceState({
-        files: combinedFiles,
-        folders: combinedFolders,
-        activeFileId: addedFiles[0]?.id || state.activeFileId,
-        stdin: state.stdin,
-      });
+      handleImportFiles(addedFiles, { mode: 'append', folders: combinedFolders, stdin: state.stdin });
 
       setImportSuccessCount(addedFiles.length);
       setStagedFiles([]);
@@ -883,6 +943,43 @@ export default function SettingsPage() {
       <div className="settings-page-body">
         {/* Navigation Sidebar */}
         <aside className="settings-sidebar">
+          <div className="settings-search-wrap" role="search">
+            <Search size={15} className="settings-search-icon" />
+            <input
+              type="search"
+              value={settingsSearch}
+              onChange={(event) => setSettingsSearch(event.target.value)}
+              placeholder="Search settings…"
+              aria-label="Search settings"
+            />
+            {settingsSearch && (
+              <button type="button" onClick={() => setSettingsSearch('')} aria-label="Clear settings search">×</button>
+            )}
+          </div>
+
+          {settingsSearch.trim() ? (
+            <div className="settings-search-results" role="region" aria-label="Matching settings">
+              <div className="settings-search-count">
+                {matchingSettings.length ? `${matchingSettings.length} matching settings` : 'No matching settings'}
+              </div>
+              {matchingSettings.map((item) => (
+                <button
+                  type="button"
+                  className={`settings-search-result ${activeTab === item.tab ? 'active' : ''}`}
+                  key={item.title}
+                  onClick={() => {
+                    setActiveTab(item.tab);
+                    setSettingsSearch('');
+                    if (item.tab === 'history') refreshSnapshots();
+                  }}
+                >
+                  <span>{item.title}</span>
+                  <small>{item.detail}</small>
+                </button>
+              ))}
+            </div>
+          ) : (
+          <>
           <div className="sidebar-group-title">PROJECT & WORKSPACE</div>
           <button
             className={`settings-nav-item ${activeTab === 'import' ? 'active' : ''}`}
@@ -964,6 +1061,17 @@ export default function SettingsPage() {
           </button>
 
           <button
+            className={`settings-nav-item ${activeTab === 'ai-chat' ? 'active' : ''}`}
+            onClick={() => setActiveTab('ai-chat')}
+          >
+            <BrainCircuit size={16} className="nav-icon" />
+            <div className="nav-text">
+              <span className="nav-title">Customize AI</span>
+              <span className="nav-sub">Chat about code and programming</span>
+            </div>
+          </button>
+
+          <button
             className={`settings-nav-item ${activeTab === 'security' ? 'active' : ''}`}
             onClick={() => setActiveTab('security')}
           >
@@ -1018,6 +1126,8 @@ export default function SettingsPage() {
               <span className="nav-pill">OFF</span>
             )}
           </button>
+          </>
+          )}
         </aside>
 
         {/* Right Tab Content View */}
@@ -2002,6 +2112,29 @@ export default function SettingsPage() {
               <div className="settings-form-group">
                 <div className="form-row">
                   <div className="form-label-col">
+                    <span className="setting-title">Explorer & Terminal UI Scale</span>
+                    <span className="setting-desc">Adjust the density of the explorer and terminal panels</span>
+                  </div>
+                  <div className="form-input-col">
+                    <div className="workspace-scale-control">
+                      <input
+                        type="range"
+                        min="0.85"
+                        max="1.2"
+                        step="0.01"
+                        value={getWorkspaceScaleValue(localConfig.workspaceUiScale)}
+                        onChange={(event) => handleConfigChange('workspaceUiScale', Number(event.target.value))}
+                        aria-label="Explorer and terminal UI scale"
+                        aria-valuetext={`${Math.round(getWorkspaceScaleValue(localConfig.workspaceUiScale) * 100)} percent`}
+                        className="workspace-scale-slider"
+                      />
+                      <span className="workspace-scale-value">{Math.round(getWorkspaceScaleValue(localConfig.workspaceUiScale) * 100)}%</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="form-row">
+                  <div className="form-label-col">
                     <span className="setting-title">Font Size</span>
                     <span className="setting-desc">Editor font size in pixels (12px to 28px)</span>
                   </div>
@@ -2050,6 +2183,24 @@ export default function SettingsPage() {
                       <option value="2">2 Spaces</option>
                       <option value="4">4 Spaces</option>
                     </select>
+                  </div>
+                </div>
+
+                <div className="form-row">
+                  <div className="form-label-col">
+                    <span className="setting-title">Suggestions While Typing</span>
+                    <span className="setting-desc">Show code completion suggestions as you type</span>
+                  </div>
+                  <div className="form-input-col">
+                    <button
+                      type="button"
+                      aria-label="Suggestions While Typing"
+                      aria-pressed={localConfig.suggestionsWhileTyping !== false}
+                      className={`btn-toggle-switch ${localConfig.suggestionsWhileTyping !== false ? 'on' : 'off'}`}
+                      onClick={() => handleConfigChange('suggestionsWhileTyping', localConfig.suggestionsWhileTyping === false)}
+                    >
+                      <span className="switch-thumb" />
+                    </button>
                   </div>
                 </div>
 
@@ -2110,9 +2261,8 @@ export default function SettingsPage() {
                       type="button"
                       className="settings-action-btn"
                       onClick={() => {
-                        dispatch({ type: 'NAVIGATE_PAGE', payload: 'editor' });
-                        dispatch({ type: 'SET_TERMINAL_HIDDEN', payload: false });
-                        dispatch({ type: 'SET_TERMINAL_TAB', payload: 'tests' });
+                        dispatch({ type: 'NAVIGATE_PAGE', payload: 'test-suite' });
+                        window.location.hash = '#/test-suite';
                       }}
                       style={{
                         padding: '6px 14px',
@@ -2178,8 +2328,8 @@ export default function SettingsPage() {
               <div className="settings-form-group">
                 <div className="form-row">
                   <div className="form-label-col">
-                    <span className="setting-title">AI Provider Mode</span>
-                    <span className="setting-desc">Toggle between instant heuristic AI and external LLM APIs</span>
+                    <span className="setting-title">AI Provider</span>
+                    <span className="setting-desc">Choose the built-in assistant or live Gemini-powered Lucia</span>
                   </div>
                   <div className="form-input-col">
                     <select
@@ -2187,10 +2337,66 @@ export default function SettingsPage() {
                       onChange={(e) => handleConfigChange('aiProvider', e.target.value)}
                       className="settings-select"
                     >
-                      <option value="mock">Full Code Built-in Heuristic AI (Instant)</option>
-                      <option value="gemini">Google Gemini 2.0 Flash</option>
-                      <option value="openai">OpenAI GPT-4o Mini</option>
-                      <option value="deepseek">DeepSeek V3</option>
+                      <option value="mock">Built-in Lucia (no API key)</option>
+                      <option value="gemini">Lucia AI powered by Gemini 2.5 Flash</option>
+
+                    </select>
+                  </div>
+                </div>
+
+                <div className="form-row">
+                  <div className="form-label-col">
+                    <span className="setting-title">Gemini API Key</span>
+                    <span className="setting-desc">Saved automatically in this browser and kept after refresh. Sent to Google only when Gemini is selected.</span>
+                  </div>
+                  <div className="form-input-col lucia-field-control lucia-key-control">
+                    <input
+                      type={apiKeyVisible ? 'text' : 'password'}
+                      className="settings-text-input"
+                      value={localConfig.geminiApiKey || ''}
+                      onChange={(event) => handleConfigChange('geminiApiKey', event.target.value)}
+                      placeholder="Paste your Gemini API key"
+                      autoComplete="new-password"
+                      aria-label="Gemini API key"
+                    />
+                    <button type="button" className="lucia-key-visibility" onClick={() => setApiKeyVisible((visible) => !visible)} aria-label={apiKeyVisible ? 'Hide Gemini API key' : 'Show Gemini API key'}>
+                      {apiKeyVisible ? <EyeOff size={15} /> : <Eye size={15} />}
+                    </button>
+                  </div>
+                </div>
+                <div className="lucia-connection-message">
+                  Gemini API usage may have a free tier and rate limits; availability depends on Google’s current account and model quotas. The key is stored in browser local storage, so use a restricted key and rotate it if it was shared publicly.
+                </div>
+
+                <div className="form-row">
+                  <div className="form-label-col">
+                    <span className="setting-title">Gemini Connection</span>
+                    <span className="setting-desc">Check that the Gemini key is valid for Lucia AI</span>
+                  </div>
+                  <div className="form-input-col lucia-field-control">
+                    <button type="button" className="settings-action-btn lucia-test-btn" onClick={handleTestGeminiConnection}>
+                      Test Gemini Key
+                    </button>
+                  </div>
+                </div>
+                {geminiConnectionStatus && (
+                  <div className="lucia-connection-message" role="status">{geminiConnectionStatus}</div>
+                )}
+
+                <div className="form-row">
+                  <div className="form-label-col">
+                    <span className="setting-title">Lucia Response Style</span>
+                    <span className="setting-desc">Prefer short answers and code-first replies for code requests</span>
+                  </div>
+                  <div className="form-input-col">
+                    <select
+                      value={localConfig.luciaResponseStyle || 'code-first'}
+                      onChange={(event) => handleConfigChange('luciaResponseStyle', event.target.value)}
+                      className="settings-select"
+                      aria-label="Lucia response style"
+                    >
+                      <option value="code-first">Concise · code first</option>
+                      <option value="balanced">Brief · balanced</option>
                     </select>
                   </div>
                 </div>
@@ -2233,6 +2439,45 @@ export default function SettingsPage() {
                   </div>
                 </div>
               </div>
+            </div>
+          )}
+
+          {/* AI customization */}
+          {activeTab === 'ai-chat' && (
+            <div className="settings-section animate-fade-in">
+              <div className="section-hero">
+                <div className="hero-icon-box bot-box"><BrainCircuit size={28} className="hero-icon" /></div>
+                <div><h2>Customize AI</h2><p>Personalize the assistant used across chat, code help, debugging, and hints.</p></div>
+              </div>
+              <div className="form-row">
+                <div className="form-label-col"><span className="setting-title">Assistant name</span><span className="setting-desc">Choose the name shown in Lucia chat.</span></div>
+                <div className="form-input-col"><input className="settings-text-input" maxLength={40} value={localConfig.aiAssistantName || 'Lucia'} onChange={(e) => handleConfigChange('aiAssistantName', e.target.value)} placeholder="Lucia" /></div>
+              </div>
+              <div className="form-row">
+                <div className="form-label-col"><span className="setting-title">Conversation mode</span><span className="setting-desc">Set the default focus for all AI actions.</span></div>
+                <div className="form-input-col"><select className="settings-select" value={localConfig.aiConversationMode || 'code'} onChange={(e) => handleConfigChange('aiConversationMode', e.target.value)}><option value="code">Code focused</option><option value="general">General conversation</option></select></div>
+              </div>
+              <div className="form-row">
+                <div className="form-label-col"><span className="setting-title">Tone</span><span className="setting-desc">Choose how the assistant speaks.</span></div>
+                <div className="form-input-col"><select className="settings-select" value={localConfig.aiTone || 'friendly'} onChange={(e) => handleConfigChange('aiTone', e.target.value)}><option value="friendly">Friendly</option><option value="professional">Professional</option><option value="direct">Direct</option></select></div>
+              </div>
+              <div className="form-row">
+                <div className="form-label-col"><span className="setting-title">Answer detail</span><span className="setting-desc">Set the usual depth of AI answers.</span></div>
+                <div className="form-input-col"><select className="settings-select" value={localConfig.aiDetailLevel || 'balanced'} onChange={(e) => handleConfigChange('aiDetailLevel', e.target.value)}><option value="concise">Concise</option><option value="balanced">Balanced</option><option value="detailed">Detailed</option></select></div>
+              </div>
+              <div className="form-row">
+                <div className="form-label-col"><span className="setting-title">Teaching level</span><span className="setting-desc">Choose the assumed programming experience.</span></div>
+                <div className="form-input-col"><select className="settings-select" value={localConfig.aiTeachingLevel || 'adaptive'} onChange={(e) => handleConfigChange('aiTeachingLevel', e.target.value)}><option value="adaptive">Adapt to the question</option><option value="beginner">Beginner</option><option value="intermediate">Intermediate</option><option value="advanced">Advanced</option></select></div>
+              </div>
+              <div className="form-row">
+                <div className="form-label-col"><span className="setting-title">Response format</span><span className="setting-desc">Choose Markdown formatting or plain text.</span></div>
+                <div className="form-input-col"><select className="settings-select" value={localConfig.aiResponseFormat || 'markdown'} onChange={(e) => handleConfigChange('aiResponseFormat', e.target.value)}><option value="markdown">Markdown</option><option value="plain">Plain text</option></select></div>
+              </div>
+              <div className="form-row">
+                <div className="form-label-col"><span className="setting-title">Custom instructions</span><span className="setting-desc">Preferences followed by AI responses. Maximum 1,200 characters.</span></div>
+                <div className="form-input-col"><textarea className="settings-text-input" maxLength={1200} rows={6} value={localConfig.aiCustomInstructions || ''} onChange={(e) => handleConfigChange('aiCustomInstructions', e.target.value)} placeholder="For example: explain concepts for a beginner, use Java examples, and keep answers concise." /><small>{(localConfig.aiCustomInstructions || '').length}/1200</small></div>
+              </div>
+              <div className="lucia-connection-message">These preferences are saved automatically and used by AI-powered chat, explanations, error help, input generation, and hints.</div>
             </div>
           )}
 

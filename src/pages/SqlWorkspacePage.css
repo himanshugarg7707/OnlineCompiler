@@ -1,0 +1,4 @@
+.sql-workspace-page{height:100dvh;display:flex;flex-direction:column;background:var(--bg-primary);color:var(--text-primary);overflow:hidden}
+.sql-workspace-header{min-height:76px;padding:12px 22px;display:flex;align-items:center;gap:24px;border-bottom:1px solid var(--border-primary);background:var(--bg-secondary)}
+.sql-workspace-header>button{display:flex;align-items:center;gap:8px;padding:8px 12px;border:1px solid var(--border-primary);border-radius:8px;background:var(--bg-tertiary);color:var(--text-primary);cursor:pointer}
+.sql-workspace-heading{display:flex;align-items:center;gap:12px}.sql-workspace-heading>svg{color:var(--accent-cyan)}.sql-workspace-heading h1{font-size:18px;margin:0}.sql-workspace-heading p{font-size:12px;color:var(--text-secondary);margin:3px 0 0}.sql-workspace-content{flex:1;min-height:0;overflow:hidden}

@@ -891,6 +891,21 @@ export default function SettingsModal() {
 
             <div className="setting-row">
               <div className="setting-info">
+                <span className="setting-label">Suggestions While Typing</span>
+                <span className="setting-desc">Show code completion suggestions as you type</span>
+              </div>
+              <label className="toggle-switch">
+                <input
+                  type="checkbox"
+                  checked={localConfig.suggestionsWhileTyping !== false}
+                  onChange={(e) => handleConfigChange('suggestionsWhileTyping', e.target.checked)}
+                />
+                <span className="toggle-slider" />
+              </label>
+            </div>
+
+            <div className="setting-row">
+              <div className="setting-info">
                 <span className="setting-label">Code Minimap</span>
                 <span className="setting-desc">Show miniature code overview scrollbar</span>
               </div>
@@ -977,16 +992,16 @@ export default function SettingsModal() {
 
             <div className="setting-row">
               <div className="setting-info">
-                <span className="setting-label">AI Code Tutor & Error Explanations</span>
+                <span className="setting-label">Lucia AI (Gemini)</span>
                 <span className="setting-desc">
-                  Enable built-in zero-config AI analysis for syntax errors and logic hints
+                  Use Gemini for live code help. Add the API key in Settings → AI & Diagnostics.
                 </span>
               </div>
               <label className="toggle-switch">
                 <input
                   type="checkbox"
-                  checked={localConfig.mockAI}
-                  onChange={(e) => handleConfigChange('mockAI', e.target.checked)}
+                  checked={localConfig.aiProvider === 'gemini'}
+                  onChange={(e) => handleConfigChange('aiProvider', e.target.checked ? 'gemini' : 'mock')}
                 />
                 <span className="toggle-slider" />
               </label>
@@ -1032,8 +1047,8 @@ export default function SettingsModal() {
                 className="btn-storage-action backup"
                 onClick={() => {
                   dispatch({ type: 'TOGGLE_SETTINGS' });
-                  dispatch({ type: 'SET_TERMINAL_HIDDEN', payload: false });
-                  dispatch({ type: 'SET_TERMINAL_TAB', payload: 'tests' });
+                  dispatch({ type: 'NAVIGATE_PAGE', payload: 'test-suite' });
+                  window.location.hash = '#/test-suite';
                 }}
                 style={{
                   display: 'inline-flex',
