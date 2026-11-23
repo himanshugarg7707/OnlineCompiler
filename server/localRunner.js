@@ -27,6 +27,7 @@ export async function detectLocalCompilers() {
 
   const binaries = [
     { key: 'python3', cmd: isWin ? 'python' : 'python3' },
+    { key: 'pip', cmd: isWin ? 'pip' : 'pip3' },
     { key: 'node', cmd: 'node' },
     { key: 'clang', cmd: 'clang' },
     { key: 'clangpp', cmd: 'clang++' },
@@ -103,6 +104,7 @@ function runProcess(command, args, options = {}, stdinData = '') {
             : `/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:${process.env.PATH || ''}`,
           PYTHONUNBUFFERED: '1',
           NODE_NO_WARNINGS: '1',
+          MPLBACKEND: 'Agg',
         },
         shell: options.shell || false,
       });

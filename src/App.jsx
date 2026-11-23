@@ -874,56 +874,63 @@ function AppContent() {
                 aria-label="Explorer"
                 onClick={() => dispatch({ type: 'TOGGLE_EXPLORER' })}
               >
-                <Files size={21} strokeWidth={1.75} />
+                <Files size={20} strokeWidth={1.75} />
               </button>
 
               <button
                 type="button"
                 className="rail-item-btn"
-                title="Search & Quick Open (⌘P / Ctrl+P)"
-                aria-label="Search"
-                onClick={() => window.dispatchEvent(new CustomEvent('fullcode-open-command-palette', { detail: { mode: 'files' } }))}
+                title="Subject Course Notebooks"
+                aria-label="Subject Course Notebooks"
+                onClick={() => dispatch({ type: 'NAVIGATE_PAGE', payload: 'notebook-setup' })}
               >
-                <Search size={21} strokeWidth={1.75} />
+                <BookOpen size={20} strokeWidth={1.75} />
               </button>
 
               <button
                 type="button"
                 className="rail-item-btn"
-                title="Source Control & Git Studio"
-                aria-label="Source Control"
-                onClick={() => {
-                  dispatch({ type: 'NAVIGATE_PAGE', payload: 'git' });
-                  window.location.hash = '#/git';
-                }}
+                title="DSA Practice Lab"
+                aria-label="DSA Practice Lab"
+                onClick={() => dispatch({ type: 'NAVIGATE_PAGE', payload: 'practice' })}
               >
-                <GitBranch size={21} strokeWidth={1.75} />
-                {gitStatus.totalCount > 0 && (
-                  <span className="rail-badge-count">{gitStatus.totalCount}</span>
-                )}
+                <Code2 size={20} strokeWidth={1.75} />
               </button>
 
               <button
                 type="button"
                 className="rail-item-btn"
-                title="Run & Step-by-Step Visualizer (⌘⇧V)"
-                aria-label="Run and Debug"
+                title="Proctored Exam & Tests"
+                aria-label="Proctored Exam & Tests"
+                onClick={() => dispatch({ type: 'NAVIGATE_PAGE', payload: 'exam' })}
+              >
+                <Timer size={20} strokeWidth={1.75} />
+              </button>
+
+              <button
+                type="button"
+                className="rail-item-btn"
+                title="DSA & Memory Visualizer (⌘⇧V)"
+                aria-label="DSA & Memory Visualizer"
                 onClick={() => {
                   dispatch({ type: 'SET_TERMINAL_HIDDEN', payload: false });
                   dispatch({ type: 'SET_TERMINAL_TAB', payload: 'visualizer' });
                 }}
               >
-                <PlaySquare size={21} strokeWidth={1.75} />
+                <BrainCircuit size={20} strokeWidth={1.75} />
               </button>
 
               <button
                 type="button"
                 className="rail-item-btn"
-                title="Code Templates & Snippets"
-                aria-label="Extensions & Templates"
-                onClick={() => dispatch({ type: 'SET_TEMPLATES_MODAL', payload: true })}
+                title="Database & SQL Explorer"
+                aria-label="Database & SQL Explorer"
+                onClick={() => {
+                  dispatch({ type: 'NAVIGATE_PAGE', payload: 'sql' });
+                  window.location.hash = '#/sql';
+                }}
               >
-                <Boxes size={21} strokeWidth={1.75} />
+                <Database size={20} strokeWidth={1.75} />
               </button>
 
               <button
@@ -936,7 +943,7 @@ function AppContent() {
                   window.location.hash = '#/test-suite';
                 }}
               >
-                <FlaskConical size={21} strokeWidth={1.75} />
+                <FlaskConical size={20} strokeWidth={1.75} />
               </button>
 
               <button
@@ -946,7 +953,27 @@ function AppContent() {
                 aria-label="Lucia AI"
                 onClick={() => dispatch({ type: 'TOGGLE_SIDEBAR' })}
               >
-                <Sparkles size={21} strokeWidth={1.75} />
+                <Sparkles size={20} strokeWidth={1.75} />
+              </button>
+
+              <button
+                type="button"
+                className="rail-item-btn"
+                title="Live Room Collaboration"
+                aria-label="Live Room Collaboration"
+                onClick={() => dispatch({ type: 'TOGGLE_COLLAB_MODAL' })}
+              >
+                <Users size={20} strokeWidth={1.75} />
+              </button>
+
+              <button
+                type="button"
+                className="rail-item-btn"
+                title="About Full Code"
+                aria-label="About Full Code"
+                onClick={() => dispatch({ type: 'SET_WELCOME_MODAL', payload: true })}
+              >
+                <Info size={20} strokeWidth={1.75} />
               </button>
             </div>
 
@@ -955,11 +982,11 @@ function AppContent() {
               <button
                 type="button"
                 className="rail-item-btn"
-                title="Accounts & Live Room Collaboration"
+                title="Accounts & Profile"
                 aria-label="Accounts"
-                onClick={() => dispatch({ type: 'TOGGLE_COLLAB_MODAL' })}
+                onClick={() => dispatch({ type: 'TOGGLE_AUTH_MODAL' })}
               >
-                <CircleUser size={21} strokeWidth={1.75} />
+                <CircleUser size={20} strokeWidth={1.75} />
               </button>
 
               <button
@@ -969,7 +996,7 @@ function AppContent() {
                 aria-label="Settings"
                 onClick={() => dispatch({ type: 'TOGGLE_SETTINGS' })}
               >
-                <Settings size={21} strokeWidth={1.75} />
+                <Settings size={20} strokeWidth={1.75} />
               </button>
             </div>
           </aside>
