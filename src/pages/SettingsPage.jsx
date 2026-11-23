@@ -79,6 +79,7 @@ import {
   hasPersistedDataInLocalStorage,
 } from '../services/storageService';
 import { generateShareUrl } from '../services/shareService';
+import { getWorkspaceScaleValue } from '../services/configService';
 import {
   processFileList,
   processDataTransferItems,
@@ -119,11 +120,6 @@ const QUICK_PALETTES = [
   { name: 'Cyber Rose', bg: '#1a0818', primary: '#f43f5e', secondary: '#ec4899', icon: '🌸' },
   { name: 'Amber Gold', bg: '#140f05', primary: '#f59e0b', secondary: '#fbbf24', icon: '👑' },
 ];
-
-function getWorkspaceScaleValue(value) {
-  if (typeof value === 'number' && Number.isFinite(value)) return Math.min(1.2, Math.max(0.85, value));
-  return ({ small: 0.9, medium: 1, zoomed: 1.12 })[value] || 1;
-}
 
 const THEMES = [
   {
@@ -2113,60 +2109,206 @@ export default function SettingsPage() {
               <div className="settings-form-group">
                 <div className="form-row">
                   <div className="form-label-col">
-                    <span className="setting-title">Explorer & Terminal UI Scale</span>
-                    <span className="setting-desc">Adjust the density of the explorer and terminal panels</span>
+                    <span className="setting-title">Global Workspace UI Scale</span>
+                    <span className="setting-desc">Zoom and scale the entire IDE interface (editor, panels, sidebars, toolbars)</span>
                   </div>
                   <div className="form-input-col">
-                    <div className="workspace-scale-control">
-                      <input
-                        type="range"
-                        min="0.85"
-                        max="1.2"
-                        step="0.01"
-                        value={getWorkspaceScaleValue(localConfig.workspaceUiScale)}
-                        onChange={(event) => handleConfigChange('workspaceUiScale', Number(event.target.value))}
-                        aria-label="Explorer and terminal UI scale"
-                        aria-valuetext={`${Math.round(getWorkspaceScaleValue(localConfig.workspaceUiScale) * 100)} percent`}
-                        className="workspace-scale-slider"
-                      />
-                      <span className="workspace-scale-value">{Math.round(getWorkspaceScaleValue(localConfig.workspaceUiScale) * 100)}%</span>
+                    <div className="workspace-scale-control" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: '8px', width: '100%' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', width: 'min(360px, 100%)' }}>
+                        <input
+                          type="range"
+                          min="0.75"
+                          max="1.35"
+                          step="0.01"
+                          value={getWorkspaceScaleValue(localConfig.workspaceUiScale)}
+                          onChange={(event) => handleConfigChange('workspaceUiScale', Number(event.target.value))}
+                          aria-label="Global Workspace UI scale"
+                          aria-valuetext={`${Math.round(getWorkspaceScaleValue(localConfig.workspaceUiScale) * 100)} percent`}
+                          className="workspace-scale-slider"
+                        />
+                        <span className="workspace-scale-value" style={{ fontWeight: 700, minWidth: '48px' }}>
+                          {Math.round(getWorkspaceScaleValue(localConfig.workspaceUiScale) * 100)}%
+                        </span>
+                      </div>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                        {[
+                          { label: '85% Compact', val: 0.85 },
+                          { label: '100% Default', val: 1.0 },
+                          { label: '112% Comfortable', val: 1.12 },
+                          { label: '125% Large', val: 1.25 },
+                        ].map((preset) => (
+                          <button
+                            key={preset.label}
+                            type="button"
+                            className="btn-theme-badge"
+                            style={{
+                              background: Math.abs(getWorkspaceScaleValue(localConfig.workspaceUiScale) - preset.val) < 0.02
+                                ? 'rgba(77, 142, 255, 0.3)'
+                                : 'rgba(255, 255, 255, 0.05)',
+                              borderColor: Math.abs(getWorkspaceScaleValue(localConfig.workspaceUiScale) - preset.val) < 0.02
+                                ? 'var(--accent-cyan)'
+                                : 'rgba(255, 255, 255, 0.1)',
+                              color: Math.abs(getWorkspaceScaleValue(localConfig.workspaceUiScale) - preset.val) < 0.02
+                                ? 'var(--accent-cyan)'
+                                : 'var(--text-secondary)',
+                              fontSize: '11px',
+                              padding: '3px 9px',
+                              borderRadius: '4px',
+                              cursor: 'pointer',
+                            }}
+                            onClick={() => handleConfigChange('workspaceUiScale', preset.val)}
+                          >
+                            {preset.label}
+                          </button>
+                        ))}
+                      </div>
                     </div>
                   </div>
                 </div>
 
                 <div className="form-row">
                   <div className="form-label-col">
-                    <span className="setting-title">Font Size</span>
-                    <span className="setting-desc">Editor font size in pixels (12px to 28px)</span>
+                    <span className="setting-title">Compiler Font Size</span>
+                    <span className="setting-desc">Editor and terminal font size in pixels (12px to 32px)</span>
                   </div>
                   <div className="form-input-col">
-                    <input
-                      type="number"
-                      min="12"
-                      max="28"
-                      value={localConfig.fontSize}
-                      onChange={(e) => handleConfigChange('fontSize', parseInt(e.target.value, 10))}
-                      className="settings-number-input"
-                    />
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <button
+                          type="button"
+                          className="btn-font-step"
+                          style={{
+                            width: '32px',
+                            height: '32px',
+                            borderRadius: '6px',
+                            border: '1px solid var(--border-primary)',
+                            background: 'var(--bg-secondary)',
+                            color: 'var(--text-primary)',
+                            cursor: 'pointer',
+                            fontWeight: 700,
+                          }}
+                          onClick={() => handleConfigChange('fontSize', Math.max(12, (Number(localConfig.fontSize) || 16) - 1))}
+                        >
+                          -
+                        </button>
+                        <input
+                          type="number"
+                          min="12"
+                          max="32"
+                          value={Number(localConfig.fontSize) || 16}
+                          onChange={(e) => handleConfigChange('fontSize', parseInt(e.target.value, 10) || 16)}
+                          className="settings-number-input"
+                          style={{ width: '70px', textAlign: 'center', fontWeight: 600 }}
+                        />
+                        <button
+                          type="button"
+                          className="btn-font-step"
+                          style={{
+                            width: '32px',
+                            height: '32px',
+                            borderRadius: '6px',
+                            border: '1px solid var(--border-primary)',
+                            background: 'var(--bg-secondary)',
+                            color: 'var(--text-primary)',
+                            cursor: 'pointer',
+                            fontWeight: 700,
+                          }}
+                          onClick={() => handleConfigChange('fontSize', Math.min(32, (Number(localConfig.fontSize) || 16) + 1))}
+                        >
+                          +
+                        </button>
+                        <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>px</span>
+                      </div>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                        {[13, 15, 16, 18, 20].map((sz) => (
+                          <button
+                            key={sz}
+                            type="button"
+                            className="btn-theme-badge"
+                            style={{
+                              background: (Number(localConfig.fontSize) || 16) === sz
+                                ? 'rgba(77, 142, 255, 0.3)'
+                                : 'rgba(255, 255, 255, 0.05)',
+                              borderColor: (Number(localConfig.fontSize) || 16) === sz
+                                ? 'var(--accent-cyan)'
+                                : 'rgba(255, 255, 255, 0.1)',
+                              color: (Number(localConfig.fontSize) || 16) === sz
+                                ? 'var(--accent-cyan)'
+                                : 'var(--text-secondary)',
+                              fontSize: '11px',
+                              padding: '2px 8px',
+                              borderRadius: '4px',
+                              cursor: 'pointer',
+                            }}
+                            onClick={() => handleConfigChange('fontSize', sz)}
+                          >
+                            {sz}px {sz === 16 ? '(Default)' : ''}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
                   </div>
                 </div>
 
                 <div className="form-row">
                   <div className="form-label-col">
-                    <span className="setting-title">Font Family</span>
-                    <span className="setting-desc">Monospaced font used for code rendering</span>
+                    <span className="setting-title">Compiler Font Family</span>
+                    <span className="setting-desc">Coding monospaced font used across editor, terminal, and execution panels</span>
                   </div>
                   <div className="form-input-col">
                     <select
-                      value={localConfig.fontFamily}
+                      value={localConfig.fontFamily || "'JetBrains Mono', monospace"}
                       onChange={(e) => handleConfigChange('fontFamily', e.target.value)}
                       className="settings-select"
+                      style={{ minWidth: '260px' }}
                     >
-                      <option value="'JetBrains Mono', monospace">JetBrains Mono</option>
-                      <option value="'Fira Code', monospace">Fira Code (Ligatures)</option>
-                      <option value="'Source Code Pro', monospace">Source Code Pro</option>
+                      <option value="'JetBrains Mono', monospace">JetBrains Mono (Default)</option>
+                      <option value="'Fira Code', monospace">Fira Code (Modern Ligatures)</option>
+                      <option value="'Source Code Pro', monospace">Source Code Pro (Adobe)</option>
+                      <option value="'Roboto Mono', monospace">Roboto Mono (Google)</option>
+                      <option value="Menlo, Monaco, monospace">Menlo / Apple Silicon</option>
+                      <option value="Consolas, monospace">Consolas (Windows)</option>
+                      <option value="'Courier New', monospace">Courier New (Classic)</option>
                       <option value="monospace">System Monospace</option>
                     </select>
+                  </div>
+                </div>
+
+                {/* Live Typography & Scale Preview Box */}
+                <div className="form-row" style={{ marginTop: '4px', marginBottom: '8px' }}>
+                  <div className="form-label-col">
+                    <span className="setting-title" style={{ color: 'var(--accent-cyan)' }}>Live Code Preview</span>
+                    <span className="setting-desc">Real-time test of your font size and family selection</span>
+                  </div>
+                  <div className="form-input-col" style={{ width: '100%' }}>
+                    <div
+                      style={{
+                        padding: '14px 18px',
+                        background: 'var(--bg-primary, #0b1326)',
+                        border: '1px solid var(--border-accent, rgba(173, 198, 255, 0.35))',
+                        borderRadius: '8px',
+                        fontFamily: localConfig.fontFamily || "'JetBrains Mono', monospace",
+                        fontSize: `${Number(localConfig.fontSize) || 16}px`,
+                        lineHeight: 1.6,
+                        color: 'var(--text-primary, #dae2fd)',
+                        overflowX: 'auto',
+                        boxShadow: 'inset 0 2px 8px rgba(0, 0, 0, 0.4)',
+                      }}
+                    >
+                      <div style={{ color: '#8c909f', fontStyle: 'italic', marginBottom: '4px' }}>
+                        {'// Font: ' + (localConfig.fontFamily || 'JetBrains Mono') + ' • Size: ' + (localConfig.fontSize || 16) + 'px'}
+                      </div>
+                      <div>
+                        <span style={{ color: 'var(--accent-cyan, #4cd7f6)', fontWeight: 'bold' }}>public class</span>{' '}
+                        <span style={{ color: 'var(--accent-green, #4edea3)', fontWeight: 'bold' }}>FullCodeApp</span> {'{'}
+                      </div>
+                      <div style={{ paddingLeft: '20px' }}>
+                        <span style={{ color: 'var(--accent-purple, #adc6ff)', fontWeight: 'bold' }}>System</span>.out.println(
+                        <span style={{ color: 'var(--accent-green, #4edea3)' }}>&quot;⚡ Compiler Typography Active!&quot;</span>
+                        );
+                      </div>
+                      <div>{'}'}</div>
+                    </div>
                   </div>
                 </div>
 

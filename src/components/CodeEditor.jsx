@@ -384,6 +384,15 @@ export default function CodeEditor() {
       monaco.editor.setTheme(themeName);
     }
 
+    // Force typography on mount
+    const fs = Number(config?.fontSize) || 16;
+    const ff = config?.fontFamily || "'JetBrains Mono', monospace";
+    editor.updateOptions({ fontSize: fs, fontFamily: ff });
+    editor.layout();
+    if (monaco.editor?.remeasureFonts) {
+      monaco.editor.remeasureFonts();
+    }
+
     // Keybindings: Cmd+Enter or Ctrl+Enter to Run
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => {
       document.dispatchEvent(new CustomEvent('fullcode-run'));
@@ -664,12 +673,12 @@ export default function CodeEditor() {
 
   // Editor options
   const editorOptions = {
-    fontSize: config.fontSize,
-    tabSize: config.tabSize,
+    fontSize: Number(config.fontSize) || 16,
+    tabSize: Number(config.tabSize) || 4,
     wordWrap: config.wordWrap ? 'on' : 'off',
     minimap: { enabled: config.minimap },
     lineNumbers: config.lineNumbers !== false ? 'on' : 'off',
-    fontFamily: config.fontFamily || "'JetBrains Mono', 'Fira Code', monospace",
+    fontFamily: config.fontFamily || "'JetBrains Mono', monospace",
     fontLigatures: true,
     cursorBlinking: 'smooth',
     cursorSmoothCaretAnimation: 'on',
@@ -723,19 +732,58 @@ export default function CodeEditor() {
     },
   };
 
-  // Monaco's React wrapper does not reliably reapply typography options when
-  // settings are changed in another page, so update the live editor explicitly.
+  // Forcefully update live Monaco editor options, layout, and font metrics cache
   useEffect(() => {
     if (!editorRef.current) return;
+    const fs = Number(config.fontSize) || 16;
+    const ff = config.fontFamily || "'JetBrains Mono', monospace";
+    const ts = Number(config.tabSize) || 4;
+
     editorRef.current.updateOptions({
-      fontSize: Number(config.fontSize) || 16,
-      fontFamily: config.fontFamily || "'JetBrains Mono', 'Fira Code', monospace",
-      tabSize: Number(config.tabSize) || 4,
+      fontSize: fs,
+      fontFamily: ff,
+      tabSize: ts,
       inlineSuggest: {
         enabled: config.inlineAiAutocomplete !== false,
       },
     });
-  }, [config.fontSize, config.fontFamily, config.tabSize, config.inlineAiAutocomplete]);
+    editorRef.current.layout();
+
+    const monaco = monacoRef.current || window.monaco;
+    if (monaco?.editor?.remeasureFonts) {
+      monaco.editor.remeasureFonts();
+    }
+  }, [config.fontSize, config.fontFamily, config.tabSize, config.inlineAiAutocomplete, config.workspaceUiScale]);
+
+  // Global event listener for instant font & scale updates
+  useEffect(() => {
+    const handleForcedConfig = (e) => {
+      if (!editorRef.current) return;
+      const detail = e.detail || {};
+      const fs = Number(detail.fontSize) || Number(config.fontSize) || 16;
+      const ff = detail.fontFamily || config.fontFamily || "'JetBrains Mono', monospace";
+      editorRef.current.updateOptions({
+        fontSize: fs,
+        fontFamily: ff,
+      });
+      editorRef.current.layout();
+      const monaco = monacoRef.current || window.monaco;
+      if (monaco?.editor?.remeasureFonts) {
+        monaco.editor.remeasureFonts();
+      }
+    };
+
+    window.addEventListener('fullcode-config-applied', handleForcedConfig);
+    if (document.fonts?.ready) {
+      document.fonts.ready.then(() => {
+        editorRef.current?.layout();
+        if (window.monaco?.editor?.remeasureFonts) {
+          window.monaco.editor.remeasureFonts();
+        }
+      });
+    }
+    return () => window.removeEventListener('fullcode-config-applied', handleForcedConfig);
+  }, [config.fontSize, config.fontFamily]);
 
   // Handle active line highlighting when stepping through Step Visualizer
   useEffect(() => {

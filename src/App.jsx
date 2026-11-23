@@ -37,6 +37,7 @@ import WebPreviewPanel from './components/WebPreviewPanel';
 import { getLanguageFromFilename } from './services/languageDetector';
 import { setActiveLocalFolderPath } from './services/localDiskWorkspaceService';
 import { getWorkspaceGitStatus } from './services/gitService';
+import { getWorkspaceScaleValue } from './services/configService';
 import {
   ChevronLeft,
   ChevronRight,
@@ -86,8 +87,6 @@ function AppContent() {
     showToast,
   } = useApp();
   const { explorerOpen, practiceOpen, toast, terminalHidden } = state;
-  const initialDevicePixelRatioRef = useRef(window.devicePixelRatio || 1);
-  const [zoomCompensation, setZoomCompensation] = useState(1);
   const [webPreviewWidth, setWebPreviewWidth] = useState(() => {
     try {
       const saved = Number(localStorage.getItem('fullcode_web_preview_width'));
@@ -96,21 +95,6 @@ function AppContent() {
   });
   const [isWebPreviewResizing, setIsWebPreviewResizing] = useState(false);
   const webPreviewDrag = useRef(null);
-
-  useEffect(() => {
-    const updateZoomCompensation = () => {
-      const currentRatio = window.devicePixelRatio || initialDevicePixelRatioRef.current;
-      setZoomCompensation(initialDevicePixelRatioRef.current / currentRatio);
-    };
-
-    window.addEventListener('resize', updateZoomCompensation);
-    window.visualViewport?.addEventListener('resize', updateZoomCompensation);
-    updateZoomCompensation();
-    return () => {
-      window.removeEventListener('resize', updateZoomCompensation);
-      window.visualViewport?.removeEventListener('resize', updateZoomCompensation);
-    };
-  }, []);
 
   const activeFile = state.files.find((f) => f.id === state.activeFileId) || state.files[0];
   const isHtmlActive = Boolean(activeFile && (/\.(html?|xhtml)$/i.test(activeFile.name) || activeFile.language?.monacoLanguage === 'html'));
@@ -855,12 +839,7 @@ function AppContent() {
         state.navbarMinimized ? 'navbar-is-minimized' : ''
       } ${isNotebookActive ? 'notebook-active' : 'simple-file-active'}`}
       style={{
-        '--zoom-compensation': zoomCompensation,
-        '--workspace-ui-scale': (() => {
-          const scale = state.config?.workspaceUiScale;
-          if (typeof scale === 'number' && Number.isFinite(scale)) return `${Math.min(1.2, Math.max(0.85, scale))}`;
-          return ({ small: '0.9', medium: '1', zoomed: '1.12' })[scale] || '1';
-        })(),
+        '--workspace-ui-scale': String(getWorkspaceScaleValue(state.config?.workspaceUiScale)),
       }}
     >
       <Header />

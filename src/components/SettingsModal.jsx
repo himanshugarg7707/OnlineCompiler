@@ -36,7 +36,7 @@ import {
 } from 'lucide-react';
 import MemoryLearningLab from './MemoryLearningLab';
 import { getSupportedLanguages, getLanguageById } from '../services/languageDetector';
-import { resetConfig } from '../services/configService';
+import { resetConfig, getWorkspaceScaleValue } from '../services/configService';
 import {
   getProtectedItems,
   protectItem,
@@ -865,27 +865,137 @@ export default function SettingsModal() {
 
           {/* ─── 4. EDITOR SETTINGS ─── */}
           <div className="settings-section">
-            <h3 className="section-title">Editor Preferences</h3>
+            <h3 className="section-title">Editor & Workspace Preferences</h3>
+
+            <div className="setting-row">
+              <div className="setting-info">
+                <span className="setting-label">Global Workspace UI Scale</span>
+                <span className="setting-desc">Zoom and scale the entire IDE (editor, panels, sidebars, header)</span>
+              </div>
+              <div className="setting-control" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '6px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <input
+                    type="range"
+                    min="0.75"
+                    max="1.35"
+                    step="0.01"
+                    value={getWorkspaceScaleValue(localConfig.workspaceUiScale)}
+                    onChange={(e) => handleConfigChange('workspaceUiScale', Number(e.target.value))}
+                    className="workspace-scale-slider"
+                    style={{ width: '130px', accentColor: 'var(--accent-cyan)' }}
+                  />
+                  <span className="font-size-val" style={{ minWidth: '46px', color: 'var(--accent-cyan)', fontWeight: 700 }}>
+                    {Math.round(getWorkspaceScaleValue(localConfig.workspaceUiScale) * 100)}%
+                  </span>
+                </div>
+                <div style={{ display: 'flex', gap: '4px' }}>
+                  {[
+                    { label: '85%', val: 0.85 },
+                    { label: '100%', val: 1.0 },
+                    { label: '112%', val: 1.12 },
+                    { label: '125%', val: 1.25 },
+                  ].map((p) => (
+                    <button
+                      key={p.label}
+                      type="button"
+                      style={{
+                        padding: '2px 6px',
+                        fontSize: '10px',
+                        borderRadius: '3px',
+                        border: '1px solid var(--border-primary)',
+                        background: Math.abs(getWorkspaceScaleValue(localConfig.workspaceUiScale) - p.val) < 0.02
+                          ? 'rgba(77, 142, 255, 0.25)'
+                          : 'transparent',
+                        color: Math.abs(getWorkspaceScaleValue(localConfig.workspaceUiScale) - p.val) < 0.02
+                          ? 'var(--accent-cyan)'
+                          : 'var(--text-muted)',
+                        cursor: 'pointer',
+                      }}
+                      onClick={() => handleConfigChange('workspaceUiScale', p.val)}
+                    >
+                      {p.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
 
             <div className="setting-row">
               <div className="setting-info">
                 <span className="setting-label">Font Size</span>
-                <span className="setting-desc">Adjust Monaco editor text size</span>
+                <span className="setting-desc">Adjust Monaco editor and compiler text size</span>
               </div>
-              <div className="setting-control font-size-control">
-                <button
-                  className="btn-font-step"
-                  onClick={() => handleConfigChange('fontSize', Math.max(12, localConfig.fontSize - 1))}
+              <div className="setting-control" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '6px' }}>
+                <div className="font-size-control">
+                  <button
+                    className="btn-font-step"
+                    onClick={() => handleConfigChange('fontSize', Math.max(12, (Number(localConfig.fontSize) || 16) - 1))}
+                  >
+                    -
+                  </button>
+                  <span className="font-size-val">{Number(localConfig.fontSize) || 16}px</span>
+                  <button
+                    className="btn-font-step"
+                    onClick={() => handleConfigChange('fontSize', Math.min(32, (Number(localConfig.fontSize) || 16) + 1))}
+                  >
+                    +
+                  </button>
+                </div>
+                <div style={{ display: 'flex', gap: '4px' }}>
+                  {[13, 15, 16, 18, 20].map((sz) => (
+                    <button
+                      key={sz}
+                      type="button"
+                      style={{
+                        padding: '2px 5px',
+                        fontSize: '10px',
+                        borderRadius: '3px',
+                        border: '1px solid var(--border-primary)',
+                        background: (Number(localConfig.fontSize) || 16) === sz
+                          ? 'rgba(77, 142, 255, 0.25)'
+                          : 'transparent',
+                        color: (Number(localConfig.fontSize) || 16) === sz
+                          ? 'var(--accent-cyan)'
+                          : 'var(--text-muted)',
+                        cursor: 'pointer',
+                      }}
+                      onClick={() => handleConfigChange('fontSize', sz)}
+                    >
+                      {sz}px
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="setting-row">
+              <div className="setting-info">
+                <span className="setting-label">Font Family</span>
+                <span className="setting-desc">Coding monospace typeface for Monaco editor</span>
+              </div>
+              <div className="setting-control">
+                <select
+                  value={localConfig.fontFamily || "'JetBrains Mono', monospace"}
+                  onChange={(e) => handleConfigChange('fontFamily', e.target.value)}
+                  style={{
+                    padding: '6px 10px',
+                    borderRadius: '6px',
+                    border: '1px solid var(--border-primary)',
+                    background: 'var(--bg-secondary)',
+                    color: 'var(--text-primary)',
+                    fontSize: '12px',
+                    cursor: 'pointer',
+                  }}
                 >
-                  -
-                </button>
-                <span className="font-size-val">{localConfig.fontSize}px</span>
-                <button
-                  className="btn-font-step"
-                  onClick={() => handleConfigChange('fontSize', Math.min(24, localConfig.fontSize + 1))}
-                >
-                  +
-                </button>
+                  <option value="'JetBrains Mono', monospace">JetBrains Mono (Default)</option>
+                  <option value="'Fira Code', monospace">Fira Code (Ligatures)</option>
+                  <option value="'Source Code Pro', monospace">Source Code Pro (Adobe)</option>
+                  <option value="'Roboto Mono', monospace">Roboto Mono (Google)</option>
+                  <option value="Menlo, Monaco, monospace">Menlo / Apple Silicon</option>
+                  <option value="Consolas, monospace">Consolas (Windows)</option>
+                  <option value="'Courier New', monospace">Courier New (Classic)</option>
+                  <option value="monospace">System Monospace</option>
+                </select>
               </div>
             </div>
 

@@ -33,12 +33,14 @@ const DEFAULT_CONFIG = {
 
   // Editor settings
   fontSize: 16,
+  fontFamily: "'JetBrains Mono', monospace",
+  tabSize: 4,
   minimap: true,
   wordWrap: 'off',
   lineNumbers: true,
   suggestionsWhileTyping: true,
   inlineAiAutocomplete: true,
-  workspaceUiScale: 'medium',
+  workspaceUiScale: 1,
 
   // Terminal settings ('bottom' | 'right')
   terminalPosition: 'bottom',
@@ -53,6 +55,59 @@ const DEFAULT_CONFIG = {
   // 'ipynb': exports standard single .ipynb notebook
   notebookExportMode: 'split',
 };
+
+/**
+ * Convert scale config (numeric or legacy string) into a clean bounded numeric multiplier.
+ */
+export function getWorkspaceScaleValue(value) {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return Math.min(1.4, Math.max(0.7, value));
+  }
+  return ({ small: 0.85, medium: 1, zoomed: 1.15 })[value] || 1;
+}
+
+/**
+ * Forcefully apply UI scale and compiler font settings across the entire DOM,
+ * CSS variables, and all listening components (Monaco Editor, panels, layouts).
+ */
+export function applyGlobalAppConfig(config) {
+  if (typeof document === 'undefined') return;
+  const cfg = config || getConfig();
+  const scale = getWorkspaceScaleValue(cfg.workspaceUiScale);
+  const fontSize = Number(cfg.fontSize) || 16;
+  const fontFamily = cfg.fontFamily || "'JetBrains Mono', monospace";
+
+  try {
+    // 1. Force global UI scale (zoom) on root document
+    document.documentElement.style.zoom = String(scale);
+    document.documentElement.style.setProperty('--workspace-ui-scale', String(scale));
+    document.documentElement.style.setProperty('--app-ui-scale', String(scale));
+  } catch (e) {
+    console.warn('Failed to apply UI scale zoom:', e);
+  }
+
+  try {
+    // 2. Force editor typography variables across whole app
+    document.documentElement.style.setProperty('--editor-font-size', `${fontSize}px`);
+    document.documentElement.style.setProperty('--editor-font-family', fontFamily);
+    document.documentElement.style.setProperty('--font-mono', fontFamily);
+  } catch (e) {
+    console.warn('Failed to apply typography CSS variables:', e);
+  }
+
+  try {
+    // 3. Notify Monaco and all listeners immediately
+    window.dispatchEvent(
+      new CustomEvent('fullcode-config-applied', {
+        detail: { scale, fontSize, fontFamily, config: cfg },
+      })
+    );
+    window.dispatchEvent(new Event('resize'));
+    if (window.monaco?.editor?.remeasureFonts) {
+      window.monaco.editor.remeasureFonts();
+    }
+  } catch {}
+}
 
 /**
  * Get the current configuration
@@ -71,12 +126,16 @@ export function getConfig() {
         parsed.theme = 'antigravity-google';
         localStorage.setItem(CONFIG_KEY, JSON.stringify({ ...DEFAULT_CONFIG, ...parsed }));
       }
-      return { ...DEFAULT_CONFIG, ...parsed };
+      const loaded = { ...DEFAULT_CONFIG, ...parsed };
+      applyGlobalAppConfig(loaded);
+      return loaded;
     }
   } catch (e) {
     console.warn('Failed to load config:', e);
   }
-  return { ...DEFAULT_CONFIG };
+  const fallback = { ...DEFAULT_CONFIG };
+  applyGlobalAppConfig(fallback);
+  return fallback;
 }
 
 /**
@@ -90,6 +149,7 @@ export function updateConfig(updates) {
   } catch (e) {
     console.warn('Failed to save config:', e);
   }
+  applyGlobalAppConfig(newConfig);
   return newConfig;
 }
 

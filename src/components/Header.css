@@ -1,6 +1,5 @@
 .header,
 .app-header {
-  zoom: var(--zoom-compensation, 1);
   height: var(--header-height, 46px);
   min-height: var(--header-height, 46px);
   max-height: var(--header-height, 46px);

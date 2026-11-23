@@ -1,7 +1,4 @@
 .output-panel {
-  zoom: var(--workspace-ui-scale, 1);
-  width: calc(100% / var(--workspace-ui-scale, 1));
-  height: calc(100% / var(--workspace-ui-scale, 1));
   container-type: inline-size;
   container-name: output-panel;
   display: flex;
@@ -15,7 +12,6 @@
 
 /* Tab Bar */
 .output-tabs {
-  zoom: var(--zoom-compensation, 1);
   display: flex;
   align-items: center;
   justify-content: space-between;

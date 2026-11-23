@@ -1,6 +1,14 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Roboto+Mono:wght@400;500;600;700&family=Source+Code+Pro:wght@400;500;600;700&display=swap');
 
 /* ─── Design Tokens ────────────────────────────────────────────────────── */
+:root {
+  --workspace-ui-scale: 1;
+  --app-ui-scale: 1;
+  --editor-font-size: 16px;
+  --editor-font-family: 'JetBrains Mono', monospace;
+  --font-mono: 'JetBrains Mono', 'Fira Code', 'Source Code Pro', 'Roboto Mono', Menlo, Monaco, Consolas, monospace;
+}
+
 :root, [data-theme="dark"], [data-theme="antigravity-google"] {
   /* Antigravity IDE Design Tokens */
   --surface-obsidian: #0b1326;

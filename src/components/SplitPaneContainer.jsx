@@ -559,14 +559,14 @@ export default function SplitPaneContainer() {
                 value={splitFile?.content || ''}
                 theme={activeMonacoTheme}
                 options={{
-                  fontSize: state.config?.fontSize || 15,
-                  tabSize: state.config?.tabSize || 2,
+                  fontSize: Number(state.config?.fontSize) || 16,
+                  tabSize: Number(state.config?.tabSize) || 4,
                   wordWrap: state.config?.wordWrap ? 'on' : 'off',
                   minimap: { enabled: state.config?.minimap ?? false },
                   lineNumbers: state.config?.lineNumbers ? 'on' : 'off',
                   scrollBeyondLastLine: false,
                   automaticLayout: true,
-                  fontFamily: "'JetBrains Mono', 'Fira Code', Menlo, monospace",
+                  fontFamily: state.config?.fontFamily || "'JetBrains Mono', monospace",
                   fontLigatures: true,
                   padding: { top: 10, bottom: 10 },
                 }}
