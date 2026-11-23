@@ -114,12 +114,12 @@ function usesGemini(config = getConfig()) {
   return config.aiProvider === 'gemini' || Boolean(config.geminiApiKey?.trim());
 }
 
-function extractGeminiText(payload) {
+function extractGeminiText(payload, isChat = false) {
   const candidate = payload?.candidates?.[0];
   const parts = candidate?.content?.parts || [];
   const visibleParts = parts.filter((part) => !part?.thought);
   const selectedParts = visibleParts.length > 0 ? visibleParts : parts;
-  const text = selectedParts
+  let text = selectedParts
     .map((part) => (typeof part?.text === 'string' ? part.text : ''))
     .filter(Boolean)
     .join('')
@@ -133,9 +133,13 @@ function extractGeminiText(payload) {
     throw new Error('Lucia received an empty response from Gemini. Check your API key and try again.');
   }
 
-  return candidate?.finishReason === 'MAX_TOKENS'
-    ? `${text}\n\n*This reply reached Gemini’s response limit. Ask “continue” for the rest.*`
-    : text;
+  // Only append conversational continuation guidance in interactive Lucia chat
+  // NEVER inject conversational markdown into code completion or code generation
+  if (isChat && candidate?.finishReason === 'MAX_TOKENS') {
+    text += '\n\n*This reply reached Gemini’s response limit. Ask “continue” for the rest.*';
+  }
+
+  return text;
 }
 
 async function requestGemini(systemPrompt, prompt, apiKey, options = {}) {
@@ -217,7 +221,7 @@ async function requestGemini(systemPrompt, prompt, apiKey, options = {}) {
         }
 
         activeGeminiModel = payload?._usedModel || model;
-        return extractGeminiText(payload);
+        return extractGeminiText(payload, Boolean(options.isChat));
       } else {
         // Query backend proxy route
         const response = await fetch(apiUrl('/api/ai/generate'), {
@@ -253,7 +257,7 @@ async function requestGemini(systemPrompt, prompt, apiKey, options = {}) {
         }
 
         activeGeminiModel = payload?._usedModel || model;
-        return extractGeminiText(payload);
+        return extractGeminiText(payload, Boolean(options.isChat));
       }
     } catch (err) {
       if (err.code === 'NO_KEY_CONFIGURED') throw err;
@@ -841,7 +845,7 @@ export async function chatWithAI(messages, code, language, output = '', error = 
         `User question:\n${question}`,
       ].filter(Boolean).join('\n\n');
       const responseRules = config.luciaResponseStyle === 'balanced' ? BRIEF_CHAT_RULES : CODE_FIRST_CHAT_RULES;
-      return await requestGemini(`${getAssistantPrompt(config)} ${responseRules}`, context, config.geminiApiKey, { maxOutputTokens: 3072, temperature: 0.25 });
+      return await requestGemini(`${getAssistantPrompt(config)} ${responseRules}`, context, config.geminiApiKey, { maxOutputTokens: 3072, temperature: 0.25, isChat: true });
     } catch (err) {
       if (err.code === 'NO_KEY_CONFIGURED') {
         const fallback = await mockChat(messages, code, language);
@@ -1070,8 +1074,9 @@ Rules:
         apiKey,
         {
           temperature: 0.1,
-          maxOutputTokens: 48,
+          maxOutputTokens: 160,
           signal,
+          isChat: false,
         }
       );
 
@@ -1081,6 +1086,13 @@ Rules:
       // Remove any backticks if AI accidentally included them
       if (text.startsWith('```')) {
         text = text.replace(/^```[\w]*\n?/, '').replace(/\n?```$/, '').trim();
+      }
+
+      // Sanitize: never allow conversational text, response limit disclaimers, or model meta text in code completions
+      if (text.includes('response limit') || text.includes('Ask “continue”') || text.includes('Gemini') || text.includes('Lucia')) {
+        text = text.replace(/\*?[^\n]*(response limit|Gemini|Lucia|Ask “continue”)[^\n]*\*/gi, '')
+                   .replace(/\n\n\*[^*]+\*/g, '')
+                   .trim();
       }
 
       // Check if result merely echoes the last few characters of prefix
