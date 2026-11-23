@@ -122,8 +122,6 @@ export default function FileExplorer() {
     handleSelectFile,
     handleCreateSequentialFile,
     handleCloseFile,
-    handleCloseTab,
-    handleCloseAllTabs,
     handleRenameFile,
     handleDuplicateFile,
     handleCopyFileAsFile,
@@ -147,9 +145,7 @@ export default function FileExplorer() {
   const [searchQuery, setSearchQuery] = useState('');
   const searchInputRef = useRef(null);
 
-  // Open files list & collapse states
-  const openFiles = (state.openFileIds || []).map((id) => files.find((f) => f.id === id)).filter(Boolean);
-  const [openEditorsCollapsed, setOpenEditorsCollapsed] = useState(false);
+  // Workspace tree collapse state
   const [workspaceCollapsed, setWorkspaceCollapsed] = useState(false);
 
   // Folder collapse state: { [folderPath]: boolean }
@@ -894,89 +890,6 @@ export default function FileExplorer() {
           >
             <X size={11} />
           </button>
-        )}
-      </div>
-
-      {/* VS Code OPEN EDITORS Section */}
-      <div className="explorer-sub-section open-editors-container">
-        <div
-          className="explorer-sub-header"
-          onClick={() => setOpenEditorsCollapsed((prev) => !prev)}
-          title="Open Editors"
-        >
-          <div className="sub-header-left">
-            <span className={`folder-chevron ${openEditorsCollapsed ? 'collapsed' : 'expanded'}`}>
-              {openEditorsCollapsed ? <ChevronRight size={10} strokeWidth={2.5} /> : <ChevronDown size={10} strokeWidth={2.5} />}
-            </span>
-            <span className="sub-header-title">OPEN EDITORS</span>
-            {openFiles.length > 0 && <span className="open-editors-badge">{openFiles.length}</span>}
-          </div>
-
-          <div className="sub-header-actions" onClick={(e) => e.stopPropagation()}>
-            <button
-              className="hierarchy-action-btn"
-              onClick={handleCloseAllTabs}
-              title="Close All Editors"
-              disabled={openFiles.length === 0}
-              style={{ opacity: openFiles.length === 0 ? 0.3 : 1 }}
-            >
-              <X size={12} />
-            </button>
-            <button
-              className="hierarchy-action-btn"
-              onClick={() => startAddFile('')}
-              title="New File"
-            >
-              <Plus size={12} />
-            </button>
-          </div>
-        </div>
-
-        {!openEditorsCollapsed && (
-          <div className="open-editors-list">
-            {openFiles.length === 0 ? (
-              <div className="open-editors-empty-hint">No open editors</div>
-            ) : (
-              openFiles.map((file) => {
-                const isActive = file.id === activeFileId;
-                const baseName = file.name.includes('/') ? file.name.split('/').pop() : file.name;
-                return (
-                  <div
-                    key={`open-editor-${file.id}`}
-                    className={`open-editor-row ${isActive ? 'active' : ''}`}
-                    onClick={() => handleFileClick(file)}
-                    onAuxClick={(e) => {
-                      if (e.button === 1) {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        handleCloseTab(file.id);
-                      }
-                    }}
-                    onDoubleClick={(e) => handleOpenFileOptions(e, file, '')}
-                    onContextMenu={(e) => handleOpenFileOptions(e, file, '')}
-                    title={`${file.name} (Click to focus, middle-click to close)`}
-                  >
-                    <span className="file-icon">
-                      <LanguageIcon language={file.language} filename={file.name} workspaceFiles={state?.files} size={14} />
-                    </span>
-                    <span className="open-editor-name">{baseName}</span>
-                    <button
-                      type="button"
-                      className="open-editor-close-btn"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleCloseTab(file.id);
-                      }}
-                      title="Close"
-                      aria-label="Close"
-                    >
-                      <X size={12} />
-                    </button>
-                  </div>
-                );
-              })
-            )}
-          </div>
         )}
       </div>
 
