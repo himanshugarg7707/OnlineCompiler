@@ -3,7 +3,8 @@ import Editor from '@monaco-editor/react';
 import { useApp } from '../context/AppContext';
 import { registerSnippets, recordVariablesFromCode } from '../services/snippets';
 import { validateCodeSyntax } from '../services/syntaxValidatorService';
-import { AlertCircle } from 'lucide-react';
+import { AlertCircle, Plus, Folder, RotateCcw } from 'lucide-react';
+import LanguageIcon from './LanguageIcon';
 import FileTabs from './FileTabs';
 import JupyterNotebookEditor from './JupyterNotebookEditor';
 import GitDiffViewer from './GitDiffViewer';
@@ -66,9 +67,19 @@ function defineCustomMonacoTheme(monaco, palette) {
 }
 
 export default function CodeEditor() {
-  const { state, handleCodeChange, handleSaveActiveFile, handleCreateSequentialFile, setFileErrors, handleSelectFile, dispatch } = useApp();
+  const {
+    state,
+    handleCodeChange,
+    handleSaveActiveFile,
+    handleCreateSequentialFile,
+    setFileErrors,
+    handleSelectFile,
+    handleReopenClosedTab,
+    dispatch,
+  } = useApp();
   const { code, detectedLanguage, errorLine, config } = state;
-  const activeFile = state.files?.find((f) => f.id === state.activeFileId) || state.files?.[0];
+  const hasOpenTabs = Boolean(state.openFileIds && state.openFileIds.length > 0);
+  const activeFile = hasOpenTabs ? (state.files?.find((f) => f.id === state.activeFileId) || state.files?.[0]) : null;
   const isNotebook = Boolean(
     activeFile?.name?.endsWith('.ipynb') ||
     detectedLanguage?.monacoLanguage === 'ipynb' ||
@@ -718,6 +729,71 @@ export default function CodeEditor() {
             file={activeFile}
             onContentChange={handleEditorChange}
           />
+        ) : !activeFile ? (
+          <div className="empty-workspace-state">
+            <div className="empty-state-content">
+              <div className="empty-state-badge">
+                <span className="material-symbols-outlined text-4xl text-primary animate-pulse">terminal</span>
+              </div>
+              <h2 className="empty-state-title">No Open Editors</h2>
+              <p className="empty-state-desc">
+                Select a file from the explorer on the left, or use the shortcuts below.
+              </p>
+
+              <div className="empty-state-shortcuts">
+                <button
+                  type="button"
+                  className="empty-shortcut-btn"
+                  onClick={() => handleCreateSequentialFile?.()}
+                >
+                  <span className="shortcut-icon"><Plus size={14} /></span>
+                  <span className="shortcut-label">New File</span>
+                  <kbd className="shortcut-kbd">⌘N</kbd>
+                </button>
+
+                <button
+                  type="button"
+                  className="empty-shortcut-btn"
+                  onClick={() => dispatch({ type: 'TOGGLE_EXPLORER' })}
+                >
+                  <span className="shortcut-icon"><Folder size={14} /></span>
+                  <span className="shortcut-label">Toggle Explorer</span>
+                  <kbd className="shortcut-kbd">⇧⌘E</kbd>
+                </button>
+
+                {state.recentlyClosedFileIds?.length > 0 && (
+                  <button
+                    type="button"
+                    className="empty-shortcut-btn"
+                    onClick={() => handleReopenClosedTab?.()}
+                  >
+                    <span className="shortcut-icon"><RotateCcw size={14} /></span>
+                    <span className="shortcut-label">Reopen Closed Editor</span>
+                    <kbd className="shortcut-kbd">⇧⌘T</kbd>
+                  </button>
+                )}
+              </div>
+
+              {state.files?.length > 0 && (
+                <div className="empty-recent-files">
+                  <span className="empty-recent-title">Files in Workspace</span>
+                  <div className="empty-recent-chips">
+                    {state.files.slice(0, 10).map((f) => (
+                      <button
+                        key={f.id}
+                        type="button"
+                        className="empty-file-chip"
+                        onClick={() => handleSelectFile?.(f.id)}
+                      >
+                        <LanguageIcon language={f.language} filename={f.name} size={13} />
+                        <span>{f.name.split('/').pop()}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
         ) : (
           <>
             <Editor

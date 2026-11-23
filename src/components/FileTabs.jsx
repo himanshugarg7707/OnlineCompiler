@@ -297,6 +297,13 @@ export default function FileTabs() {
                 ref={isActive ? activeTabRef : null}
                 className={`file-tab ${isActive ? 'active' : ''} ${isDragging ? 'is-dragging' : ''} ${isDragOver ? 'is-drag-over' : ''}`}
                 onClick={() => handleTabClick(file)}
+                onAuxClick={(e) => {
+                  if (e.button === 1) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    handleCloseTab(file.id);
+                  }
+                }}
                 onDoubleClick={(e) => handleOpenTabOptions(e, file)}
                 onContextMenu={(e) => handleOpenTabOptions(e, file)}
                 draggable={!isEditing}
@@ -305,7 +312,7 @@ export default function FileTabs() {
                 onDragLeave={(e) => handleDragLeave(e, file.id)}
                 onDrop={(e) => handleDrop(e, file.id)}
                 onDragEnd={handleDragEnd}
-                title={`${file.name || 'File'} (${file.language?.name || 'Code'}) — Double-click or right-click for options`}
+                title={`${file.name || 'File'} (${file.language?.name || 'Code'}) — Double-click or right-click for options, middle-click to close`}
               >
                 <span className="file-tab-icon">
                   <LanguageIcon language={file.language} filename={file.name} workspaceFiles={openFiles} size={14} />

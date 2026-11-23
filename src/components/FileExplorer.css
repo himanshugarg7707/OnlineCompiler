@@ -1285,4 +1285,135 @@
   border-radius: 3px;
 }
 
+/* ─── Open Editors Section (VS Code style) ─────────────────────────── */
+.explorer-sub-section {
+  border-bottom: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.05));
+  margin-bottom: 4px;
+}
+
+.explorer-sub-header {
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 10px 0 8px;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.12s ease;
+}
+
+.explorer-sub-header:hover {
+  background: var(--bg-tertiary, rgba(255, 255, 255, 0.04));
+}
+
+.sub-header-left {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.sub-header-title {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--text-secondary, #94a3b8);
+}
+
+.open-editors-badge {
+  font-size: 10px;
+  padding: 1px 5px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-muted, #64748b);
+  font-weight: 600;
+}
+
+.sub-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.open-editors-list {
+  display: flex;
+  flex-direction: column;
+  padding: 2px 0 4px 0;
+}
+
+.open-editors-empty-hint {
+  font-size: 11px;
+  color: var(--text-muted, #64748b);
+  padding: 4px 20px;
+  font-style: italic;
+}
+
+.open-editor-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  padding: 0 8px 0 16px;
+  font-size: 12px;
+  cursor: pointer;
+  color: var(--text-secondary, #cbd5e1);
+  transition: all 0.12s ease;
+  position: relative;
+}
+
+.open-editor-row:hover {
+  background: var(--bg-tertiary, rgba(255, 255, 255, 0.05));
+  color: var(--text-primary, #ffffff);
+}
+
+.open-editor-row.active {
+  background: rgba(173, 198, 255, 0.12);
+  color: var(--text-primary, #ffffff);
+  font-weight: 600;
+}
+
+.open-editor-row.active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 3px;
+  bottom: 3px;
+  width: 2px;
+  background: var(--color-primary, #adc6ff);
+  border-radius: 0 2px 2px 0;
+}
+
+.open-editor-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.open-editor-close-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 3px;
+  background: transparent;
+  border: none;
+  color: var(--text-muted, #64748b);
+  cursor: pointer;
+  opacity: 0;
+  transition: all 0.12s ease;
+  padding: 0;
+}
+
+.open-editor-row:hover .open-editor-close-btn,
+.open-editor-row.active .open-editor-close-btn {
+  opacity: 1;
+}
+
+.open-editor-close-btn:hover {
+  background: rgba(248, 81, 73, 0.2);
+  color: var(--accent-red, #f85149);
+}
+
 

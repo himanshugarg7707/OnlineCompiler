@@ -11,6 +11,11 @@ import {
   Play,
   Trash2,
   Lock,
+  X,
+  XSquare,
+  ArrowRight,
+  FolderX,
+  RotateCcw,
 } from 'lucide-react';
 import LanguageIcon from './LanguageIcon';
 import './FileOptionsMenu.css';
@@ -35,6 +40,11 @@ export default function FileOptionsMenu({
     handleCopyFilePath,
     handleSaveActiveFile,
     handleCloseFile,
+    handleCloseTab,
+    handleCloseOtherTabs,
+    handleCloseTabsToRight,
+    handleCloseAllTabs,
+    handleReopenClosedTab,
     handleSelectFile,
     handleRunCode,
   } = useApp();
@@ -173,6 +183,92 @@ export default function FileOptionsMenu({
         </div>
 
         <div className="file-options-divider" />
+
+        {/* Section 0: VS Code Tab Actions (When opened from Tab or open file) */}
+        {isTab && (
+          <>
+            <div className="file-options-group-label">Tab Actions</div>
+
+            <button
+              className="file-options-btn"
+              onClick={() => {
+                handleCloseTab?.(file.id);
+                onClose();
+              }}
+              title="Close this editor tab (Cmd+W)"
+            >
+              <X size={14} className="btn-icon" />
+              <div className="btn-text">
+                <span className="btn-title">Close Tab</span>
+                <span className="btn-subtext">⌘W</span>
+              </div>
+            </button>
+
+            <button
+              className="file-options-btn"
+              onClick={() => {
+                handleCloseOtherTabs?.(file.id);
+                onClose();
+              }}
+              title="Close all other tabs"
+            >
+              <XSquare size={14} className="btn-icon" />
+              <div className="btn-text">
+                <span className="btn-title">Close Others</span>
+                <span className="btn-subtext">Keep only this tab open</span>
+              </div>
+            </button>
+
+            <button
+              className="file-options-btn"
+              onClick={() => {
+                handleCloseTabsToRight?.(file.id);
+                onClose();
+              }}
+              title="Close tabs to the right of this one"
+            >
+              <ArrowRight size={14} className="btn-icon" />
+              <div className="btn-text">
+                <span className="btn-title">Close to the Right</span>
+                <span className="btn-subtext">Close tabs after this</span>
+              </div>
+            </button>
+
+            <button
+              className="file-options-btn"
+              onClick={() => {
+                handleCloseAllTabs?.();
+                onClose();
+              }}
+              title="Close all tabs"
+            >
+              <FolderX size={14} className="btn-icon" />
+              <div className="btn-text">
+                <span className="btn-title">Close All</span>
+                <span className="btn-subtext">Close all editor tabs</span>
+              </div>
+            </button>
+
+            {state.recentlyClosedFileIds?.length > 0 && (
+              <button
+                className="file-options-btn"
+                onClick={() => {
+                  handleReopenClosedTab?.();
+                  onClose();
+                }}
+                title="Reopen recently closed editor (Cmd+Shift+T)"
+              >
+                <RotateCcw size={14} className="btn-icon" />
+                <div className="btn-text">
+                  <span className="btn-title">Reopen Closed Editor</span>
+                  <span className="btn-subtext">⇧⌘T</span>
+                </div>
+              </button>
+            )}
+
+            <div className="file-options-divider" />
+          </>
+        )}
 
         {/* Section 1: Copy & Duplication Actions */}
         <div className="file-options-group-label">File & Clipboard</div>

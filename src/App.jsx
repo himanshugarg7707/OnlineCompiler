@@ -54,6 +54,10 @@ function AppContent() {
     handleToggleTerminal,
     handleFormatCode,
     handleCloseTab,
+    handleCloseOtherTabs,
+    handleCloseTabsToRight,
+    handleCloseAllTabs,
+    handleReopenClosedTab,
     handleCloseFile,
     handleDownloadWorkspace,
     handleToggleSplitView,
@@ -213,9 +217,21 @@ function AppContent() {
         handleRunCode();
       }
       // Ctrl+S or Cmd+S to Save
-      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key === 's') {
         e.preventDefault();
         handleSaveActiveFile();
+      }
+      // Ctrl+W or Cmd+W to Close Active Tab
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && (e.key === 'w' || e.key === 'W')) {
+        e.preventDefault();
+        e.stopPropagation();
+        handleCloseTab();
+      }
+      // Ctrl+Shift+T or Cmd+Shift+T to Reopen Closed Tab
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 't' || e.key === 'T')) {
+        e.preventDefault();
+        e.stopPropagation();
+        handleReopenClosedTab();
       }
       // Ctrl+N or Cmd+N to create sequential file
       if ((e.ctrlKey || e.metaKey) && (e.key === 'n' || e.key === 'N')) {
@@ -276,7 +292,7 @@ function AppContent() {
 
     window.addEventListener('keydown', handleKeyDown, { capture: true });
     return () => window.removeEventListener('keydown', handleKeyDown, { capture: true });
-  }, [handleRunCode, handleSaveActiveFile, handleCreateSequentialFile, handleToggleTerminal, dispatch, state.focusMode, state.files, state.activeFileId, state.code, state.stderr, state.compileOutput, state.stdout, state.detectedLanguage, isNotebookActive, state.config, handleUpdateConfig]);
+  }, [handleRunCode, handleSaveActiveFile, handleCloseTab, handleReopenClosedTab, handleCreateSequentialFile, handleToggleTerminal, dispatch, state.focusMode, state.files, state.activeFileId, state.code, state.stderr, state.compileOutput, state.stdout, state.detectedLanguage, isNotebookActive, state.config, handleUpdateConfig]);
 
   // ── macOS Native Taskbar & Menu Bar Integration ──
   useEffect(() => {
@@ -458,13 +474,13 @@ function AppContent() {
           handleDownloadWorkspace();
           break;
         case 'close-tab':
-          if (activeFile) {
-            if (handleCloseTab) {
-              handleCloseTab(activeFile.id);
-            } else {
-              handleCloseFile(activeFile.id);
-            }
-          }
+          handleCloseTab();
+          break;
+        case 'close-all-tabs':
+          handleCloseAllTabs();
+          break;
+        case 'reopen-tab':
+          handleReopenClosedTab();
           break;
         case 'go-to-file':
           if (!state.explorerOpen) dispatch({ type: 'TOGGLE_EXPLORER' });

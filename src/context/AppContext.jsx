@@ -473,6 +473,7 @@ const initialState = {
   folders: initialFolders,
   openFileIds: initialOpenTabs,
   activeFileId: initialActiveId,
+  recentlyClosedFileIds: [],
   activeDiffFile: null, // { file, baselineContent }
   code: initialActiveFile ? initialActiveFile.content : getStarterTemplate(71),
   detectedLanguage: resolveLanguage(initialActiveFile?.language, initialActiveFile?.name),
@@ -1002,35 +1003,150 @@ function reducer(state, action) {
     }
 
     case 'CLOSE_TAB': {
-      const fileIdToClose = action.payload;
-      const filteredOpenIds = state.openFileIds.filter((id) => id !== fileIdToClose);
+      const fileIdToClose = action.payload || state.activeFileId;
+      if (!fileIdToClose) return state;
 
-      if (filteredOpenIds.length === 0) {
-        if (state.files.length > 0) {
-          filteredOpenIds.push(state.files[0].id);
-        }
-      }
+      const currentOpen = state.openFileIds || [];
+      const closeIndex = currentOpen.indexOf(fileIdToClose);
+      if (closeIndex === -1) return state;
+
+      const filteredOpenIds = currentOpen.filter((id) => id !== fileIdToClose);
+      const recentlyClosed = [
+        fileIdToClose,
+        ...(state.recentlyClosedFileIds || []).filter((id) => id !== fileIdToClose),
+      ].slice(0, 20);
 
       let newActiveId = state.activeFileId;
       if (state.activeFileId === fileIdToClose) {
-        newActiveId = filteredOpenIds[filteredOpenIds.length - 1] || state.files[0]?.id;
+        if (filteredOpenIds.length === 0) {
+          newActiveId = null;
+        } else if (closeIndex < filteredOpenIds.length) {
+          // Switch to adjacent tab to the right
+          newActiveId = filteredOpenIds[closeIndex];
+        } else {
+          // Switch to adjacent tab to the left
+          newActiveId = filteredOpenIds[closeIndex - 1] || filteredOpenIds[0];
+        }
       }
 
-      const newActiveFile = state.files.find((f) => f.id === newActiveId) || state.files[0];
-      const isNewNb = Boolean(
-        newActiveFile?.name?.endsWith('.ipynb') ||
-        newActiveFile?.language?.monacoLanguage === 'ipynb' ||
-        newActiveFile?.language?.id === 710
-      );
+      const newActiveFile = newActiveId ? state.files.find((f) => f.id === newActiveId) : null;
       saveStateToStorage(state.files, newActiveId, state.stdin, state.folders, filteredOpenIds);
 
       return {
         ...state,
         openFileIds: filteredOpenIds,
         activeFileId: newActiveId,
-        code: newActiveFile ? newActiveFile.content : state.code,
-        detectedLanguage: resolveLanguage(newActiveFile?.language, newActiveFile?.name),
+        recentlyClosedFileIds: recentlyClosed,
+        code: newActiveFile ? newActiveFile.content : '',
+        detectedLanguage: newActiveFile ? resolveLanguage(newActiveFile?.language, newActiveFile?.name) : state.detectedLanguage,
         terminalHidden: state.terminalHidden,
+        errorLine: null,
+      };
+    }
+
+    case 'CLOSE_OTHER_TABS': {
+      const targetId = action.payload || state.activeFileId;
+      if (!targetId) return state;
+
+      const currentOpen = state.openFileIds || [];
+      const closed = currentOpen.filter((id) => id !== targetId);
+      const recentlyClosed = [
+        ...closed,
+        ...(state.recentlyClosedFileIds || []).filter((id) => !closed.includes(id)),
+      ].slice(0, 20);
+
+      const nextOpenIds = state.files.some((f) => f.id === targetId) ? [targetId] : [];
+      const activeFile = nextOpenIds.length > 0 ? state.files.find((f) => f.id === targetId) : null;
+
+      saveStateToStorage(state.files, targetId, state.stdin, state.folders, nextOpenIds);
+
+      return {
+        ...state,
+        openFileIds: nextOpenIds,
+        activeFileId: nextOpenIds.length > 0 ? targetId : null,
+        recentlyClosedFileIds: recentlyClosed,
+        code: activeFile ? activeFile.content : '',
+        detectedLanguage: activeFile ? resolveLanguage(activeFile?.language, activeFile?.name) : state.detectedLanguage,
+        errorLine: null,
+      };
+    }
+
+    case 'CLOSE_TABS_TO_RIGHT': {
+      const targetId = action.payload || state.activeFileId;
+      if (!targetId) return state;
+
+      const currentOpen = state.openFileIds || [];
+      const idx = currentOpen.indexOf(targetId);
+      if (idx === -1) return state;
+
+      const remainingOpenIds = currentOpen.slice(0, idx + 1);
+      const closed = currentOpen.slice(idx + 1);
+      const recentlyClosed = [
+        ...closed,
+        ...(state.recentlyClosedFileIds || []).filter((id) => !closed.includes(id)),
+      ].slice(0, 20);
+
+      const newActiveId = remainingOpenIds.includes(state.activeFileId)
+        ? state.activeFileId
+        : targetId;
+      const activeFile = state.files.find((f) => f.id === newActiveId);
+
+      saveStateToStorage(state.files, newActiveId, state.stdin, state.folders, remainingOpenIds);
+
+      return {
+        ...state,
+        openFileIds: remainingOpenIds,
+        activeFileId: newActiveId,
+        recentlyClosedFileIds: recentlyClosed,
+        code: activeFile ? activeFile.content : '',
+        detectedLanguage: activeFile ? resolveLanguage(activeFile?.language, activeFile?.name) : state.detectedLanguage,
+        errorLine: null,
+      };
+    }
+
+    case 'CLOSE_ALL_TABS': {
+      const currentOpen = state.openFileIds || [];
+      const recentlyClosed = [
+        ...currentOpen,
+        ...(state.recentlyClosedFileIds || []).filter((id) => !currentOpen.includes(id)),
+      ].slice(0, 20);
+
+      saveStateToStorage(state.files, null, state.stdin, state.folders, []);
+
+      return {
+        ...state,
+        openFileIds: [],
+        activeFileId: null,
+        recentlyClosedFileIds: recentlyClosed,
+        code: '',
+        errorLine: null,
+      };
+    }
+
+    case 'REOPEN_CLOSED_TAB': {
+      const recentlyClosed = state.recentlyClosedFileIds || [];
+      const currentOpen = state.openFileIds || [];
+      const fileToReopenId = recentlyClosed.find(
+        (id) => state.files.some((f) => f.id === id) && !currentOpen.includes(id)
+      );
+
+      if (!fileToReopenId) return state;
+
+      const targetFile = state.files.find((f) => f.id === fileToReopenId);
+      if (!targetFile) return state;
+
+      const nextOpenIds = [...currentOpen, fileToReopenId];
+      const remainingClosed = recentlyClosed.filter((id) => id !== fileToReopenId);
+
+      saveStateToStorage(state.files, fileToReopenId, state.stdin, state.folders, nextOpenIds);
+
+      return {
+        ...state,
+        openFileIds: nextOpenIds,
+        activeFileId: fileToReopenId,
+        recentlyClosedFileIds: remainingClosed,
+        code: targetFile.content,
+        detectedLanguage: resolveLanguage(targetFile?.language, targetFile?.name),
         errorLine: null,
       };
     }
@@ -1854,6 +1970,22 @@ export function AppProvider({ children }) {
 
   const handleCloseTab = useCallback((id) => {
     dispatch({ type: 'CLOSE_TAB', payload: id });
+  }, []);
+
+  const handleCloseOtherTabs = useCallback((id) => {
+    dispatch({ type: 'CLOSE_OTHER_TABS', payload: id });
+  }, []);
+
+  const handleCloseTabsToRight = useCallback((id) => {
+    dispatch({ type: 'CLOSE_TABS_TO_RIGHT', payload: id });
+  }, []);
+
+  const handleCloseAllTabs = useCallback(() => {
+    dispatch({ type: 'CLOSE_ALL_TABS' });
+  }, []);
+
+  const handleReopenClosedTab = useCallback(() => {
+    dispatch({ type: 'REOPEN_CLOSED_TAB' });
   }, []);
 
   const handleCloseFile = useCallback((id) => {
@@ -3106,6 +3238,10 @@ export function AppProvider({ children }) {
     handleCreateSequentialFile,
     handleSelectFile,
     handleCloseTab,
+    handleCloseOtherTabs,
+    handleCloseTabsToRight,
+    handleCloseAllTabs,
+    handleReopenClosedTab,
     handleCloseFile,
     handleRenameFile,
     handleAddFolder,
