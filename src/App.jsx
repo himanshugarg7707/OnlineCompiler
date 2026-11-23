@@ -38,27 +38,19 @@ import { getLanguageFromFilename } from './services/languageDetector';
 import { setActiveLocalFolderPath } from './services/localDiskWorkspaceService';
 import { getWorkspaceGitStatus } from './services/gitService';
 import {
-  FolderTree,
   ChevronLeft,
   ChevronRight,
-  Maximize2,
   Minimize2,
-  Play,
   Check,
   BookOpen,
   Code2,
   Timer,
-  Braces,
   BrainCircuit,
   Database,
   Users,
   Info,
   FlaskConical,
   Files,
-  Search,
-  GitBranch,
-  PlaySquare,
-  Boxes,
   Sparkles,
   CircleUser,
   Settings,
@@ -695,6 +687,12 @@ function AppContent() {
     };
   }, [isVerticalDragging, splitPercent]);
 
+  // Explorer Open ref for horizontal dragging without stale closures
+  const explorerOpenRef = useRef(explorerOpen);
+  useEffect(() => {
+    explorerOpenRef.current = explorerOpen;
+  }, [explorerOpen]);
+
   // Handle Horizontal Dragging (File Explorer width)
   const handleHorizontalMouseDown = useCallback((e) => {
     e.preventDefault();
@@ -717,6 +715,38 @@ function AppContent() {
     });
   }, []);
 
+  // Handlers for reverse slider in collapsed sidebar rail
+  const handleReverseExpandClick = useCallback((e) => {
+    e.stopPropagation();
+    if (explorerWidth < 160) {
+      setExplorerWidth(240);
+      try {
+        localStorage.setItem(EXPLORER_WIDTH_KEY, '240');
+      } catch {}
+    }
+    dispatch({ type: 'SET_EXPLORER', payload: true });
+  }, [dispatch, explorerWidth]);
+
+  const handleCollapsedSliderDoubleClick = useCallback((e) => {
+    e.stopPropagation();
+    setExplorerWidth(240);
+    try {
+      localStorage.setItem(EXPLORER_WIDTH_KEY, '240');
+    } catch {}
+    dispatch({ type: 'SET_EXPLORER', payload: true });
+  }, [dispatch]);
+
+  const handleCollapsedSliderMouseDown = useCallback((e) => {
+    e.preventDefault();
+    setIsHorizontalDragging(true);
+    document.body.classList.add('resizing-horizontal');
+  }, []);
+
+  const handleCollapsedSliderTouchStart = useCallback(() => {
+    setIsHorizontalDragging(true);
+    document.body.classList.add('resizing-horizontal');
+  }, []);
+
   useEffect(() => {
     if (!isHorizontalDragging) return;
 
@@ -728,12 +758,17 @@ function AppContent() {
 
       const offsetLeft = clientX - rect.left;
 
-      // Auto-collapse if dragged very small
-      if (offsetLeft < 60) {
-        dispatch({ type: 'TOGGLE_EXPLORER' });
-        setIsHorizontalDragging(false);
-        document.body.classList.remove('resizing-horizontal');
+      // Auto-collapse if dragged very small (under 70px)
+      if (offsetLeft < 70) {
+        if (explorerOpenRef.current) {
+          dispatch({ type: 'SET_EXPLORER', payload: false });
+        }
         return;
+      }
+
+      // If dragged >= 70px, ensure explorer is dynamically opened
+      if (!explorerOpenRef.current) {
+        dispatch({ type: 'SET_EXPLORER', payload: true });
       }
 
       // Responsive clamp based on viewport width: min 140px, max 55% of screen width or 550px
@@ -861,7 +896,8 @@ function AppContent() {
       <div className="app-body" ref={appBodyRef}>
         {/* Left File Explorer Sidebar (Collapsed Activity Bar) */}
         {!explorerOpen && (
-          <aside
+          <>
+            <aside
             className="explorer-collapsed-rail"
             aria-label="Activity Bar"
           >
@@ -1000,51 +1036,86 @@ function AppContent() {
               </button>
             </div>
           </aside>
-        )}
 
-        {explorerOpen && (
-          <>
-            <div
-              className="explorer-mobile-backdrop"
-              onClick={() => dispatch({ type: 'TOGGLE_EXPLORER' })}
-              title="Close File Explorer"
-            />
-            <div
-              className="explorer-container"
-              style={{ width: `${explorerWidth}px`, flex: 'none' }}
-            >
-              <FileExplorer />
-            </div>
-
-            <div
-              className={`horizontal-resizer ${isHorizontalDragging ? 'dragging' : ''}`}
-              onMouseDown={handleHorizontalMouseDown}
-              onTouchStart={handleHorizontalTouchStart}
-              onDoubleClick={handleExplorerResizerDoubleClick}
-              title="Drag to resize file explorer • Double-click to toggle width"
-            >
-              <div className="horizontal-resizer-handle" title="Drag to slide explorer width">
-                <div className="resizer-dots-grip">
-                  <span />
-                  <span />
-                  <span />
-                </div>
+          {/* Draggable Horizontal Resizer with Reverse Sliding Option in Collapse */}
+          <div
+            className={`horizontal-resizer collapsed-rail-slider ${isHorizontalDragging ? 'dragging' : ''}`}
+            onMouseDown={handleCollapsedSliderMouseDown}
+            onTouchStart={handleCollapsedSliderTouchStart}
+            onDoubleClick={handleCollapsedSliderDoubleClick}
+            title="Drag right to slide open file explorer • Click reverse button to expand"
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="Reverse slide explorer open"
+          >
+            <div className="horizontal-resizer-handle" title="Drag to slide explorer width">
+              <div className="resizer-dots-grip">
+                <span />
+                <span />
+                <span />
               </div>
-
-              <button
-                type="button"
-                className="btn-quick-collapse-slider"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  dispatch({ type: 'TOGGLE_EXPLORER' });
-                }}
-                title="Collapse File Explorer"
-              >
-                <ChevronLeft size={10} />
-              </button>
             </div>
-          </>
-        )}
+
+            <button
+              type="button"
+              className="btn-quick-collapse-slider is-collapsed-reverse"
+              onClick={handleReverseExpandClick}
+              title="Expand File Explorer (Reverse Slide)"
+              aria-label="Expand File Explorer"
+            >
+              <ChevronRight size={10} />
+            </button>
+          </div>
+        </>
+      )}
+
+      {explorerOpen && (
+        <>
+          <div
+            className="explorer-mobile-backdrop"
+            onClick={() => dispatch({ type: 'TOGGLE_EXPLORER' })}
+            title="Close File Explorer"
+          />
+          <div
+            className="explorer-container"
+            style={{ width: `${explorerWidth}px`, flex: 'none' }}
+          >
+            <FileExplorer />
+          </div>
+
+          <div
+            className={`horizontal-resizer ${isHorizontalDragging ? 'dragging' : ''}`}
+            onMouseDown={handleHorizontalMouseDown}
+            onTouchStart={handleHorizontalTouchStart}
+            onDoubleClick={handleExplorerResizerDoubleClick}
+            title="Drag to resize file explorer • Double-click to toggle width"
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="Resize or collapse file explorer"
+          >
+            <div className="horizontal-resizer-handle" title="Drag to slide explorer width">
+              <div className="resizer-dots-grip">
+                <span />
+                <span />
+                <span />
+              </div>
+            </div>
+
+            <button
+              type="button"
+              className="btn-quick-collapse-slider"
+              onClick={(e) => {
+                e.stopPropagation();
+                dispatch({ type: 'SET_EXPLORER', payload: false });
+              }}
+              title="Collapse File Explorer"
+              aria-label="Collapse File Explorer"
+            >
+              <ChevronLeft size={10} />
+            </button>
+          </div>
+        </>
+      )}
 
         {/* Main Editor & Output Split Panel */}
         <div

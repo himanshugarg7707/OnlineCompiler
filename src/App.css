@@ -48,6 +48,11 @@
   position: relative;
   z-index: 15;
   background: var(--bg-secondary);
+  animation: slideInLeft 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+body.resizing-horizontal .explorer-container {
+  animation: none !important;
 }
 
 .practice-container {
@@ -137,10 +142,12 @@
   background: #ffffff;
 }
 
-/* Quick 1-click Collapse Slider Button */
+/* Quick 1-click Collapse / Reverse Expand Slider Button */
 .btn-quick-collapse-slider {
   position: absolute;
   top: calc(50% + 36px);
+  left: 50%;
+  transform: translateX(-50%) scale(0.9);
   width: 18px;
   height: 18px;
   border-radius: 50%;
@@ -152,17 +159,18 @@
   justify-content: center;
   cursor: pointer;
   padding: 0;
-  opacity: 0;
-  transform: scale(0.85);
+  opacity: 0.65;
   transition: all var(--transition-fast);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
   z-index: 30;
 }
 
 .horizontal-resizer:hover .btn-quick-collapse-slider,
-.horizontal-resizer.dragging .btn-quick-collapse-slider {
+.horizontal-resizer.dragging .btn-quick-collapse-slider,
+.explorer-collapsed-rail:hover + .collapsed-rail-slider .btn-quick-collapse-slider {
   opacity: 1;
-  transform: scale(1);
+  transform: translateX(-50%) scale(1.05);
+  color: var(--text-primary);
 }
 
 .btn-quick-collapse-slider:hover {
@@ -170,6 +178,35 @@
   border-color: var(--accent-cyan);
   color: #000;
   box-shadow: 0 0 10px var(--accent-cyan);
+  transform: translateX(-50%) scale(1.18);
+  opacity: 1;
+}
+
+/* Collapsed Rail Slider & Reverse Sliding Option */
+.collapsed-rail-slider {
+  border-left: none;
+  background: var(--bg-secondary);
+}
+
+.collapsed-rail-slider .btn-quick-collapse-slider.is-collapsed-reverse {
+  opacity: 0.8;
+  border-color: rgba(0, 212, 255, 0.4);
+  color: var(--accent-cyan);
+}
+
+.explorer-collapsed-rail:hover + .collapsed-rail-slider,
+.collapsed-rail-slider:hover,
+.collapsed-rail-slider.dragging {
+  background: rgba(0, 212, 255, 0.15);
+  border-color: var(--accent-cyan);
+}
+
+.collapsed-rail-slider:hover .btn-quick-collapse-slider.is-collapsed-reverse,
+.collapsed-rail-slider.dragging .btn-quick-collapse-slider.is-collapsed-reverse {
+  opacity: 1;
+  transform: translateX(-50%) scale(1.18);
+  background: var(--accent-cyan);
+  color: #000;
 }
 
 /* Collapsed Explorer Left Rail (VS Code Activity Bar Style) */
