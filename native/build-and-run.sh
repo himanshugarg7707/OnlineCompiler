@@ -17,7 +17,11 @@ if [ ! -f "$SCRIPT_DIR/AppIcon.icns" ]; then
   iconutil -c icns /tmp/AppIcon.iconset -o "$SCRIPT_DIR/AppIcon.icns"
 fi
 
-# ── 2. Create .app bundle structure ──────────────────────────────
+# ── 2. Compile frontend assets and create .app bundle structure ───
+echo "🔨 Compiling production React assets (npm run build)…"
+cd "$PROJECT_DIR"
+npm run build
+
 echo "📦 Packaging .app bundle…"
 rm -rf "$APP_BUNDLE"
 mkdir -p "$APP_BUNDLE/Contents/MacOS"
@@ -27,8 +31,13 @@ cp "$SCRIPT_DIR/Info.plist" "$APP_BUNDLE/Contents/Info.plist"
 cp "$SCRIPT_DIR/AppIcon.icns" "$APP_BUNDLE/Contents/Resources/AppIcon.icns"
 
 if [ -d "$PROJECT_DIR/dist" ]; then
-  echo "🌐 Bundling production web assets into FullCode.app..."
+  echo "🌐 Bundling production static assets into FullCode.app..."
   cp -R "$PROJECT_DIR/dist" "$APP_BUNDLE/Contents/Resources/dist"
+fi
+
+if [ -d "$PROJECT_DIR/server" ]; then
+  echo "🌐 Bundling backend server runtime into FullCode.app..."
+  cp -R "$PROJECT_DIR/server" "$APP_BUNDLE/Contents/Resources/server"
 fi
 
 # ── 3. Compile Swift Native Application ──────────────────────────

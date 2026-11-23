@@ -5,15 +5,47 @@ import { isHostedEnvironment } from '../hostedMode.js';
 const router = Router();
 const CANDIDATE_MODELS = [
   process.env.GEMINI_MODEL,
-  'gemini-2.5-flash',
-  'gemini-3.8-flash',
-  'gemini-2.0-flash',
   'gemini-1.5-flash',
-  'gemini-1.5-flash-8b',
+  'gemini-2.0-flash',
+  'gemini-1.5-flash-latest',
+  'gemini-2.0-flash-exp',
+  'gemini-1.5-pro',
+  'gemini-1.5-pro-latest',
+  'gemini-pro',
 ].filter(Boolean);
 
 let verifiedBackendModel = null;
+let cachedServerModels = null;
+let lastServerKey = '';
 const requestsByIp = new Map();
+
+async function getServerSupportedModels(key) {
+  if (!key) return CANDIDATE_MODELS;
+  if (cachedServerModels && lastServerKey === key) return cachedServerModels;
+  try {
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(key)}`, {
+      signal: AbortSignal.timeout(4000),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      const models = (data?.models || [])
+        .filter((m) => (m.supportedGenerationMethods || []).includes('generateContent'))
+        .map((m) => m.name.replace(/^models\//, ''))
+        .filter((name) => !name.includes('embedding') && !name.includes('aqa') && !name.includes('imagen'));
+      if (models.length > 0) {
+        models.sort((a, b) => {
+          const aWeight = a.includes('1.5-flash') ? 4 : a.includes('2.0-flash') ? 3 : a.includes('flash') ? 2 : 1;
+          const bWeight = b.includes('1.5-flash') ? 4 : b.includes('2.0-flash') ? 3 : b.includes('flash') ? 2 : 1;
+          return bWeight - aWeight;
+        });
+        cachedServerModels = models;
+        lastServerKey = key;
+        return models;
+      }
+    }
+  } catch {}
+  return CANDIDATE_MODELS;
+}
 
 function shouldCascadeModel(status, errMsg) {
   const normalized = (errMsg || '').toLowerCase();
@@ -86,10 +118,11 @@ router.post('/generate', (req, res, next) => {
   delete requestBody.model;
 
   // Build list of models to try in order
+  const candidateList = await getServerSupportedModels(key);
   const modelPool = [
     requestedModel,
     verifiedBackendModel,
-    ...CANDIDATE_MODELS,
+    ...candidateList,
   ].filter(Boolean);
   const modelsToTry = [...new Set(modelPool)];
 

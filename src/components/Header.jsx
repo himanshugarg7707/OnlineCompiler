@@ -195,6 +195,10 @@ export default function Header() {
     window.electronAPI?.isElectron ||
     window.__IS_DESKTOP_APP__
   );
+  const isMacNative = isNativeApp && (
+    (typeof navigator !== 'undefined' && /Mac|iPhone|iPod|iPad/.test(navigator.platform)) ||
+    (typeof window !== 'undefined' && (Boolean(window.webkit?.messageHandlers?.nativeHost) || window.__IS_MACOS_NATIVE__))
+  );
   const isLocalHost = isLocalEnvironment();
 
   const [activeMenu, setActiveMenu] = useState(null);
@@ -275,6 +279,7 @@ export default function Header() {
     return (
       <header className="header app-header header-minimized">
         <div className="header-min-left">
+          {isMacNative && <div className="mac-traffic-lights-spacer" />}
           <GodNavLogo
             isMinimized={true}
             onClick={() => dispatch({ type: 'NAVIGATE_PAGE', payload: 'editor' })}
@@ -341,6 +346,7 @@ export default function Header() {
     <header className="header app-header antigravity-top-bar" ref={menuBarRef}>
       {/* Left: Brand Logo (Aligned directly to the left) */}
       <div className="header-left">
+        {isMacNative && <div className="mac-traffic-lights-spacer" />}
         <GodNavLogo onClick={() => dispatch({ type: 'NAVIGATE_PAGE', payload: 'editor' })} />
 
         {/* Website Top Menubar (File, Edit, View, Go, Run, More) — Hidden in Native macOS Desktop App */}

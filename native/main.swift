@@ -23,7 +23,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigati
     var serverProcess: Process?
     var startedServerMyself = false
 
-    let appUrlString = "http://localhost:5173"
+    let appUrlString = "http://127.0.0.1:5001"
     var isCompiling = false
     var currentFileName = "main.py"
     var currentLanguage = "Python"
@@ -147,6 +147,55 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigati
 
         let contentController = WKUserContentController()
         contentController.add(self, name: "nativeHost")
+
+        // Eliminate Safari web browser behaviors (context menus, drag-drops, web shortcuts)
+        let nativeBootstrapScript = """
+        window.__IS_DESKTOP_APP__ = true;
+        window.__IS_MACOS_NATIVE__ = true;
+
+        document.addEventListener('DOMContentLoaded', function() {
+            document.body.classList.add('mac-native-app');
+            document.body.classList.add('electron-desktop-app');
+        });
+
+        // Suppress default Safari browser context menu (Inspect Element, Reload, Back, Forward)
+        document.addEventListener('contextmenu', function(e) {
+            var t = e.target;
+            if (t && (t.closest('.monaco-editor') || t.closest('.file-item') || t.closest('.file-tree') || t.closest('.has-custom-contextmenu') || t.closest('input') || t.closest('textarea'))) {
+                return;
+            }
+            e.preventDefault();
+        }, true);
+
+        // Prevent Safari drag navigation
+        document.addEventListener('dragover', function(e) { e.preventDefault(); }, false);
+        document.addEventListener('drop', function(e) { e.preventDefault(); }, false);
+
+        // Intercept browser shortcuts
+        document.addEventListener('keydown', function(e) {
+            var isCmd = e.metaKey || e.ctrlKey;
+            if (e.key === 'F5' || (isCmd && (e.key === 'r' || e.key === 'R') && !e.shiftKey)) {
+                e.preventDefault();
+                e.stopPropagation();
+                if (e.key === 'F5') {
+                    window.dispatchEvent(new CustomEvent('editor-run-code'));
+                }
+            }
+            if (isCmd && (e.key === 's' || e.key === 'S')) {
+                e.preventDefault();
+                e.stopPropagation();
+                window.dispatchEvent(new CustomEvent('editor-save-file'));
+            }
+            if (isCmd && (e.key === 'p' || e.key === 'P') && !e.shiftKey) {
+                e.preventDefault();
+                e.stopPropagation();
+                window.dispatchEvent(new CustomEvent('fullcode-open-command-palette', { detail: { mode: 'files' } }));
+            }
+        }, true);
+        """
+        let userScript = WKUserScript(source: nativeBootstrapScript, injectionTime: .atDocumentStart, forMainFrameOnly: false)
+        contentController.addUserScript(userScript)
+
         config.userContentController = contentController
 
         webView = WKWebView(frame: .zero, configuration: config)
@@ -154,9 +203,13 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigati
         webView.setValue(false, forKey: "drawsBackground") // Prevents white flash while loading
         webView.translatesAutoresizingMaskIntoConstraints = false
         webView.pageZoom = currentZoom
+        webView.allowsMagnification = false // Disables pinch-to-zoom trackpad gesture
+        webView.allowsBackForwardNavigationGestures = false // Disables swipe back/forward
         webView.customUserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) FullCodeNativeIDE/1.5.0"
 
         window.contentView!.addSubview(webView)
+        webView.enclosingScrollView?.horizontalScrollElasticity = .none
+        webView.enclosingScrollView?.verticalScrollElasticity = .none
         NSLayoutConstraint.activate([
             webView.topAnchor.constraint(equalTo: window.contentView!.topAnchor),
             webView.bottomAnchor.constraint(equalTo: window.contentView!.bottomAnchor),
@@ -289,9 +342,15 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigati
         self.startedServerMyself = true
         let projDir = self.projectDirectory
 
+        // Prefer project server script, fallback to bundled server in Contents/Resources/server
+        let bundledServer = Bundle.main.bundleURL.appendingPathComponent("Contents/Resources/server/index.js").path
+        let serverScript = FileManager.default.fileExists(atPath: "\(projDir)/server/index.js")
+            ? "\(projDir)/server/index.js"
+            : bundledServer
+
         let proc = Process()
         proc.executableURL = URL(fileURLWithPath: "/bin/zsh")
-        proc.arguments = ["-l", "-c", "cd '\(projDir)' && npm run dev"]
+        proc.arguments = ["-l", "-c", "cd '\(projDir)' && node '\(serverScript)'"]
 
         var env = ProcessInfo.processInfo.environment
         let pathsToAdd = "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$HOME/.nvm/versions/node/$(ls $HOME/.nvm/versions/node 2>/dev/null | tail -n 1)/bin"
@@ -300,13 +359,16 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigati
         } else {
             env["PATH"] = pathsToAdd
         }
+        env["PORT"] = "5001"
+        env["NODE_ENV"] = "production"
+        env["SERVE_STATIC"] = "1"
         proc.environment = env
 
         do {
             try proc.run()
             self.serverProcess = proc
         } catch {
-            print("Failed to auto-spawn npm run dev: \(error)")
+            print("Failed to auto-spawn node server: \(error)")
         }
 
         DispatchQueue.main.async { [weak self] in

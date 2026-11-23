@@ -19,17 +19,60 @@ const CODE_FIRST_CHAT_RULES = 'For requests to write, complete, or modify code, 
 const BRIEF_CHAT_RULES = 'Answer directly and briefly. For code requests, provide a complete code block first and limit the explanation to two short bullets. Keep prose under 180 words unless the user asks for detail.';
 
 const GEMINI_MODELS = [
-  'gemini-2.5-flash',
-  'gemini-3.8-flash',
-  'gemini-2.0-flash',
   'gemini-1.5-flash',
-  'gemini-1.5-flash-8b',
+  'gemini-2.0-flash',
+  'gemini-1.5-flash-latest',
+  'gemini-2.0-flash-exp',
+  'gemini-1.5-pro',
+  'gemini-1.5-pro-latest',
+  'gemini-pro',
 ];
 
-let activeGeminiModel = 'gemini-2.5-flash';
+let activeGeminiModel = 'gemini-1.5-flash';
+let cachedSupportedModels = null;
+let lastModelFetchKey = '';
 
 export function getActiveGeminiModel() {
   return activeGeminiModel;
+}
+
+/**
+ * Dynamically queries Google's ModelService.ListModels to discover
+ * exactly which models are supported and active for this specific API key.
+ */
+export async function getSupportedGeminiModels(apiKey) {
+  const trimmed = apiKey?.trim() || '';
+  if (!trimmed) return GEMINI_MODELS;
+  if (cachedSupportedModels && lastModelFetchKey === trimmed) {
+    return cachedSupportedModels;
+  }
+
+  try {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(trimmed)}`;
+    const res = await fetch(url, { signal: AbortSignal.timeout(4000) });
+    if (res.ok) {
+      const data = await res.json();
+      const models = (data?.models || [])
+        .filter((m) => (m.supportedGenerationMethods || []).includes('generateContent'))
+        .map((m) => m.name.replace(/^models\//, ''))
+        .filter((name) => !name.includes('embedding') && !name.includes('aqa') && !name.includes('imagen'));
+
+      if (models.length > 0) {
+        // Sort priority: flash models first, then pro
+        models.sort((a, b) => {
+          const aWeight = a.includes('1.5-flash') ? 4 : a.includes('2.0-flash') ? 3 : a.includes('flash') ? 2 : 1;
+          const bWeight = b.includes('1.5-flash') ? 4 : b.includes('2.0-flash') ? 3 : b.includes('flash') ? 2 : 1;
+          return bWeight - aWeight;
+        });
+        cachedSupportedModels = models;
+        lastModelFetchKey = trimmed;
+        return models;
+      }
+    }
+  } catch (e) {
+    // Network or timeout, fallback to GEMINI_MODELS
+  }
+  return GEMINI_MODELS;
 }
 
 function shouldCascadeModel(status, errMsg) {
@@ -97,9 +140,10 @@ function extractGeminiText(payload) {
 
 async function requestGemini(systemPrompt, prompt, apiKey, options = {}) {
   const trimmedKey = apiKey?.trim() || '';
+  const candidateModels = await getSupportedGeminiModels(trimmedKey);
   const modelsToTry = [
     activeGeminiModel,
-    ...GEMINI_MODELS.filter((m) => m !== activeGeminiModel),
+    ...candidateModels.filter((m) => m !== activeGeminiModel),
   ];
 
   let lastError = null;
@@ -215,6 +259,13 @@ async function requestGemini(systemPrompt, prompt, apiKey, options = {}) {
       if (err.code === 'NO_KEY_CONFIGURED') throw err;
       if (err.message?.includes('API_KEY_INVALID') || err.message?.includes('PERMISSION_DENIED')) throw err;
       lastError = err;
+    }
+  }
+
+  if (lastError) {
+    const msg = (lastError.message || '').toLowerCase();
+    if (msg.includes('high demand') || msg.includes('503') || msg.includes('capacity')) {
+      throw new Error('Google Gemini is currently experiencing a temporary demand spike across flash models. Please wait a moment and try again.');
     }
   }
 
