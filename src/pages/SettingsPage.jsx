@@ -547,9 +547,10 @@ export default function SettingsPage() {
   const handleTestGeminiConnection = async () => {
     setGeminiConnectionStatus('Checking Gemini key…');
     try {
-      await testGeminiConnection(localConfig.geminiApiKey);
-      setGeminiConnectionStatus('Connected. Lucia is ready to use Gemini.');
-      showToast('Gemini connected. Lucia is ready ✓');
+      const msg = await testGeminiConnection(localConfig.geminiApiKey);
+      const text = typeof msg === 'string' ? msg : 'Connected. Lucia is ready to use Gemini.';
+      setGeminiConnectionStatus(text);
+      showToast(text);
     } catch (error) {
       setGeminiConnectionStatus(error.message || 'Could not connect to Gemini.');
       showToast(error.message || 'Could not connect to Gemini.');
@@ -2333,13 +2334,12 @@ export default function SettingsPage() {
                   </div>
                   <div className="form-input-col">
                     <select
-                      value={localConfig.aiProvider || 'mock'}
+                      value={localConfig.aiProvider || 'gemini'}
                       onChange={(e) => handleConfigChange('aiProvider', e.target.value)}
                       className="settings-select"
                     >
-                      <option value="mock">Built-in Lucia (no API key)</option>
-                      <option value="gemini">Lucia AI powered by Gemini 3.8 Flash</option>
-
+                      <option value="gemini">Lucia AI powered by Gemini 3.8 Flash (Auto-Fallback)</option>
+                      <option value="mock">Built-in Lucia (offline / no API key)</option>
                     </select>
                   </div>
                 </div>

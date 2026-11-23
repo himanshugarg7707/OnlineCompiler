@@ -1000,7 +1000,7 @@ export default function SettingsModal() {
               <label className="toggle-switch">
                 <input
                   type="checkbox"
-                  checked={localConfig.aiProvider === 'gemini'}
+                  checked={localConfig.aiProvider !== 'mock'}
                   onChange={(e) => handleConfigChange('aiProvider', e.target.checked ? 'gemini' : 'mock')}
                 />
                 <span className="toggle-slider" />

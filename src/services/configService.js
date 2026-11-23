@@ -15,6 +15,7 @@ const DEFAULT_CONFIG = {
   // API Keys (Optional)
   claudeApiKey: '',
   geminiApiKey: '',
+  aiProvider: 'gemini',
   luciaResponseStyle: 'code-first',
   aiAssistantName: 'Lucia',
   aiConversationMode: 'code',
@@ -61,7 +62,8 @@ export function getConfig() {
     if (stored) {
       const parsed = JSON.parse(stored);
       if (parsed.aiProvider === 'lucia') parsed.aiProvider = 'gemini';
-      if (parsed.aiProvider && !['mock', 'gemini'].includes(parsed.aiProvider)) parsed.aiProvider = 'mock';
+      if (!parsed.aiProvider) parsed.aiProvider = 'gemini';
+      if (!['mock', 'gemini'].includes(parsed.aiProvider)) parsed.aiProvider = 'gemini';
       // Upgrade legacy or baby-pink themes to official Google Antigravity theme
       if ((parsed.theme === 'baby-pink' || !parsed.theme) && !localStorage.getItem('fullcode_antigravity_official_v4')) {
         localStorage.setItem('fullcode_antigravity_official_v4', 'true');
@@ -107,7 +109,7 @@ export function resetConfig() {
  */
 export function isAIReady() {
   const config = getConfig();
-  return config.aiProvider === 'gemini' && Boolean(config.geminiApiKey);
+  return config.aiProvider === 'gemini' || Boolean(config.geminiApiKey);
 }
 
 export function isExecutionReady() {

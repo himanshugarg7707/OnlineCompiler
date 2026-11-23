@@ -18,36 +18,167 @@ function getAssistantPrompt(config = getConfig()) {
 const CODE_FIRST_CHAT_RULES = 'For requests to write, complete, or modify code, put the complete runnable code first in one fenced code block, with at most one short note after it. Do not add a long explanation unless explicitly requested. For debugging, show the corrected code or smallest useful patch first. For questions without a code request, answer directly in no more than three concise bullets. Keep prose under 100 words unless the user asks for detail.';
 const BRIEF_CHAT_RULES = 'Answer directly and briefly. For code requests, provide a complete code block first and limit the explanation to two short bullets. Keep prose under 180 words unless the user asks for detail.';
 
-function usesGemini(config) {
-  return config.aiProvider === 'gemini';
+const GEMINI_MODELS = [
+  'gemini-3.8-flash',
+  'gemini-2.5-flash',
+  'gemini-2.0-flash',
+  'gemini-1.5-flash',
+];
+
+let activeGeminiModel = 'gemini-3.8-flash';
+
+export function getActiveGeminiModel() {
+  return activeGeminiModel;
 }
 
-async function requestGemini(systemPrompt, prompt, apiKey, options = {}) {
-  const model = 'gemini-3.8-flash';
-  const response = await fetch(apiKey?.trim()
-    ? `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`
-    : apiUrl('/api/ai/generate'), {
-    method: 'POST',
-    credentials: apiKey?.trim() ? 'omit' : 'include',
-    headers: { 'Content-Type': 'application/json', ...(apiKey?.trim() ? { 'x-goog-api-key': apiKey.trim() } : {}) },
-    body: JSON.stringify({
-      system_instruction: { parts: [{ text: systemPrompt }] },
-      contents: [{ role: 'user', parts: [{ text: prompt }] }],
-      generationConfig: { temperature: options.temperature ?? 0.35, maxOutputTokens: options.maxOutputTokens ?? 8192 },
-    }),
-  });
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(`Lucia could not reach Gemini: ${payload?.error?.message || `HTTP ${response.status}`}`);
+function usesGemini(config = getConfig()) {
+  if (config.aiProvider === 'mock') return false;
+  return config.aiProvider === 'gemini' || Boolean(config.geminiApiKey?.trim());
+}
+
+function extractGeminiText(payload) {
   const candidate = payload?.candidates?.[0];
-  const text = candidate?.content?.parts
-    ?.map((part) => typeof part?.text === 'string' ? part.text : '')
+  const parts = candidate?.content?.parts || [];
+  const visibleParts = parts.filter((part) => !part?.thought);
+  const selectedParts = visibleParts.length > 0 ? visibleParts : parts;
+  const text = selectedParts
+    .map((part) => (typeof part?.text === 'string' ? part.text : ''))
     .filter(Boolean)
     .join('')
     .trim();
-  if (!text) throw new Error('Lucia received an empty response from Gemini. Check the key and try again.');
+
+  if (!text) {
+    const finishReason = candidate?.finishReason;
+    if (finishReason && finishReason !== 'STOP') {
+      throw new Error(`Lucia received finish status "${finishReason}" from Gemini.`);
+    }
+    throw new Error('Lucia received an empty response from Gemini. Check your API key and try again.');
+  }
+
   return candidate?.finishReason === 'MAX_TOKENS'
     ? `${text}\n\n*This reply reached Gemini’s response limit. Ask “continue” for the rest.*`
     : text;
+}
+
+async function requestGemini(systemPrompt, prompt, apiKey, options = {}) {
+  const trimmedKey = apiKey?.trim() || '';
+  const modelsToTry = [
+    activeGeminiModel,
+    ...GEMINI_MODELS.filter((m) => m !== activeGeminiModel),
+  ];
+
+  let lastError = null;
+
+  for (const model of modelsToTry) {
+    try {
+      if (trimmedKey) {
+        // Direct browser call with ?key=... URL param and x-goog-api-key header
+        const directUrl = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(trimmedKey)}`;
+        const reqBody = {
+          system_instruction: { parts: [{ text: systemPrompt }] },
+          contents: [{ role: 'user', parts: [{ text: prompt }] }],
+          generationConfig: {
+            temperature: options.temperature ?? 0.35,
+            maxOutputTokens: options.maxOutputTokens ?? 8192,
+          },
+        };
+
+        let response = null;
+        let directFetchFailed = false;
+
+        try {
+          response = await fetch(directUrl, {
+            method: 'POST',
+            credentials: 'omit',
+            headers: {
+              'Content-Type': 'application/json',
+              'x-goog-api-key': trimmedKey,
+            },
+            body: JSON.stringify(reqBody),
+          });
+        } catch (fetchErr) {
+          // Direct fetch failed (CORS or network policy) - fallback to backend proxy
+          directFetchFailed = true;
+        }
+
+        if (directFetchFailed || !response) {
+          try {
+            response = await fetch(apiUrl('/api/ai/generate'), {
+              method: 'POST',
+              credentials: 'omit',
+              headers: {
+                'Content-Type': 'application/json',
+                'x-goog-api-key': trimmedKey,
+              },
+              body: JSON.stringify({
+                ...reqBody,
+                apiKey: trimmedKey,
+                model,
+              }),
+            });
+          } catch (proxyErr) {
+            throw new Error(`Lucia could not reach AI endpoint: ${proxyErr.message}`);
+          }
+        }
+
+        const payload = await response.json().catch(() => ({}));
+
+        if (!response.ok) {
+          const errMsg = payload?.error?.message || `HTTP ${response.status}`;
+          // If model is not found or unsupported, cascade to next candidate model
+          if (response.status === 404 || errMsg.toLowerCase().includes('not found') || errMsg.toLowerCase().includes('not supported')) {
+            lastError = new Error(`Model ${model} unavailable: ${errMsg}`);
+            continue;
+          }
+          throw new Error(`Lucia could not reach Gemini: ${errMsg}`);
+        }
+
+        activeGeminiModel = payload?._usedModel || model;
+        return extractGeminiText(payload);
+      } else {
+        // Query backend proxy route
+        const response = await fetch(apiUrl('/api/ai/generate'), {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            model,
+            system_instruction: { parts: [{ text: systemPrompt }] },
+            contents: [{ role: 'user', parts: [{ text: prompt }] }],
+            generationConfig: {
+              temperature: options.temperature ?? 0.35,
+              maxOutputTokens: options.maxOutputTokens ?? 8192,
+            },
+          }),
+        });
+
+        const payload = await response.json().catch(() => ({}));
+
+        if (!response.ok) {
+          const errMsg = payload?.error?.message || `HTTP ${response.status}`;
+          if (response.status === 503) {
+            const err = new Error(errMsg);
+            err.code = 'NO_KEY_CONFIGURED';
+            throw err;
+          }
+          if (response.status === 404 || errMsg.toLowerCase().includes('not found') || errMsg.toLowerCase().includes('not supported')) {
+            lastError = new Error(`Model ${model} unavailable: ${errMsg}`);
+            continue;
+          }
+          throw new Error(`Lucia could not reach Gemini: ${errMsg}`);
+        }
+
+        activeGeminiModel = payload?._usedModel || model;
+        return extractGeminiText(payload);
+      }
+    } catch (err) {
+      if (err.code === 'NO_KEY_CONFIGURED') throw err;
+      if (err.message?.includes('API_KEY_INVALID') || err.message?.includes('PERMISSION_DENIED')) throw err;
+      lastError = err;
+    }
+  }
+
+  throw lastError || new Error('Lucia could not connect to Gemini with any supported model.');
 }
 
 function codeContext(code, language, extra = '') {
@@ -60,7 +191,8 @@ function parseJsonResponse(text) {
 }
 
 export async function testGeminiConnection(apiKey) {
-  return requestGemini(getAssistantPrompt(), 'Reply with exactly: Connected.', apiKey, { maxOutputTokens: 32 });
+  await requestGemini(getAssistantPrompt(), 'Reply with exactly: Connected.', apiKey, { maxOutputTokens: 32 });
+  return `Connected via ${activeGeminiModel} ✓`;
 }
 
 // ─── Error Explanation ──────────────────────────────────────────────────────
@@ -69,11 +201,19 @@ export async function explainError(code, error, language) {
   const config = getConfig();
 
   if (usesGemini(config)) {
-    return requestGemini(
-      `${getAssistantPrompt(config)} Explain compiler/runtime errors in plain language, identify likely source locations, and give a concrete fix.`,
-      `${codeContext(code, language, `Compiler/runtime error:\n${error || '(no error text)'}`)}\n\nExplain the error and suggest a fix.`,
-      config.geminiApiKey
-    );
+    try {
+      return await requestGemini(
+        `${getAssistantPrompt(config)} Explain compiler/runtime errors in plain language, identify likely source locations, and give a concrete fix.`,
+        `${codeContext(code, language, `Compiler/runtime error:\n${error || '(no error text)'}`)}\n\nExplain the error and suggest a fix.`,
+        config.geminiApiKey
+      );
+    } catch (err) {
+      if (err.code === 'NO_KEY_CONFIGURED') {
+        const fallback = await mockExplainError(code, error, language);
+        return `> 💡 **Lucia Note:** To enable live **Gemini 3.8 Flash**, enter your Google Gemini API key in **Settings → AI & Diagnostics**.\n\n${fallback}`;
+      }
+      throw err;
+    }
   }
 
   return mockExplainError(code, error, language);
@@ -166,11 +306,19 @@ export async function explainCode(code, language) {
   const config = getConfig();
 
   if (usesGemini(config)) {
-    return requestGemini(
-      `${getAssistantPrompt(config)} Explain the code's purpose, execution flow, important variables, and likely edge cases.`,
-      `${codeContext(code, language)}\n\nExplain this code clearly, including a short walkthrough.`,
-      config.geminiApiKey
-    );
+    try {
+      return await requestGemini(
+        `${getAssistantPrompt(config)} Explain the code's purpose, execution flow, important variables, and likely edge cases.`,
+        `${codeContext(code, language)}\n\nExplain this code clearly, including a short walkthrough.`,
+        config.geminiApiKey
+      );
+    } catch (err) {
+      if (err.code === 'NO_KEY_CONFIGURED') {
+        const fallback = await mockExplainCode(code, language);
+        return `> 💡 **Lucia Note:** To enable live **Gemini 3.8 Flash**, enter your Google Gemini API key in **Settings → AI & Diagnostics**.\n\n${fallback}`;
+      }
+      throw err;
+    }
   }
 
   return mockExplainCode(code, language);
@@ -328,16 +476,23 @@ export async function generateInputs(code, language) {
   const config = getConfig();
 
   if (usesGemini(config)) {
-    const response = await requestGemini(
-      `${getAssistantPrompt(config)} Create valid standard input for the supplied program. Return only JSON with string fields "input" and "description".`,
-      `${codeContext(code, language)}\n\nGenerate a realistic sample input that matches this program.`,
-      config.geminiApiKey,
-      { temperature: 0.2 }
-    );
-    const parsed = parseJsonResponse(response);
-    return parsed?.input !== undefined
-      ? { input: String(parsed.input), description: String(parsed.description || 'Generated by Lucia AI') }
-      : { input: response, description: 'Generated by Lucia AI' };
+    try {
+      const response = await requestGemini(
+        `${getAssistantPrompt(config)} Create valid standard input for the supplied program. Return only JSON with string fields "input" and "description".`,
+        `${codeContext(code, language)}\n\nGenerate a realistic sample input that matches this program.`,
+        config.geminiApiKey,
+        { temperature: 0.2 }
+      );
+      const parsed = parseJsonResponse(response);
+      return parsed?.input !== undefined
+        ? { input: String(parsed.input), description: String(parsed.description || 'Generated by Lucia AI (Gemini)') }
+        : { input: response, description: 'Generated by Lucia AI (Gemini)' };
+    } catch (err) {
+      if (err.code === 'NO_KEY_CONFIGURED') {
+        return mockGenerateInputs(code, language);
+      }
+      throw err;
+    }
   }
 
   return mockGenerateInputs(code, language);
@@ -447,20 +602,27 @@ export async function getLogicHint(code, language, hintLevel = 1) {
   const config = getConfig();
 
   if (usesGemini(config)) {
-    const response = await requestGemini(
-      `${getAssistantPrompt(config)} Give one useful programming hint at the requested level. Avoid giving a complete solution unless the student asks. Return JSON with string fields "title" and "content".`,
-      `${codeContext(code, language)}\n\nGive hint level ${hintLevel} for understanding or improving this code.`,
-      config.geminiApiKey,
-      { temperature: 0.4 }
-    );
-    const parsed = parseJsonResponse(response);
-    return {
-      level: hintLevel,
-      title: String(parsed?.title || `Lucia Hint ${hintLevel}`),
-      content: String(parsed?.content || response),
-      totalHints: 3,
-      hasNext: hintLevel < 3,
-    };
+    try {
+      const response = await requestGemini(
+        `${getAssistantPrompt(config)} Give one useful programming hint at the requested level. Avoid giving a complete solution unless the student asks. Return JSON with string fields "title" and "content".`,
+        `${codeContext(code, language)}\n\nGive hint level ${hintLevel} for understanding or improving this code.`,
+        config.geminiApiKey,
+        { temperature: 0.4 }
+      );
+      const parsed = parseJsonResponse(response);
+      return {
+        level: hintLevel,
+        title: String(parsed?.title || `Lucia Hint ${hintLevel}`),
+        content: String(parsed?.content || response),
+        totalHints: 3,
+        hasNext: hintLevel < 3,
+      };
+    } catch (err) {
+      if (err.code === 'NO_KEY_CONFIGURED') {
+        return mockGetHint(code, language, hintLevel);
+      }
+      throw err;
+    }
   }
 
   return mockGetHint(code, language, hintLevel);
@@ -579,15 +741,23 @@ export async function chatWithAI(messages, code, language, output = '', error = 
   const config = getConfig();
 
   if (usesGemini(config)) {
-    const question = typeof messages === 'string' ? messages : messages?.at(-1)?.content || '';
-    const turns = history.slice(-10).map((turn) => `${turn.role === 'assistant' ? 'Lucia' : 'User'}: ${toPlainText(turn.content)}`).join('\n\n');
-    const context = [
-      codeContext(code, language, [output ? `Latest output:\n${String(output).slice(0, 4000)}` : '', error ? `Latest error:\n${String(error).slice(0, 4000)}` : ''].filter(Boolean).join('\n\n')),
-      turns ? `Recent conversation:\n${turns}` : '',
-      `User question:\n${question}`,
-    ].filter(Boolean).join('\n\n');
-    const responseRules = config.luciaResponseStyle === 'balanced' ? BRIEF_CHAT_RULES : CODE_FIRST_CHAT_RULES;
-    return requestGemini(`${getAssistantPrompt(config)} ${responseRules}`, context, config.geminiApiKey, { maxOutputTokens: 3072, temperature: 0.25 });
+    try {
+      const question = typeof messages === 'string' ? messages : messages?.at(-1)?.content || '';
+      const turns = history.slice(-10).map((turn) => `${turn.role === 'assistant' ? 'Lucia' : 'User'}: ${toPlainText(turn.content)}`).join('\n\n');
+      const context = [
+        codeContext(code, language, [output ? `Latest output:\n${String(output).slice(0, 4000)}` : '', error ? `Latest error:\n${String(error).slice(0, 4000)}` : ''].filter(Boolean).join('\n\n')),
+        turns ? `Recent conversation:\n${turns}` : '',
+        `User question:\n${question}`,
+      ].filter(Boolean).join('\n\n');
+      const responseRules = config.luciaResponseStyle === 'balanced' ? BRIEF_CHAT_RULES : CODE_FIRST_CHAT_RULES;
+      return await requestGemini(`${getAssistantPrompt(config)} ${responseRules}`, context, config.geminiApiKey, { maxOutputTokens: 3072, temperature: 0.25 });
+    } catch (err) {
+      if (err.code === 'NO_KEY_CONFIGURED') {
+        const fallback = await mockChat(messages, code, language);
+        return `> 💡 **Lucia Note:** Add a Google Gemini API key in **Settings → AI & Diagnostics** to chat with live **Gemini 3.8 Flash**.\n\n${fallback}`;
+      }
+      throw err;
+    }
   }
 
   return mockChat(messages, code, language);
