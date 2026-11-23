@@ -5,14 +5,49 @@ import { isHostedEnvironment } from '../hostedMode.js';
 const router = Router();
 const CANDIDATE_MODELS = [
   process.env.GEMINI_MODEL,
-  'gemini-3.8-flash',
   'gemini-2.5-flash',
+  'gemini-3.8-flash',
   'gemini-2.0-flash',
   'gemini-1.5-flash',
+  'gemini-1.5-flash-8b',
 ].filter(Boolean);
 
 let verifiedBackendModel = null;
 const requestsByIp = new Map();
+
+function shouldCascadeModel(status, errMsg) {
+  const normalized = (errMsg || '').toLowerCase();
+  // Don't cascade if the user's API key itself is permanently invalid
+  if (
+    normalized.includes('api key not valid') ||
+    normalized.includes('api_key_invalid') ||
+    normalized.includes('bad api key') ||
+    normalized.includes('key has expired')
+  ) {
+    return false;
+  }
+  // Always cascade on server unavailable, high demand, rate limit, capacity, not found, overload
+  if ([404, 429, 500, 502, 503, 504].includes(status)) {
+    return true;
+  }
+  if (
+    normalized.includes('high demand') ||
+    normalized.includes('spikes in demand') ||
+    normalized.includes('overloaded') ||
+    normalized.includes('capacity') ||
+    normalized.includes('unavailable') ||
+    normalized.includes('resource_exhausted') ||
+    normalized.includes('rate limit') ||
+    normalized.includes('quota') ||
+    normalized.includes('not found') ||
+    normalized.includes('not supported') ||
+    normalized.includes('try again') ||
+    normalized.includes('temporary')
+  ) {
+    return true;
+  }
+  return false;
+}
 
 router.post('/generate', (req, res, next) => {
   if (isHostedEnvironment()) return requireAuth(req, res, next);
@@ -87,8 +122,8 @@ router.post('/generate', (req, res, next) => {
       lastPayload = payload;
 
       const errMsg = (payload?.error?.message || '').toLowerCase();
-      // If model not found or unsupported, try next model in cascade
-      if (upstream.status === 404 || errMsg.includes('not found') || errMsg.includes('not supported')) {
+      // If model not found, overloaded, high demand, rate limited, try next model in cascade
+      if (shouldCascadeModel(upstream.status, errMsg)) {
         continue;
       }
 

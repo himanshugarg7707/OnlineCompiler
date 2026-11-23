@@ -2338,7 +2338,7 @@ export default function SettingsPage() {
                       onChange={(e) => handleConfigChange('aiProvider', e.target.value)}
                       className="settings-select"
                     >
-                      <option value="gemini">Lucia AI powered by Gemini 3.8 Flash (Auto-Fallback)</option>
+                      <option value="gemini">Lucia AI (Gemini Flash with High-Demand Auto-Failover)</option>
                       <option value="mock">Built-in Lucia (offline / no API key)</option>
                     </select>
                   </div>

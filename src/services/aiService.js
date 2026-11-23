@@ -19,16 +19,51 @@ const CODE_FIRST_CHAT_RULES = 'For requests to write, complete, or modify code, 
 const BRIEF_CHAT_RULES = 'Answer directly and briefly. For code requests, provide a complete code block first and limit the explanation to two short bullets. Keep prose under 180 words unless the user asks for detail.';
 
 const GEMINI_MODELS = [
-  'gemini-3.8-flash',
   'gemini-2.5-flash',
+  'gemini-3.8-flash',
   'gemini-2.0-flash',
   'gemini-1.5-flash',
+  'gemini-1.5-flash-8b',
 ];
 
-let activeGeminiModel = 'gemini-3.8-flash';
+let activeGeminiModel = 'gemini-2.5-flash';
 
 export function getActiveGeminiModel() {
   return activeGeminiModel;
+}
+
+function shouldCascadeModel(status, errMsg) {
+  const normalized = (errMsg || '').toLowerCase();
+  // Don't cascade if the user's API key itself is permanently invalid
+  if (
+    normalized.includes('api key not valid') ||
+    normalized.includes('api_key_invalid') ||
+    normalized.includes('bad api key') ||
+    normalized.includes('key has expired')
+  ) {
+    return false;
+  }
+  // Always cascade on server unavailable, high demand, rate limit, capacity, not found, overload
+  if ([404, 429, 500, 502, 503, 504].includes(status)) {
+    return true;
+  }
+  if (
+    normalized.includes('high demand') ||
+    normalized.includes('spikes in demand') ||
+    normalized.includes('overloaded') ||
+    normalized.includes('capacity') ||
+    normalized.includes('unavailable') ||
+    normalized.includes('resource_exhausted') ||
+    normalized.includes('rate limit') ||
+    normalized.includes('quota') ||
+    normalized.includes('not found') ||
+    normalized.includes('not supported') ||
+    normalized.includes('try again') ||
+    normalized.includes('temporary')
+  ) {
+    return true;
+  }
+  return false;
 }
 
 function usesGemini(config = getConfig()) {
@@ -125,8 +160,8 @@ async function requestGemini(systemPrompt, prompt, apiKey, options = {}) {
 
         if (!response.ok) {
           const errMsg = payload?.error?.message || `HTTP ${response.status}`;
-          // If model is not found or unsupported, cascade to next candidate model
-          if (response.status === 404 || errMsg.toLowerCase().includes('not found') || errMsg.toLowerCase().includes('not supported')) {
+          // If model is experiencing high demand, capacity issues, 404, 429, 503, cascade to next candidate model
+          if (shouldCascadeModel(response.status, errMsg)) {
             lastError = new Error(`Model ${model} unavailable: ${errMsg}`);
             continue;
           }
@@ -156,12 +191,12 @@ async function requestGemini(systemPrompt, prompt, apiKey, options = {}) {
 
         if (!response.ok) {
           const errMsg = payload?.error?.message || `HTTP ${response.status}`;
-          if (response.status === 503) {
+          if (response.status === 503 && errMsg.toLowerCase().includes('server key is not configured')) {
             const err = new Error(errMsg);
             err.code = 'NO_KEY_CONFIGURED';
             throw err;
           }
-          if (response.status === 404 || errMsg.toLowerCase().includes('not found') || errMsg.toLowerCase().includes('not supported')) {
+          if (shouldCascadeModel(response.status, errMsg)) {
             lastError = new Error(`Model ${model} unavailable: ${errMsg}`);
             continue;
           }
