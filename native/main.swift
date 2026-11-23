@@ -299,16 +299,13 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigati
 
     // ── Auto-Start Local Services ────────────────────────────────────────────
     private func ensureServicesAndLoad() {
-        // Immediately start loading so the app opens instantly
-        loadAppUrl()
-
         checkServerReachable { [weak self] isRunning in
             guard let self = self else { return }
             DispatchQueue.main.async {
                 if isRunning {
                     self.loadAppUrl()
                 } else {
-                    self.loadingLabel?.stringValue = "Launching local dev & native compiler server…"
+                    self.loadingLabel?.stringValue = "Launching local FullCode backend…"
                     self.startBackgroundServer {
                         DispatchQueue.main.async {
                             self.loadAppUrl()
@@ -393,16 +390,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigati
     }
 
     private func loadAppUrl() {
-        if let url = URL(string: appUrlString) {
-            webView.load(URLRequest(url: url))
-        } else if let bundledDist = Bundle.main.url(forResource: "index", withExtension: "html", subdirectory: "dist") {
-            webView.loadFileURL(bundledDist, allowingReadAccessTo: bundledDist.deletingLastPathComponent())
-        }
-
-        // Safety failsafe: always dismiss loading overlay within 1.2s max so it never hangs
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { [weak self] in
-            self?.hideLoadingOverlay()
-        }
+        guard let url = URL(string: appUrlString) else { return }
+        webView.load(URLRequest(url: url))
     }
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
@@ -411,11 +400,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigati
     }
 
     func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
-        if let bundledDist = Bundle.main.url(forResource: "index", withExtension: "html", subdirectory: "dist") {
-            webView.loadFileURL(bundledDist, allowingReadAccessTo: bundledDist.deletingLastPathComponent())
-        }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
-            self?.hideLoadingOverlay()
+        print("[FullCode Native] Navigation pending server ready: \(error.localizedDescription). Retrying...")
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+            self?.loadAppUrl()
         }
     }
 

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { AppProvider, useApp } from './context/AppContext';
 import Header from './components/Header';
@@ -62,6 +62,7 @@ import {
   Sparkles,
   CircleUser,
   Settings,
+  Columns2,
 } from 'lucide-react';
 import './App.css';
 
@@ -89,6 +90,7 @@ function AppContent() {
     handleDownloadWorkspace,
     handleToggleSplitView,
     handleUpdateConfig,
+    handleGitPush,
     showToast,
   } = useApp();
   const { explorerOpen, practiceOpen, toast, terminalHidden } = state;

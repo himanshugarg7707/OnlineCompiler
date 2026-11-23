@@ -72,7 +72,9 @@ app.use(['/api/ai', '/ai'], aiRoutes);
 // Static frontend serving for production desktop/web distributions
 if (fs.existsSync(distPath)) {
   app.use(express.static(distPath));
-  app.get('*', (req, res, next) => {
+  // In Express 5, use fallback middleware (avoids PathError from app.get('*'))
+  app.use((req, res, next) => {
+    if (req.method !== 'GET') return next();
     if (req.path.startsWith('/api') || req.path.startsWith('/db') || req.path.startsWith('/execute') || req.path.startsWith('/health')) {
       return next();
     }
