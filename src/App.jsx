@@ -141,31 +141,7 @@ function AppContent() {
       window.removeEventListener('pointerup', onPointerUp);
     };
   }, [isWebPreviewResizing, webPreviewWidth]);
-  const runCollapsedRailAction = (action) => {
-    switch (action) {
-      case 'collaboration': dispatch({ type: 'TOGGLE_COLLAB_MODAL' }); break;
-      case 'about': dispatch({ type: 'SET_WELCOME_MODAL', payload: true }); break;
-      case 'notebooks': dispatch({ type: 'NAVIGATE_PAGE', payload: 'notebook-setup' }); break;
-      case 'practice': dispatch({ type: 'NAVIGATE_PAGE', payload: 'practice' }); break;
-      case 'exam': dispatch({ type: 'NAVIGATE_PAGE', payload: 'exam' }); break;
-      case 'templates': dispatch({ type: 'NAVIGATE_PAGE', payload: 'templates' }); break;
-      case 'visualizer': window.dispatchEvent(new CustomEvent('open-dsa-visualizer')); break;
-      case 'database': dispatch({ type: 'NAVIGATE_PAGE', payload: 'sql' }); window.location.hash = '#/sql'; break;
-      case 'test-suite': dispatch({ type: 'NAVIGATE_PAGE', payload: 'test-suite' }); window.location.hash = '#/test-suite'; break;
-      default: break;
-    }
-  };
-  const collapsedMoreShortcuts = [
-    { title: 'Live Room Collaboration', action: 'collaboration', Icon: Users },
-    { title: 'About Full Code', action: 'about', Icon: Info },
-    { title: 'Subject Course Notebooks', action: 'notebooks', Icon: BookOpen },
-    { title: 'DSA Practice Lab', action: 'practice', Icon: Code2 },
-    { title: 'Proctored Exam & Tests', action: 'exam', Icon: Timer },
-    { title: 'Code Templates & Snippets', action: 'templates', Icon: Braces },
-    { title: 'DSA & Memory Visualizer', action: 'visualizer', Icon: BrainCircuit },
-    { title: 'Database & SQL Explorer', action: 'database', Icon: Database },
-    { title: 'Test Case Suite & Stress Tester', action: 'test-suite', Icon: FlaskConical },
-  ];
+
   const isNotebookActive = Boolean(
     activeFile?.name?.endsWith('.ipynb') ||
     state.detectedLanguage?.monacoLanguage === 'ipynb' ||
@@ -881,31 +857,120 @@ function AppContent() {
       )}
 
       <div className="app-body" ref={appBodyRef}>
-        {/* Left File Explorer Sidebar */}
+        {/* Left File Explorer Sidebar (Collapsed Activity Bar) */}
         {!explorerOpen && (
-          <div
+          <aside
             className="explorer-collapsed-rail"
-            onClick={() => dispatch({ type: 'TOGGLE_EXPLORER' })}
-            title="Expand File Explorer (Ctrl+Shift+E)"
+            aria-label="Activity Bar"
           >
-            <FolderTree size={15} className="rail-folder-icon" />
-            <span className="rail-vertical-text">EXPLORER</span>
-            <div className="collapsed-rail-actions" onClick={(event) => event.stopPropagation()}>
-              {collapsedMoreShortcuts.map(({ title, action, Icon }) => (
-                <button
-                  key={action}
-                  type="button"
-                  className="collapsed-rail-action"
-                  title={title}
-                  aria-label={title}
-                  onClick={() => runCollapsedRailAction(action)}
-                >
-                  <Icon size={15} />
-                </button>
-              ))}
+            {/* Top Icon Group */}
+            <div className="rail-top-group">
+              <button
+                type="button"
+                className="rail-item-btn"
+                title="Explorer (Ctrl+Shift+E)"
+                aria-label="Explorer"
+                onClick={() => dispatch({ type: 'TOGGLE_EXPLORER' })}
+              >
+                <Files size={21} strokeWidth={1.75} />
+              </button>
+
+              <button
+                type="button"
+                className="rail-item-btn"
+                title="Search & Quick Open (⌘P / Ctrl+P)"
+                aria-label="Search"
+                onClick={() => window.dispatchEvent(new CustomEvent('fullcode-open-command-palette', { detail: { mode: 'files' } }))}
+              >
+                <Search size={21} strokeWidth={1.75} />
+              </button>
+
+              <button
+                type="button"
+                className="rail-item-btn"
+                title="Source Control & Git Studio"
+                aria-label="Source Control"
+                onClick={() => {
+                  dispatch({ type: 'NAVIGATE_PAGE', payload: 'git' });
+                  window.location.hash = '#/git';
+                }}
+              >
+                <GitBranch size={21} strokeWidth={1.75} />
+                {gitStatus.totalCount > 0 && (
+                  <span className="rail-badge-count">{gitStatus.totalCount}</span>
+                )}
+              </button>
+
+              <button
+                type="button"
+                className="rail-item-btn"
+                title="Run & Step-by-Step Visualizer (⌘⇧V)"
+                aria-label="Run and Debug"
+                onClick={() => {
+                  dispatch({ type: 'SET_TERMINAL_HIDDEN', payload: false });
+                  dispatch({ type: 'SET_TERMINAL_TAB', payload: 'visualizer' });
+                }}
+              >
+                <PlaySquare size={21} strokeWidth={1.75} />
+              </button>
+
+              <button
+                type="button"
+                className="rail-item-btn"
+                title="Code Templates & Snippets"
+                aria-label="Extensions & Templates"
+                onClick={() => dispatch({ type: 'SET_TEMPLATES_MODAL', payload: true })}
+              >
+                <Boxes size={21} strokeWidth={1.75} />
+              </button>
+
+              <button
+                type="button"
+                className="rail-item-btn"
+                title="Test Case Suite & Stress Tester"
+                aria-label="Testing"
+                onClick={() => {
+                  dispatch({ type: 'NAVIGATE_PAGE', payload: 'test-suite' });
+                  window.location.hash = '#/test-suite';
+                }}
+              >
+                <FlaskConical size={21} strokeWidth={1.75} />
+              </button>
+
+              <button
+                type="button"
+                className="rail-item-btn"
+                title="Lucia AI Assistant (Chat & Code Explanations)"
+                aria-label="Lucia AI"
+                onClick={() => dispatch({ type: 'TOGGLE_SIDEBAR' })}
+              >
+                <Sparkles size={21} strokeWidth={1.75} />
+              </button>
             </div>
-            <ChevronRight size={12} className="rail-expand-arrow" />
-          </div>
+
+            {/* Bottom Icon Group */}
+            <div className="rail-bottom-group">
+              <button
+                type="button"
+                className="rail-item-btn"
+                title="Accounts & Live Room Collaboration"
+                aria-label="Accounts"
+                onClick={() => dispatch({ type: 'TOGGLE_COLLAB_MODAL' })}
+              >
+                <CircleUser size={21} strokeWidth={1.75} />
+              </button>
+
+              <button
+                type="button"
+                className="rail-item-btn"
+                title="Settings (⌘,)"
+                aria-label="Settings"
+                onClick={() => dispatch({ type: 'TOGGLE_SETTINGS' })}
+              >
+                <Settings size={21} strokeWidth={1.75} />
+              </button>
+            </div>
+          </aside>
         )}
 
         {explorerOpen && (
