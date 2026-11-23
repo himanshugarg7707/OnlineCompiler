@@ -488,6 +488,16 @@ export default function Header() {
               <div className="menu-dropdown animate-fade-in">
                 <button
                   className="dropdown-entry"
+                  onClick={() => closeMenuAndRun(() => {
+                    window.dispatchEvent(new CustomEvent('fullcode-open-command-palette', { detail: { mode: 'commands' } }));
+                  })}
+                >
+                  <span>Command Palette...</span>
+                  <kbd>⌘⇧P</kbd>
+                </button>
+                <div className="dropdown-divider" />
+                <button
+                  className="dropdown-entry"
                   onClick={() => closeMenuAndRun(() => dispatch({ type: 'TOGGLE_EXPLORER' }))}
                 >
                   <span>Toggle File Explorer</span>
@@ -578,15 +588,11 @@ export default function Header() {
                 <button
                   className="dropdown-entry"
                   onClick={() => closeMenuAndRun(() => {
-                    if (!explorerOpen) dispatch({ type: 'TOGGLE_EXPLORER' });
-                    setTimeout(() => {
-                      const searchInput = document.querySelector('.explorer-search-input');
-                      searchInput?.focus();
-                    }, 50);
+                    window.dispatchEvent(new CustomEvent('fullcode-open-command-palette', { detail: { mode: 'files' } }));
                   })}
                 >
                   <span>Go to File...</span>
-                  <kbd>Ctrl+P</kbd>
+                  <kbd>⌘P</kbd>
                 </button>
                 <button
                   className="dropdown-entry"

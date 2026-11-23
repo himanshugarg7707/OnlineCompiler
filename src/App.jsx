@@ -22,6 +22,7 @@ import BranchSwitcherModal from './components/BranchSwitcherModal';
 import WelcomeLandingModal from './components/WelcomeLandingModal';
 import TemplatesModal from './components/TemplatesModal';
 import DsaVisualizerModal from './components/DsaVisualizerModal';
+import CommandPaletteModal from './components/CommandPaletteModal';
 import SharedWorkspaceBanner from './components/SharedWorkspaceBanner';
 import SettingsPage from './pages/SettingsPage';
 import NotebookSetupPage from './pages/NotebookSetupPage';
@@ -152,10 +153,24 @@ function AppContent() {
   // Interactive DSA & Execution Visualizer Modal State
   const [dsaVisualizerOpen, setDsaVisualizerOpen] = useState(false);
 
+  // Command Palette & Quick File Open Modal State
+  const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
+  const [commandPaletteMode, setCommandPaletteMode] = useState('commands');
+
   useEffect(() => {
     const handleOpenDsa = () => setDsaVisualizerOpen(true);
     window.addEventListener('open-dsa-visualizer', handleOpenDsa);
-    return () => window.removeEventListener('open-dsa-visualizer', handleOpenDsa);
+
+    const handleOpenPalette = (e) => {
+      setCommandPaletteMode(e.detail?.mode || 'commands');
+      setCommandPaletteOpen(true);
+    };
+    window.addEventListener('fullcode-open-command-palette', handleOpenPalette);
+
+    return () => {
+      window.removeEventListener('open-dsa-visualizer', handleOpenDsa);
+      window.removeEventListener('fullcode-open-command-palette', handleOpenPalette);
+    };
   }, []);
 
   // Vertical Editor/Terminal Split
@@ -206,6 +221,22 @@ function AppContent() {
   // Global Keyboard Shortcuts
   useEffect(() => {
     const handleKeyDown = (e) => {
+      // Cmd+Shift+P or Ctrl+Shift+P: Command Palette
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'p' || e.key === 'P')) {
+        e.preventDefault();
+        e.stopPropagation();
+        setCommandPaletteMode('commands');
+        setCommandPaletteOpen(true);
+        return;
+      }
+      // Cmd+P or Ctrl+P: Quick File Switcher
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && (e.key === 'p' || e.key === 'P')) {
+        e.preventDefault();
+        e.stopPropagation();
+        setCommandPaletteMode('files');
+        setCommandPaletteOpen(true);
+        return;
+      }
       // Ctrl+Enter or Cmd+Enter to Run Code
       if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
         e.preventDefault();
@@ -1079,6 +1110,24 @@ function AppContent() {
       <DsaVisualizerModal
         isOpen={dsaVisualizerOpen}
         onClose={() => setDsaVisualizerOpen(false)}
+      />
+      <CommandPaletteModal
+        isOpen={commandPaletteOpen}
+        initialMode={commandPaletteMode}
+        onClose={() => setCommandPaletteOpen(false)}
+        onRunCode={handleRunCode}
+        onSaveFile={handleSaveActiveFile}
+        onCloseTab={handleCloseTab}
+        onCloseAllTabs={handleCloseAllTabs}
+        onReopenTab={handleReopenClosedTab}
+        onToggleTerminal={handleToggleTerminal}
+        onToggleExplorer={() => dispatch({ type: 'TOGGLE_EXPLORER' })}
+        onToggleSplit={() => dispatch({ type: 'TOGGLE_SPLIT_VIEW' })}
+        onToggleFocus={() => dispatch({ type: 'TOGGLE_FOCUS_MODE' })}
+        onFormatCode={() => window.dispatchEvent(new CustomEvent('fullcode-format-active-file'))}
+        onGitPush={handleGitPush}
+        onOpenSettings={() => dispatch({ type: 'TOGGLE_SETTINGS' })}
+        onOpenVisualizer={() => setDsaVisualizerOpen(true)}
       />
     </div>
   );

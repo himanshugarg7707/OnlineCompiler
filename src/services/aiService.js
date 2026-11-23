@@ -125,6 +125,7 @@ async function requestGemini(systemPrompt, prompt, apiKey, options = {}) {
           response = await fetch(directUrl, {
             method: 'POST',
             credentials: 'omit',
+            signal: options.signal,
             headers: {
               'Content-Type': 'application/json',
               'x-goog-api-key': trimmedKey,
@@ -132,6 +133,7 @@ async function requestGemini(systemPrompt, prompt, apiKey, options = {}) {
             body: JSON.stringify(reqBody),
           });
         } catch (fetchErr) {
+          if (fetchErr.name === 'AbortError') throw fetchErr;
           // Direct fetch failed (CORS or network policy) - fallback to backend proxy
           directFetchFailed = true;
         }
@@ -141,6 +143,7 @@ async function requestGemini(systemPrompt, prompt, apiKey, options = {}) {
             response = await fetch(apiUrl('/api/ai/generate'), {
               method: 'POST',
               credentials: 'omit',
+              signal: options.signal,
               headers: {
                 'Content-Type': 'application/json',
                 'x-goog-api-key': trimmedKey,
@@ -152,6 +155,7 @@ async function requestGemini(systemPrompt, prompt, apiKey, options = {}) {
               }),
             });
           } catch (proxyErr) {
+            if (proxyErr.name === 'AbortError') throw proxyErr;
             throw new Error(`Lucia could not reach AI endpoint: ${proxyErr.message}`);
           }
         }
@@ -175,6 +179,7 @@ async function requestGemini(systemPrompt, prompt, apiKey, options = {}) {
         const response = await fetch(apiUrl('/api/ai/generate'), {
           method: 'POST',
           credentials: 'include',
+          signal: options.signal,
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             model,
@@ -919,3 +924,128 @@ What would you like to know? 💬`;
     }, 800 + Math.random() * 1200);
   });
 }
+
+// ─── Inline Copilot-Style Autocomplete (Ghost Text) ─────────────────────────
+
+export function getLocalHeuristicCompletion(prefix = '', suffix = '', language = '') {
+  const lang = (language || '').toLowerCase();
+  const trimmedPrefix = prefix.trimEnd();
+  const lastLine = prefix.split('\n').pop() || '';
+  const trimmedLastLine = lastLine.trim();
+
+  // Java heuristics
+  if (lang.includes('java')) {
+    if (lastLine.endsWith('System.out.')) return 'println("");';
+    if (lastLine.endsWith('Scanner sc = new ') || lastLine.endsWith('Scanner scan = new ')) return 'Scanner(System.in);';
+    if (trimmedLastLine === 'public static void main') return '(String[] args) {\n        \n    }';
+    if (lastLine.endsWith('for (int i = 0;') || lastLine.endsWith('for(int i = 0;')) return ' i < n; i++) {\n        \n    }';
+    if (lastLine.endsWith('PriorityQueue<')) return 'Integer> pq = new PriorityQueue<>();';
+    if (lastLine.endsWith('HashMap<')) return 'Integer, Integer> map = new HashMap<>();';
+    if (lastLine.endsWith('ArrayList<')) return 'Integer> list = new ArrayList<>();';
+    if (lastLine.endsWith('int[] arr = ') || lastLine.endsWith('int arr[] = ')) return 'new int[n];';
+    if (lastLine.endsWith('while (!') || lastLine.endsWith('while(!')) return 'q.isEmpty()) {\n        \n    }';
+    if (lastLine.endsWith('import java.util.')) return '*;';
+    if (trimmedLastLine === 'class Solution {') return '\n    public static void main(String[] args) {\n        \n    }\n}';
+  }
+
+  // Python heuristics
+  if (lang.includes('python') || lang.includes('py')) {
+    if (trimmedLastLine === 'if __name__ ==') return " '__main__':\n    main()";
+    if (trimmedLastLine === 'def') return ' solve():\n    pass';
+    if (lastLine.endsWith('for i in range(')) return 'n):\n    ';
+    if (lastLine.endsWith('print(')) return 'f"Result: {ans}")';
+    if (trimmedLastLine === 'import sys') return '\nfrom collections import defaultdict, deque\nimport heapq';
+  }
+
+  // JavaScript / TypeScript heuristics
+  if (lang.includes('javascript') || lang.includes('typescript') || lang.includes('js') || lang.includes('ts')) {
+    if (lastLine.endsWith('console.')) return 'log();';
+    if (lastLine.endsWith('const [state, setState] = ')) return 'useState(null);';
+    if (lastLine.endsWith('.addEventListener(')) return "'click', (e) => {\n  \n});";
+    if (trimmedLastLine === 'useEffect(() => {') return '\n  return () => {};\n}, []);';
+    if (lastLine.endsWith('document.querySelector(')) return "'#app');";
+    if (trimmedLastLine === 'export default') return ' function App() {\n  return (\n    <div>\n    </div>\n  );\n}';
+  }
+
+  // C / C++ heuristics
+  if (lang.includes('cpp') || lang.includes('c++') || lang === 'c') {
+    if (lastLine.endsWith('std::')) return 'cout << "\\n";';
+    if (lastLine.endsWith('#include <')) return 'iostream>\nusing namespace std;';
+    if (trimmedLastLine === 'int main()') return ' {\n    ios_base::sync_with_stdio(false);\n    cin.tie(NULL);\n    return 0;\n}';
+    if (lastLine.endsWith('vector<')) return 'int> vec;';
+  }
+
+  // Common bracket/quote continuations
+  if (trimmedLastLine.endsWith('{') && !suffix.trim().startsWith('}')) {
+    return '\n    \n}';
+  }
+
+  return '';
+}
+
+/**
+ * Fetch fast inline AI code completion for Monaco Ghost Text
+ * @param {string} prefix - Code before the cursor
+ * @param {string} suffix - Code after the cursor
+ * @param {string} language - Active Monaco language
+ * @param {AbortSignal} [signal] - Optional cancellation signal
+ * @returns {Promise<string>} Completion string or empty
+ */
+export async function getInlineCompletion(prefix, suffix, language, signal) {
+  const config = getConfig();
+  if (config.inlineAiAutocomplete === false) return '';
+
+  // 1. Try Gemini when enabled
+  if (usesGemini(config)) {
+    try {
+      const apiKey = config.geminiApiKey?.trim();
+      const codeBefore = prefix.slice(-1200);
+      const codeAfter = suffix.slice(0, 400);
+
+      const systemPrompt = `You are an ultra-fast, high-precision code completion engine like GitHub Copilot.
+The developer is coding in ${language || 'programming language'}.
+Task: Output ONLY the immediate code continuation that should be inserted directly at the cursor.
+Rules:
+1. Output RAW CODE ONLY. Never wrap in markdown, backticks (\`\`\`), or quotes.
+2. Never repeat any text already written in the prefix or suffix.
+3. Keep suggestions concise: 1 statement, 1 expression, or a short block (max 3 lines).
+4. If the code is already complete or no high-confidence continuation exists, output absolutely nothing.`;
+
+      const prompt = `Code before cursor:\n${codeBefore}\n\n[CURSOR]\n\nCode after cursor:\n${codeAfter}\n\nImmediate raw code continuation:`;
+
+      const result = await requestGemini(
+        systemPrompt,
+        prompt,
+        apiKey,
+        {
+          temperature: 0.1,
+          maxOutputTokens: 48,
+          signal,
+        }
+      );
+
+      if (signal?.aborted) return '';
+
+      let text = String(result || '').trim();
+      // Remove any backticks if AI accidentally included them
+      if (text.startsWith('```')) {
+        text = text.replace(/^```[\w]*\n?/, '').replace(/\n?```$/, '').trim();
+      }
+
+      // Check if result merely echoes the last few characters of prefix
+      const lastLine = prefix.split('\n').pop() || '';
+      if (lastLine && text.startsWith(lastLine.trim())) {
+        text = text.slice(lastLine.trim().length);
+      }
+
+      if (text) return text;
+    } catch (err) {
+      if (signal?.aborted || err?.name === 'AbortError') return '';
+      // On Gemini failure, seamlessly fallback to local heuristic
+    }
+  }
+
+  // 2. Fast local heuristic fallback (instant, zero delay, works offline)
+  return getLocalHeuristicCompletion(prefix, suffix, language);
+}
+

@@ -3,6 +3,7 @@ import Editor from '@monaco-editor/react';
 import { useApp } from '../context/AppContext';
 import { registerSnippets, recordVariablesFromCode } from '../services/snippets';
 import { validateCodeSyntax } from '../services/syntaxValidatorService';
+import { getInlineCompletion } from '../services/aiService';
 import { AlertCircle, Plus, Folder, RotateCcw } from 'lucide-react';
 import LanguageIcon from './LanguageIcon';
 import FileTabs from './FileTabs';
@@ -11,6 +12,7 @@ import GitDiffViewer from './GitDiffViewer';
 import './CodeEditor.css';
 
 let snippetsRegistered = false;
+let inlineCompletionsRegistered = false;
 
 // Theme mapping from config theme to Monaco theme name
 const MONACO_THEMES = {
@@ -89,7 +91,10 @@ export default function CodeEditor() {
   const editorRef = useRef(null);
   const monacoRef = useRef(null);
   const decorationsRef = useRef([]);
+  const visualizerDecorationsRef = useRef([]);
   const isInternalChangeRef = useRef(false);
+  const configRef = useRef(config);
+  configRef.current = config;
   const lastActiveFileIdRef = useRef(state.activeFileId);
   const handleCreateSeqFileRef = useRef(handleCreateSequentialFile);
   handleCreateSeqFileRef.current = handleCreateSequentialFile;
@@ -394,10 +399,105 @@ export default function CodeEditor() {
       handleCreateSeqFileRef.current?.();
     });
 
+    // Keybindings: Cmd+Shift+P / Ctrl+Shift+P for Command Palette
+    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.KeyP, () => {
+      window.dispatchEvent(new CustomEvent('fullcode-open-command-palette', { detail: { mode: 'commands' } }));
+    });
+
+    // Keybindings: Cmd+P / Ctrl+P for Quick File Open
+    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyP, () => {
+      window.dispatchEvent(new CustomEvent('fullcode-open-command-palette', { detail: { mode: 'files' } }));
+    });
+
     // Make Tab indent instead of accepting suggestions when suggest widget is visible
     editor.addCommand(monaco.KeyCode.Tab, () => {
       editor.trigger('keyboard', 'tab', {});
     }, 'suggestWidgetVisible');
+
+    // Register Inline AI Completion Provider (Copilot Ghost Text)
+    if (!inlineCompletionsRegistered && monaco.languages.registerInlineCompletionsProvider) {
+      inlineCompletionsRegistered = true;
+      try {
+        monaco.languages.registerInlineCompletionsProvider('*', {
+          provideInlineCompletions: async (model, position, context, token) => {
+            if (configRef.current?.inlineAiAutocomplete === false) {
+              return { items: [] };
+            }
+
+            if (token.isCancellationRequested) return { items: [] };
+
+            const lineContent = model.getLineContent(position.lineNumber);
+            const prefixInLine = lineContent.substring(0, position.column - 1);
+            const suffixInLine = lineContent.substring(position.column - 1);
+
+            // Don't autocomplete in the middle of a word unless space/symbol follows
+            if (/^[a-zA-Z0-9_]/.test(suffixInLine)) {
+              return { items: [] };
+            }
+
+            // Debounce 280ms
+            await new Promise((resolve) => setTimeout(resolve, 280));
+            if (token.isCancellationRequested) return { items: [] };
+
+            const startLine = Math.max(1, position.lineNumber - 35);
+            const textBefore = model.getValueInRange({
+              startLineNumber: startLine,
+              startColumn: 1,
+              endLineNumber: position.lineNumber,
+              endColumn: position.column,
+            });
+
+            const endLine = Math.min(model.getLineCount(), position.lineNumber + 20);
+            const textAfter = model.getValueInRange({
+              startLineNumber: position.lineNumber,
+              startColumn: position.column,
+              endLineNumber: endLine,
+              endColumn: model.getLineMaxColumn(endLine),
+            });
+
+            const lang = model.getLanguageId();
+            const abortController = new AbortController();
+            const onCancel = token.onCancellationRequested(() => {
+              abortController.abort();
+            });
+
+            try {
+              const completion = await getInlineCompletion(
+                textBefore,
+                textAfter,
+                lang,
+                abortController.signal
+              );
+
+              if (token.isCancellationRequested || !completion) {
+                return { items: [] };
+              }
+
+              return {
+                items: [
+                  {
+                    insertText: completion,
+                    range: new monaco.Range(
+                      position.lineNumber,
+                      position.column,
+                      position.lineNumber,
+                      position.column
+                    ),
+                  },
+                ],
+              };
+            } catch (err) {
+              return { items: [] };
+            } finally {
+              onCancel?.dispose?.();
+            }
+          },
+          freeInlineCompletions: () => {},
+        });
+      } catch (providerErr) {
+        console.warn('Inline completion registration failed:', providerErr);
+      }
+    }
 
     // Track cursor position
     editor.onDidChangeCursorPosition((e) => {
@@ -617,7 +717,10 @@ export default function CodeEditor() {
     },
     // Require at least 2 chars before showing word-based suggestions
     wordBasedSuggestionsMode: 'currentDocument',
-
+    inlineSuggest: {
+      enabled: config.inlineAiAutocomplete !== false,
+      mode: 'subsequent',
+    },
   };
 
   // Monaco's React wrapper does not reliably reapply typography options when
@@ -628,8 +731,49 @@ export default function CodeEditor() {
       fontSize: Number(config.fontSize) || 16,
       fontFamily: config.fontFamily || "'JetBrains Mono', 'Fira Code', monospace",
       tabSize: Number(config.tabSize) || 4,
+      inlineSuggest: {
+        enabled: config.inlineAiAutocomplete !== false,
+      },
     });
-  }, [config.fontSize, config.fontFamily, config.tabSize]);
+  }, [config.fontSize, config.fontFamily, config.tabSize, config.inlineAiAutocomplete]);
+
+  // Handle active line highlighting when stepping through Step Visualizer
+  useEffect(() => {
+    const handleVisualizerStep = (e) => {
+      const line = Number(e.detail?.line);
+      const monaco = monacoRef.current || window.monaco;
+      if (!editorRef.current || !monaco) return;
+
+      if (line && line > 0) {
+        visualizerDecorationsRef.current = editorRef.current.deltaDecorations(
+          visualizerDecorationsRef.current,
+          [
+            {
+              range: new monaco.Range(line, 1, line, 1),
+              options: {
+                isWholeLine: true,
+                className: 'visualizer-step-line-decoration',
+                glyphMarginClassName: 'visualizer-step-glyph-margin',
+                overviewRuler: {
+                  color: '#38bdf8',
+                  position: monaco.editor.OverviewRulerLane.Full,
+                },
+              },
+            },
+          ]
+        );
+        editorRef.current.revealLineInCenter(line);
+      } else {
+        visualizerDecorationsRef.current = editorRef.current.deltaDecorations(
+          visualizerDecorationsRef.current,
+          []
+        );
+      }
+    };
+
+    window.addEventListener('fullcode-visualizer-step', handleVisualizerStep);
+    return () => window.removeEventListener('fullcode-visualizer-step', handleVisualizerStep);
+  }, []);
 
   const handleEditorChange = (value) => {
     const newCode = value || '';

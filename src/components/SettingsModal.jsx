@@ -906,6 +906,21 @@ export default function SettingsModal() {
 
             <div className="setting-row">
               <div className="setting-info">
+                <span className="setting-label">Inline AI Autocomplete (Copilot Ghost Text)</span>
+                <span className="setting-desc">Predictive gray text suggestions as you code. Press Tab to accept.</span>
+              </div>
+              <label className="toggle-switch">
+                <input
+                  type="checkbox"
+                  checked={localConfig.inlineAiAutocomplete !== false}
+                  onChange={(e) => handleConfigChange('inlineAiAutocomplete', e.target.checked)}
+                />
+                <span className="toggle-slider" />
+              </label>
+            </div>
+
+            <div className="setting-row">
+              <div className="setting-info">
                 <span className="setting-label">Code Minimap</span>
                 <span className="setting-desc">Show miniature code overview scrollbar</span>
               </div>

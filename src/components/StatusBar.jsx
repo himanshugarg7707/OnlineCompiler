@@ -6,7 +6,7 @@ import { getWorkspaceGitStatus } from '../services/gitService';
 import './StatusBar.css';
 
 export default function StatusBar() {
-  const { state, dispatch, handleGitSync, handleGitPush } = useApp();
+  const { state, dispatch, handleGitSync, handleGitPush, handleUpdateConfig } = useApp();
   const {
     detectedLanguage,
     cursorPosition,
@@ -21,7 +21,17 @@ export default function StatusBar() {
     gitAhead = 0,
     gitBehind = 0,
     gitSyncing = false,
+    config = {},
   } = state;
+
+  const handleToggleAiAutocomplete = () => {
+    const nextVal = config.inlineAiAutocomplete === false;
+    if (handleUpdateConfig) {
+      handleUpdateConfig({ inlineAiAutocomplete: nextVal });
+    } else {
+      dispatch({ type: 'UPDATE_CONFIG', payload: { ...config, inlineAiAutocomplete: nextVal } });
+    }
+  };
 
   const activeFile = files?.find((f) => f.id === activeFileId);
 
@@ -139,6 +149,20 @@ export default function StatusBar() {
           Ln {cursorPosition.line}, Col {cursorPosition.column}
         </span>
 
+
+        <button
+          type="button"
+          className={`status-item ai-copilot-pill ${config.inlineAiAutocomplete !== false ? 'copilot-on' : 'copilot-off'}`}
+          onClick={handleToggleAiAutocomplete}
+          title={
+            config.inlineAiAutocomplete !== false
+              ? '✨ Lucia Copilot: ACTIVE (Tab to accept suggestions) • Click to toggle off'
+              : '✨ Lucia Copilot: OFF • Click to enable inline AI code completions'
+          }
+        >
+          <span className={`copilot-indicator-dot ${config.inlineAiAutocomplete !== false ? 'active' : ''}`} />
+          <span>{config.inlineAiAutocomplete !== false ? 'Lucia AI' : 'Lucia AI Off'}</span>
+        </button>
 
         <span className="status-item prettier-active" title="Code Formatter Active">
           <span className="prettier-indicator-dot" />

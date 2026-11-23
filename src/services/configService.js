@@ -37,6 +37,7 @@ const DEFAULT_CONFIG = {
   wordWrap: 'off',
   lineNumbers: true,
   suggestionsWhileTyping: true,
+  inlineAiAutocomplete: true,
   workspaceUiScale: 'medium',
 
   // Terminal settings ('bottom' | 'right')

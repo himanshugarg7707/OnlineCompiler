@@ -16,10 +16,13 @@ router.get('/info', (req, res) => {
   const username = os.userInfo().username || 'developer';
   const hostname = os.hostname() || 'fullcode-mac';
 
+  const isWin = process.platform === 'win32';
+  const defaultShell = isWin ? (process.env.COMSPEC || 'cmd.exe') : (process.platform === 'darwin' ? '/bin/zsh' : (process.env.SHELL || '/bin/bash'));
+
   res.json({
     isLocal: !isServerless,
     platform: process.platform,
-    shell: process.platform === 'darwin' ? '/bin/zsh' : (process.env.SHELL || '/bin/bash'),
+    shell: defaultShell,
     username,
     hostname,
     defaultCwd: defaultWorkspaceCwd,
@@ -117,7 +120,9 @@ router.post('/exec', async (req, res) => {
   }
 
   // Execute command using user's shell
-  const shell = process.platform === 'darwin' ? '/bin/zsh' : (process.env.SHELL || '/bin/bash');
+  const isWin = process.platform === 'win32';
+  const shell = isWin ? (process.env.COMSPEC || 'cmd.exe') : (process.platform === 'darwin' ? '/bin/zsh' : (process.env.SHELL || '/bin/bash'));
+  const shellArgs = isWin ? ['/d', '/s', '/c', trimmedCmd] : ['-l', '-c', trimmedCmd];
   const timeoutMs = 20000; // 20s max for interactive terminal commands
 
   let stdout = '';
@@ -125,7 +130,7 @@ router.post('/exec', async (req, res) => {
   let isTimedOut = false;
 
   try {
-    const child = spawn(shell, ['-l', '-c', trimmedCmd], {
+    const child = spawn(shell, shellArgs, {
       cwd: workingDir,
       env: {
         ...process.env,

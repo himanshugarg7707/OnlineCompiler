@@ -368,3 +368,43 @@
   }
 }
 
+.ai-copilot-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  cursor: pointer;
+  padding: 1px 6px;
+  transition: all 0.2s ease;
+  font-size: 11px;
+}
+
+.ai-copilot-pill:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.ai-copilot-pill.copilot-on {
+  color: #c084fc;
+}
+
+.ai-copilot-pill.copilot-off {
+  color: #71717a;
+  opacity: 0.7;
+}
+
+.copilot-indicator-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #71717a;
+  transition: all 0.2s ease;
+}
+
+.copilot-indicator-dot.active {
+  background: #c084fc;
+  box-shadow: 0 0 6px rgba(192, 132, 252, 0.8);
+}
+
+

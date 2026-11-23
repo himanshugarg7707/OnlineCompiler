@@ -21,8 +21,12 @@ export async function detectLocalCompilers() {
     return cachedCompilers;
   }
 
+  const isWin = process.platform === 'win32';
+  const whichCmd = isWin ? 'where' : 'which';
+  const nullRedirect = isWin ? '2>nul' : '2>/dev/null';
+
   const binaries = [
-    { key: 'python3', cmd: 'python3' },
+    { key: 'python3', cmd: isWin ? 'python' : 'python3' },
     { key: 'node', cmd: 'node' },
     { key: 'clang', cmd: 'clang' },
     { key: 'clangpp', cmd: 'clang++' },
@@ -42,8 +46,8 @@ export async function detectLocalCompilers() {
   await Promise.all(
     binaries.map(async ({ key, cmd }) => {
       try {
-        const { stdout } = await execAsync(`which ${cmd} 2>/dev/null`);
-        const trimmed = stdout.trim();
+        const { stdout } = await execAsync(`${whichCmd} ${cmd} ${nullRedirect}`);
+        const trimmed = (stdout || '').split(/\r?\n/)[0]?.trim();
         if (trimmed) {
           found[key] = trimmed;
         }
@@ -94,7 +98,9 @@ function runProcess(command, args, options = {}, stdinData = '') {
         cwd: options.cwd || os.tmpdir(),
         env: {
           ...process.env,
-          PATH: `/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:${process.env.PATH || ''}`,
+          PATH: process.platform === 'win32'
+            ? (process.env.PATH || '')
+            : `/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:${process.env.PATH || ''}`,
           PYTHONUNBUFFERED: '1',
           NODE_NO_WARNINGS: '1',
         },

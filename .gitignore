@@ -30,3 +30,8 @@ server/data/databases/*.sqlite*
 
 # Native macOS build outputs
 native/*.app
+
+# Desktop application packaging releases
+release/
+dist-electron/
+

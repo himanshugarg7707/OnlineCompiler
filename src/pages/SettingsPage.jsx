@@ -2207,6 +2207,24 @@ export default function SettingsPage() {
 
                 <div className="form-row">
                   <div className="form-label-col">
+                    <span className="setting-title">Inline AI Autocomplete (Copilot Ghost Text)</span>
+                    <span className="setting-desc">Predictive gray text suggestions as you code. Press Tab to accept.</span>
+                  </div>
+                  <div className="form-input-col">
+                    <button
+                      type="button"
+                      aria-label="Inline AI Autocomplete"
+                      aria-pressed={localConfig.inlineAiAutocomplete !== false}
+                      className={`btn-toggle-switch ${localConfig.inlineAiAutocomplete !== false ? 'on' : 'off'}`}
+                      onClick={() => handleConfigChange('inlineAiAutocomplete', localConfig.inlineAiAutocomplete === false)}
+                    >
+                      <span className="switch-thumb" />
+                    </button>
+                  </div>
+                </div>
+
+                <div className="form-row">
+                  <div className="form-label-col">
                     <span className="setting-title">Minimap</span>
                     <span className="setting-desc">Display code overview on the right side</span>
                   </div>
