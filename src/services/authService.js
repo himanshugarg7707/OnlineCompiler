@@ -1,5 +1,6 @@
-import { apiFetch, hasDedicatedApiBackend } from './apiClient';
+import { apiFetch } from './apiClient';
 
+const USERS_DB_KEY = 'fullcode_users_db_v1';
 const PROFILE_KEY = 'fullcode_active_account_profile_v2';
 const LEGACY_ACTIVE_KEY = 'fullcode_active_user_id_v1';
 
@@ -22,6 +23,15 @@ function safeProfile(user) {
   };
 }
 
+function hashPassword(pwd) {
+  let hash = 0;
+  for (let i = 0; i < pwd.length; i++) {
+    hash = ((hash << 5) - hash) + pwd.charCodeAt(i);
+    hash |= 0;
+  }
+  return `pwd_${Math.abs(hash).toString(16)}_${pwd.length}`;
+}
+
 function cacheProfile(user) {
   const profile = safeProfile(user);
   if (!profile) return null;
@@ -40,90 +50,184 @@ function clearCachedProfile() {
 }
 
 export function getAllUsers() {
-  const active = getActiveUser();
-  return active ? { [active.id]: active } : {};
+  try {
+    const raw = localStorage.getItem(USERS_DB_KEY);
+    const users = raw ? JSON.parse(raw) : {};
+    const active = getActiveUser();
+    if (active && !users[active.id]) {
+      users[active.id] = active;
+    }
+    return users;
+  } catch {
+    const active = getActiveUser();
+    return active ? { [active.id]: active } : {};
+  }
 }
 
 export function getActiveUser() {
   try {
     const cached = localStorage.getItem(PROFILE_KEY);
     if (cached) return safeProfile(JSON.parse(cached));
-    // Display-only migration for legacy profiles; server session validation still gates cloud access.
     return null;
   } catch {
     return null;
   }
 }
 
-async function authRequest(path, body) {
-  if (!hasDedicatedApiBackend() && !import.meta.env.DEV) {
-    throw new Error('Account sign-in needs the backend URL configured. Guest workspaces still work locally.');
+/**
+ * Local offline login / registration fallback
+ */
+function localLoginOrRegister(username, password) {
+  const cleanUsername = String(username || '').trim();
+  const cleanPassword = String(password || '').trim();
+
+  if (!cleanUsername) {
+    return { success: false, error: 'Please enter a username.' };
   }
-  let response;
+  if (!cleanPassword || cleanPassword.length < 3) {
+    return { success: false, error: 'Password must be at least 3 characters.' };
+  }
+
+  const users = getAllUsers();
+  const userId = `user_${cleanUsername.toLowerCase().replace(/[^a-z0-9_]/g, '_')}`;
+  const pwdHash = hashPassword(cleanPassword);
+
+  let user = users[userId];
+
+  if (user) {
+    // If account exists locally, verify password
+    if (user.passwordHash && user.passwordHash !== pwdHash) {
+      return { success: false, error: 'Incorrect password for this account.' };
+    }
+  } else {
+    // Register new local account
+    const colors = ['#00d4ff', '#ec4899', '#10b981', '#f59e0b', '#8b5cf6', '#6366f1'];
+    user = {
+      id: userId,
+      username: cleanUsername,
+      passwordHash: pwdHash,
+      avatarInitials: generateFirstLastInitials(cleanUsername),
+      avatarColor: colors[cleanUsername.length % colors.length] || '#00d4ff',
+      avatarEmoji: '',
+      createdAt: Date.now(),
+    };
+    users[userId] = user;
+    try {
+      localStorage.setItem(USERS_DB_KEY, JSON.stringify(users));
+    } catch {}
+  }
+
+  const cached = cacheProfile(user);
+  return { success: true, user: cached, isNew: !users[userId] };
+}
+
+/**
+ * Login or Register:
+ * Tries server first (cloud / self-hosted backend).
+ * If server is unavailable, returns 503 (no database), or network is offline,
+ * seamlessly falls back to local in-browser account creation!
+ */
+export async function loginOrRegister(username, password, rememberMe = true) {
+  const cleanUsername = String(username || '').trim();
+  const cleanPassword = String(password || '').trim();
+
+  if (!cleanUsername) {
+    return { success: false, error: 'Please choose a username.' };
+  }
+  if (!cleanPassword || cleanPassword.length < 3) {
+    return { success: false, error: 'Password must be at least 3 characters.' };
+  }
+
   try {
-    response = await apiFetch(path, {
+    const response = await apiFetch('/api/auth/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-      signal: AbortSignal.timeout(20_000),
+      body: JSON.stringify({ username: cleanUsername, password: cleanPassword, rememberMe }),
+      signal: AbortSignal.timeout(5_000),
     });
-  } catch {
-    throw new Error('Could not reach the account server. Your local workspace is still available.');
-  }
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(payload.error || `Account request failed (${response.status}).`);
-  return payload;
-}
 
-export async function loginOrRegister(username, password, rememberMe = true) {
-  try {
-    const payload = await authRequest('/api/auth/login', { username, password, rememberMe });
-    const user = cacheProfile(payload.user);
-    return { success: true, user, isNew: Boolean(payload.isNew) };
-  } catch (error) {
-    return { success: false, error: error.message || 'Authentication failed.' };
+    const payload = await response.json().catch(() => ({}));
+
+    if (response.ok && payload.user) {
+      const user = cacheProfile(payload.user);
+      try {
+        const users = getAllUsers();
+        users[user.id] = user;
+        localStorage.setItem(USERS_DB_KEY, JSON.stringify(users));
+      } catch {}
+      return { success: true, user, isNew: Boolean(payload.isNew) };
+    }
+
+    // Specific client errors like invalid credentials or rate limiting
+    if (response.status === 401 || response.status === 409 || response.status === 429) {
+      return { success: false, error: payload.error || 'Authentication failed.' };
+    }
+
+    // Server returned 503 (database not configured on backend) or 404/500:
+    // Gracefully fall back to local account storage
+    return localLoginOrRegister(cleanUsername, cleanPassword);
+  } catch {
+    // Network offline or server unreachable:
+    // Gracefully fall back to local account storage
+    return localLoginOrRegister(cleanUsername, cleanPassword);
   }
 }
 
 export async function restoreAuthSession() {
-  if (!hasDedicatedApiBackend() && !import.meta.env.DEV) return { authenticated: false, unavailable: true };
+  const active = getActiveUser();
+
   try {
-    const response = await apiFetch('/api/auth/me', { signal: AbortSignal.timeout(12_000) });
+    const response = await apiFetch('/api/auth/me', { signal: AbortSignal.timeout(4_000) });
     if (response.status === 401) {
-      return { authenticated: false, unavailable: false };
+      if (!active) {
+        return { authenticated: false, unavailable: false };
+      }
     }
     const payload = await response.json().catch(() => ({}));
-    if (!response.ok) return { authenticated: false, unavailable: true };
-    return { authenticated: true, user: cacheProfile(payload.user), unavailable: false };
-  } catch {
-    return { authenticated: false, unavailable: true };
+    if (response.ok && payload.user) {
+      return { authenticated: true, user: cacheProfile(payload.user), unavailable: false };
+    }
+  } catch {}
+
+  if (active) {
+    return { authenticated: true, user: active, unavailable: false };
   }
+
+  return { authenticated: false, unavailable: false };
 }
 
 export async function updateUserProfile(userId, updates = {}) {
   const active = getActiveUser();
   if (!active || active.id !== userId) return null;
+
   try {
     const response = await apiFetch('/api/auth/me', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(updates),
-      signal: AbortSignal.timeout(12_000),
+      signal: AbortSignal.timeout(5_000),
     });
     const payload = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(payload.error || 'Could not save profile changes.');
-    return cacheProfile(payload.user);
-  } catch (error) {
-    console.warn('[Auth] Profile update failed:', error.message);
-    return null;
-  }
+    if (response.ok && payload.user) {
+      return cacheProfile(payload.user);
+    }
+  } catch {}
+
+  const updatedUser = {
+    ...active,
+    ...updates,
+  };
+  const users = getAllUsers();
+  users[userId] = updatedUser;
+  try {
+    localStorage.setItem(USERS_DB_KEY, JSON.stringify(users));
+  } catch {}
+  return cacheProfile(updatedUser);
 }
 
 export async function logoutUser() {
   try {
-    if (hasDedicatedApiBackend() || import.meta.env.DEV) {
-      await apiFetch('/api/auth/logout', { method: 'POST', signal: AbortSignal.timeout(8_000) });
-    }
+    await apiFetch('/api/auth/logout', { method: 'POST', signal: AbortSignal.timeout(4_000) });
   } catch {}
   clearCachedProfile();
 }

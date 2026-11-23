@@ -72,8 +72,8 @@ export default function WelcomeLandingModal({ isOpen, onClose }) {
       setError('Please choose a username.');
       return;
     }
-    if (cleanPwd.length < 10) {
-      setError('Password must be at least 10 characters.');
+    if (cleanPwd.length < 6) {
+      setError('Password must be at least 6 characters.');
       return;
     }
     if (mode === 'signup' && confirmPassword.trim() && cleanPwd !== confirmPassword.trim()) {

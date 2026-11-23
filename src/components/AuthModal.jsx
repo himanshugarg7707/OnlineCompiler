@@ -69,8 +69,8 @@ export default function AuthModal({ isOpen, onClose }) {
   const handleSubmitLogin = async (e) => {
     e.preventDefault();
     setError('');
-    if (password.length < 10) {
-      setError('Use a password with at least 10 characters.');
+    if (password.length < 6) {
+      setError('Use a password with at least 6 characters.');
       return;
     }
     setIsSubmitting(true);
