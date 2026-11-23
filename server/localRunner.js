@@ -230,11 +230,134 @@ async function _executeCodeLocallyInternal({ code, languageId, stdin = '', filen
       const srcName = (cleanFilename && cleanFilename.endsWith('.py')) ? cleanFilename : 'main.py';
       const filePath = path.join(tempDir, srcName);
       fs.writeFileSync(filePath, code, 'utf8');
-      const res = await runProcess(compilers.python3, ['-u', filePath], { cwd: tempDir }, stdin);
+
+      // Headless Python runner wrapper that supports Matplotlib Agg backend,
+      // non-blocking plt.show(), figure capture to base64, and clean traceback
+      const runnerCode = `import sys, os, io, base64, json
+
+_fullcode_plots = []
+try:
+    import matplotlib
+    matplotlib.use('Agg')
+    import matplotlib.pyplot as _plt
+
+    def _fullcode_show(*args, **kwargs):
+        for _fignum in _plt.get_fignums():
+            _fig = _plt.figure(_fignum)
+            _buf = io.BytesIO()
+            _fig.savefig(_buf, format='png', bbox_inches='tight', dpi=120)
+            _buf.seek(0)
+            _fullcode_plots.append(f"data:image/png;base64,{base64.b64encode(_buf.read()).decode('ascii')}")
+        _plt.close('all')
+
+    _plt.show = _fullcode_show
+except Exception:
+    pass
+
+_target_file = sys.argv[1]
+_success = True
+try:
+    with open(_target_file, 'rb') as _f:
+        _code_bytes = _f.read()
+    _globals = {
+        '__name__': '__main__',
+        '__file__': os.path.abspath(_target_file),
+        '__doc__': None,
+    }
+    exec(compile(_code_bytes, _target_file, 'exec'), _globals)
+except BaseException:
+    _success = False
+    import traceback
+    _tb_lines = traceback.format_exc().splitlines()
+    _filtered_tb = []
+    _skip = True
+    for _line in _tb_lines:
+        if f'File "{_target_file}"' in _line or f"File '{_target_file}'" in _line:
+            _skip = False
+        if not _skip:
+            _filtered_tb.append(_line)
+    if _filtered_tb:
+        sys.stderr.write("Traceback (most recent call last):\\n" + "\\n".join(_filtered_tb) + "\\n")
+    else:
+        traceback.print_exc(file=sys.stderr)
+finally:
+    try:
+        import matplotlib.pyplot as _plt
+        for _fignum in _plt.get_fignums():
+            _fig = _plt.figure(_fignum)
+            _buf = io.BytesIO()
+            _fig.savefig(_buf, format='png', bbox_inches='tight', dpi=120)
+            _buf.seek(0)
+            _fullcode_plots.append(f"data:image/png;base64,{base64.b64encode(_buf.read()).decode('ascii')}")
+        _plt.close('all')
+    except Exception:
+        pass
+
+    if _fullcode_plots:
+        sys.stdout.write(f"\\n__FULLCODE_PLOTS_START__{json.dumps(_fullcode_plots)}__FULLCODE_PLOTS_END__\\n")
+        sys.stdout.flush()
+
+if not _success:
+    sys.exit(1)
+`;
+
+      const runnerPath = path.join(tempDir, '_fullcode_runner.py');
+      fs.writeFileSync(runnerPath, runnerCode, 'utf8');
+
+      let res = await runProcess(
+        compilers.python3,
+        ['-u', runnerPath, srcName],
+        { cwd: tempDir, env: { ...process.env, MPLBACKEND: 'Agg' } },
+        stdin
+      );
+
+      // If local python failed due to a missing module (e.g. ModuleNotFoundError)
+      if (!res.success && res.stderr && res.stderr.includes('ModuleNotFoundError')) {
+        const match = res.stderr.match(/ModuleNotFoundError:\s+No module named '([^']+)'/);
+        const missingPkg = match && match[1];
+
+        // Attempt on-demand pip install if pip is available
+        if (missingPkg && compilers.pip) {
+          try {
+            await runProcess(
+              compilers.pip,
+              ['install', '--break-system-packages', missingPkg],
+              { timeoutMs: 15000 }
+            );
+            res = await runProcess(
+              compilers.python3,
+              ['-u', runnerPath, srcName],
+              { cwd: tempDir, env: { ...process.env, MPLBACKEND: 'Agg' } },
+              stdin
+            );
+          } catch (_) {}
+        }
+
+        // If still missing module, gracefully delegate to Pyodide in-browser WebAssembly runner
+        if (!res.success && res.stderr && res.stderr.includes('ModuleNotFoundError')) {
+          return {
+            useClientRunner: true,
+            reason: `Missing module ${missingPkg || ''}, delegating to Pyodide in-browser WebAssembly runner`,
+          };
+        }
+      }
+
+      // Extract plots from stdout if present
+      let plots = [];
+      let cleanStdout = res.stdout || '';
+      const plotMatch = cleanStdout.match(/__FULLCODE_PLOTS_START__([\s\S]*?)__FULLCODE_PLOTS_END__/);
+      if (plotMatch) {
+        try {
+          plots = JSON.parse(plotMatch[1]);
+          cleanStdout = cleanStdout.replace(/__FULLCODE_PLOTS_START__[\s\S]*?__FULLCODE_PLOTS_END__\r?\n?/, '').trimEnd();
+        } catch (_) {}
+      }
+
       return {
         success: res.success,
-        output: res.stdout,
+        output: cleanStdout,
         error: res.stderr,
+        plots,
         time: res.time,
         statusCode: res.exitCode,
         isLocal: true,

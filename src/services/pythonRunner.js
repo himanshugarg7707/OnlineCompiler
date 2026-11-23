@@ -47,26 +47,42 @@ export async function restartPythonRuntime() {
  * Pre-install or load packages on demand
  */
 async function ensurePackages(pyodide, code) {
+  // 1. Pyodide intelligent import analyzer: scans AST and loads all standard Pyodide distribution packages & dependencies
+  try {
+    if (typeof pyodide.loadPackagesFromImports === 'function') {
+      await pyodide.loadPackagesFromImports(code);
+    }
+  } catch (err) {
+    console.warn('loadPackagesFromImports note:', err);
+  }
+
+  // 2. Explicit guaranteed loading for primary data science, scientific, and math packages
   const loadTasks = [];
 
-  if (/\b(numpy|np)\b/.test(code)) {
-    loadTasks.push(pyodide.loadPackage('numpy'));
+  if (/\b(numpy|np)\b/i.test(code)) {
+    loadTasks.push(pyodide.loadPackage('numpy').catch(() => {}));
   }
-  if (/\b(pandas|pd)\b/.test(code)) {
-    loadTasks.push(pyodide.loadPackage('pandas'));
+  if (/\b(pandas|pd)\b/i.test(code)) {
+    loadTasks.push(pyodide.loadPackage('pandas').catch(() => {}));
   }
-  if (/\b(scipy|stats)\b/.test(code)) {
-    loadTasks.push(pyodide.loadPackage('scipy'));
+  if (/\b(scipy|stats)\b/i.test(code)) {
+    loadTasks.push(pyodide.loadPackage('scipy').catch(() => {}));
   }
-  if (/\b(matplotlib|plt)\b/.test(code)) {
-    loadTasks.push(pyodide.loadPackage('matplotlib'));
+  if (/\b(matplotlib|plt|pylab)\b/i.test(code)) {
+    loadTasks.push(pyodide.loadPackage('matplotlib').catch(() => {}));
   }
-  if (/\b(sklearn|scikit-learn)\b/.test(code)) {
-    loadTasks.push(pyodide.loadPackage('scikit-learn'));
+  if (/\b(sklearn|scikit-learn)\b/i.test(code)) {
+    loadTasks.push(pyodide.loadPackage('scikit-learn').catch(() => {}));
+  }
+  if (/\b(seaborn|sns)\b/i.test(code)) {
+    loadTasks.push(pyodide.loadPackage('seaborn').catch(() => {}));
+  }
+  if (/\b(sympy|sp)\b/i.test(code)) {
+    loadTasks.push(pyodide.loadPackage('sympy').catch(() => {}));
   }
 
   // Handle map libraries like folium or extra packages via micropip if needed
-  if (/\bfolium\b/.test(code)) {
+  if (/\bfolium\b/i.test(code)) {
     loadTasks.push(
       (async () => {
         try {
@@ -593,6 +609,44 @@ sys.stdin = _old_stdin
     const hasError = Boolean(error && error.trim());
 
     if (hasError) {
+      // Auto-recovery for any missing third-party package via micropip
+      if (/ModuleNotFoundError:\s+No module named '([^']+)'/.test(error)) {
+        const match = error.match(/ModuleNotFoundError:\s+No module named '([^']+)'/);
+        const missingPkg = match && match[1];
+        if (missingPkg && !missingPkg.startsWith('_')) {
+          try {
+            await pyodide.loadPackage('micropip');
+            const micropip = pyodide.pyimport('micropip');
+            await micropip.install(missingPkg);
+
+            // Re-run with the freshly installed package
+            const retryProxy = await pyodide.runPythonAsync(wrapper);
+            const retryResult = retryProxy.toJs ? retryProxy.toJs({ dict_converter: Object.fromEntries }) : retryProxy;
+            retryProxy.destroy?.();
+
+            if (!retryResult.error || !retryResult.error.trim()) {
+              const retryStdout = magicOutput ? magicOutput + (retryResult.stdout || '') : (retryResult.stdout || '');
+              const retryPlots = Array.isArray(retryResult.plots) ? retryResult.plots : [];
+              return {
+                success: true,
+                output: retryStdout || (retryPlots.length > 0 || retryResult.html || retryResult.table ? '' : '(Program finished with no output)'),
+                warning: retryResult.stderr || null,
+                error: null,
+                plots: retryPlots,
+                html: retryResult.html || '',
+                table: retryResult.table || null,
+                variables: Array.isArray(retryResult.variables) ? retryResult.variables : [],
+                time: ((performance.now() - startTime) / 1000).toFixed(3),
+                memory: 0,
+                statusCode: 0,
+              };
+            }
+          } catch (installErr) {
+            console.warn(`Failed to auto-install ${missingPkg} via micropip:`, installErr);
+          }
+        }
+      }
+
       return {
         success: false,
         output: stdout,

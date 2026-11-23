@@ -161,6 +161,11 @@ async function tryLocalExecution(code, languageId, stdin = '', filename = '', fi
     if (response.ok) {
       const result = await response.json();
       if (result && !result.useClientRunner && typeof result.success === 'boolean') {
+        // If local Python failed due to ModuleNotFoundError, fall back to in-browser Pyodide
+        if (languageId === 71 && !result.success && result.error && result.error.includes('ModuleNotFoundError')) {
+          console.warn('Local Python missing imported module; falling back to in-browser Pyodide engine');
+          return null;
+        }
         return result;
       }
     }
@@ -217,7 +222,12 @@ export async function executeCode(code, languageId, stdin = '', allFiles = [], f
     try {
       const localRes = await tryLocalExecution(processedCode, languageId, stdin, filename, allFiles);
       if (localRes && (localRes.isLocal || localRes.engine === 'local' || localRes.engine === 'sqlite')) {
-        return withCompilerMeta(localRes);
+        // If local Python failed due to ModuleNotFoundError, fall through to Pyodide
+        if (languageId === 71 && !localRes.success && localRes.error && localRes.error.includes('ModuleNotFoundError')) {
+          console.warn('Local Python missing module; falling back to WebAssembly Pyodide with on-demand package loader');
+        } else {
+          return withCompilerMeta(localRes);
+        }
       }
     } catch {
       // Local backend unreachable or not supported; continue to in-browser / cloud execution
