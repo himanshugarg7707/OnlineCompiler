@@ -190,7 +190,11 @@ export default function Header() {
     }
   };
 
-  const isNativeApp = typeof window !== 'undefined' && Boolean(window.webkit?.messageHandlers?.nativeHost);
+  const isNativeApp = typeof window !== 'undefined' && Boolean(
+    window.webkit?.messageHandlers?.nativeHost ||
+    window.electronAPI?.isElectron ||
+    window.__IS_DESKTOP_APP__
+  );
   const isLocalHost = isLocalEnvironment();
 
   const [activeMenu, setActiveMenu] = useState(null);
@@ -215,9 +219,10 @@ export default function Header() {
     setEngineMode(next);
     localStorage.setItem('fullcode_engine_mode', next);
     window.dispatchEvent(new CustomEvent('engine-mode-changed', { detail: { mode: next } }));
+    const osLabel = (typeof window !== 'undefined' && window.electronAPI?.platform === 'win32') ? 'Windows' : 'Native PC';
     showToast(
       next === 'local'
-        ? '⚡️ Engine: Local Native Mac Compilers (Ultra-Fast 0.02s)'
+        ? `⚡️ Engine: Local ${osLabel} Compilers (Ultra-Fast 0.02s)`
         : '🌐 Engine: Cloud Sandbox (WebAssembly & Remote)'
     );
   };

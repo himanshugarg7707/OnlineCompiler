@@ -172,99 +172,130 @@
   box-shadow: 0 0 10px var(--accent-cyan);
 }
 
-/* Collapsed Explorer Left Rail */
+/* Collapsed Explorer Left Rail (VS Code Activity Bar Style) */
 .explorer-collapsed-rail {
-  width: 32px;
-  min-width: 32px;
+  width: 48px;
+  min-width: 48px;
   height: 100%;
-  background: var(--bg-secondary);
-  border-right: 1px solid var(--border-primary);
+  background: var(--bg-secondary, #111827);
+  border-right: 1px solid var(--border-primary, rgba(255, 255, 255, 0.08));
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding-top: 14px;
-  gap: 16px;
-  cursor: pointer;
+  justify-content: space-between;
   user-select: none;
   z-index: 20;
   position: relative;
-  transition: all var(--transition-fast);
+  flex-shrink: 0;
+  box-sizing: border-box;
+  transition: width var(--transition-fast), background var(--transition-fast);
 }
 
-.explorer-collapsed-rail:hover {
-  background: var(--bg-tertiary);
-  border-color: var(--accent-cyan);
-}
-
-.rail-folder-icon {
-  color: var(--accent-cyan);
-  flex: 0 0 auto;
-}
-
-.collapsed-rail-actions {
+.rail-top-group,
+.rail-bottom-group {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 5px;
-  max-height: calc(100% - 150px);
-  min-height: 0;
-  margin-top: 12px;
-  overflow-y: auto;
-  scrollbar-width: none;
+  width: 100%;
 }
 
-.collapsed-rail-actions::-webkit-scrollbar {
-  display: none;
+.rail-top-group {
+  padding-top: 2px;
 }
 
-.collapsed-rail-action {
-  display: inline-flex;
+.rail-bottom-group {
+  padding-bottom: 6px;
+  margin-top: auto;
+}
+
+.rail-item-btn {
+  width: 48px;
+  height: 48px;
+  display: flex;
   align-items: center;
   justify-content: center;
-  width: 25px;
-  height: 25px;
-  padding: 0;
-  color: var(--text-muted);
   background: transparent;
-  border: 1px solid transparent;
-  border-radius: 7px;
+  border: none;
   cursor: pointer;
-  transition: color var(--transition-fast), background var(--transition-fast), border-color var(--transition-fast);
+  position: relative;
+  color: #858585;
+  color: var(--text-muted, #94a3b8);
+  padding: 0;
+  transition: color 0.12s ease, background 0.12s ease;
+  outline: none;
 }
 
-.collapsed-rail-action:hover,
-.collapsed-rail-action.active {
-  color: var(--accent-cyan);
-  background: color-mix(in srgb, var(--accent-cyan) 12%, transparent);
-  border-color: color-mix(in srgb, var(--accent-cyan) 24%, transparent);
+.rail-item-btn:hover {
+  color: #ffffff;
+  color: var(--text-primary, #ffffff);
 }
 
-.rail-vertical-text {
-  writing-mode: vertical-rl;
-  text-orientation: mixed;
-  transform: rotate(180deg);
-  font-size: 10px;
+.rail-item-btn:active,
+.rail-item-btn.active {
+  color: #ffffff;
+}
+
+/* Left indicator line matching VS Code Activity Bar */
+.rail-item-btn.active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: #38bdf8;
+  background: var(--accent-cyan, #38bdf8);
+}
+
+.rail-item-btn:hover::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 8px;
+  bottom: 8px;
+  width: 2px;
+  background: rgba(255, 255, 255, 0.4);
+}
+
+.rail-item-btn svg {
+  transition: transform 0.12s ease;
+}
+
+.rail-item-btn:hover svg {
+  transform: scale(1.06);
+}
+
+/* Badge on icon (e.g., git changes) */
+.rail-badge-dot {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #38bdf8;
+  background: var(--accent-cyan, #38bdf8);
+  box-shadow: 0 0 6px rgba(56, 189, 248, 0.8);
+}
+
+.rail-badge-count {
+  position: absolute;
+  top: 8px;
+  right: 6px;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  border-radius: 7px;
+  background: #38bdf8;
+  background: var(--accent-cyan, #38bdf8);
+  color: #0b1326;
+  font-size: 9px;
   font-weight: 700;
-  letter-spacing: 1.5px;
-  color: var(--text-muted);
-  transition: color var(--transition-fast);
-}
-
-.explorer-collapsed-rail:hover .rail-vertical-text {
-  color: var(--accent-cyan);
-}
-
-.rail-expand-arrow {
-  color: var(--text-muted);
-  margin-top: auto;
-  margin-bottom: 16px;
-  flex: 0 0 auto;
-  transition: transform var(--transition-fast);
-}
-
-.explorer-collapsed-rail:hover .rail-expand-arrow {
-  color: var(--accent-cyan);
-  transform: translateX(2px);
+  font-family: 'JetBrains Mono', monospace;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
 }
 
 /* While resizing horizontally */
@@ -758,6 +789,64 @@ body.resizing-vertical * {
   border-top: none;
   border-left: 1px solid var(--border-primary);
 }
+
+/* ==========================================================================
+   Native Production Desktop Window App Optimizations
+   Removes browser feel: no text selection on chrome, no link dragging,
+   custom IDE scrollbars, proper cursor handling
+   ========================================================================== */
+body.electron-desktop-app {
+  user-select: none !important;
+  -webkit-user-select: none !important;
+  -webkit-user-drag: none !important;
+  overflow: hidden;
+  cursor: default;
+}
+
+body.electron-desktop-app a,
+body.electron-desktop-app button,
+body.electron-desktop-app img,
+body.electron-desktop-app svg {
+  -webkit-user-drag: none !important;
+}
+
+body.electron-desktop-app img {
+  pointer-events: none;
+}
+
+/* Preserve text selection inside code editor, inputs, and console outputs */
+body.electron-desktop-app .monaco-editor,
+body.electron-desktop-app .monaco-editor *,
+body.electron-desktop-app input,
+body.electron-desktop-app textarea,
+body.electron-desktop-app [contenteditable="true"],
+body.electron-desktop-app .terminal-output,
+body.electron-desktop-app .terminal-body,
+body.electron-desktop-app .output-container,
+body.electron-desktop-app .selectable-text {
+  user-select: text !important;
+  -webkit-user-select: text !important;
+}
+
+/* Custom dark scrollbars matching native desktop IDEs */
+body.electron-desktop-app ::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+body.electron-desktop-app ::-webkit-scrollbar-track {
+  background: #18181b;
+}
+
+body.electron-desktop-app ::-webkit-scrollbar-thumb {
+  background: #3f3f46;
+  border-radius: 4px;
+}
+
+body.electron-desktop-app ::-webkit-scrollbar-thumb:hover {
+  background: #52525b;
+}
+
 
 
 

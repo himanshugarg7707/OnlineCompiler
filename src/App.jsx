@@ -36,7 +36,33 @@ import SplitPaneContainer from './components/SplitPaneContainer';
 import WebPreviewPanel from './components/WebPreviewPanel';
 import { getLanguageFromFilename } from './services/languageDetector';
 import { setActiveLocalFolderPath } from './services/localDiskWorkspaceService';
-import { FolderTree, ChevronLeft, ChevronRight, Maximize2, Minimize2, Play, Check, BookOpen, Code2, Timer, Braces, BrainCircuit, Database, Users, Info, FlaskConical } from 'lucide-react';
+import { getWorkspaceGitStatus } from './services/gitService';
+import {
+  FolderTree,
+  ChevronLeft,
+  ChevronRight,
+  Maximize2,
+  Minimize2,
+  Play,
+  Check,
+  BookOpen,
+  Code2,
+  Timer,
+  Braces,
+  BrainCircuit,
+  Database,
+  Users,
+  Info,
+  FlaskConical,
+  Files,
+  Search,
+  GitBranch,
+  PlaySquare,
+  Boxes,
+  Sparkles,
+  CircleUser,
+  Settings,
+} from 'lucide-react';
 import './App.css';
 
 const SPLIT_STORAGE_KEY = 'fullcode_split_percent';
@@ -149,6 +175,9 @@ function AppContent() {
   // Rule: In notebooks, the terminal is completely hidden (inline cell execution only).
   // In regular code files, respect terminalHidden state.
   const effectiveTerminalHidden = isNotebookActive ? true : terminalHidden;
+
+  // Workspace Git status for activity bar badges
+  const gitStatus = useMemo(() => getWorkspaceGitStatus(state.files || [], []), [state.files]);
 
   // Interactive DSA & Execution Visualizer Modal State
   const [dsaVisualizerOpen, setDsaVisualizerOpen] = useState(false);
@@ -464,9 +493,10 @@ function AppContent() {
           const nextMode = curMode === 'local' ? 'cloud' : 'local';
           localStorage.setItem('fullcode_engine_mode', nextMode);
           window.dispatchEvent(new CustomEvent('engine-mode-changed', { detail: { mode: nextMode } }));
+          const osLabel = (typeof window !== 'undefined' && window.electronAPI?.platform === 'win32') ? 'Windows' : 'Native PC';
           showToast(
             nextMode === 'local'
-              ? '⚡️ Engine: Local Native Mac Compilers (Ultra-Fast 0.02s)'
+              ? `⚡️ Engine: Local ${osLabel} Compilers (Ultra-Fast 0.02s)`
               : '🌐 Engine: Cloud Sandbox (WebAssembly & Remote)'
           );
           break;
