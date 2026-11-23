@@ -297,14 +297,14 @@ export default function SettingsModal() {
   };
 
   // Update profile avatar
-  const handleSaveProfileAvatar = () => {
+  const handleSaveProfileAvatar = async () => {
     if (!activeUser) return;
-    const updated = updateUserProfile(activeUser.id, {
+    const updated = await updateUserProfile(activeUser.id, {
       avatarInitials: editInitials.toUpperCase().slice(0, 3),
       avatarColor: editColor,
     });
     if (updated) {
-      handleSwitchUser(updated);
+      await handleSwitchUser(updated);
       showToast('Profile avatar updated! ✨');
     }
   };

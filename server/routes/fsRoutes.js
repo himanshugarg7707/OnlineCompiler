@@ -25,6 +25,81 @@ const ALLOWED_EXTENSIONS = new Set([
   'zsh', 'yaml', 'yml', 'xml', 'csv', 'ipynb', 'toml', 'env'
 ]);
 
+const CONFIG_FILE = path.join(os.homedir(), '.fullcode', 'workspace-config.json');
+
+export function getActiveWorkspaceDir() {
+  try {
+    if (fs.existsSync(CONFIG_FILE)) {
+      const data = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'));
+      if (data.activeFolderPath && fs.existsSync(data.activeFolderPath)) {
+        return data.activeFolderPath;
+      }
+    }
+  } catch (_) {}
+  const defaultDir = path.join(os.homedir(), 'Documents', 'FullCodeWorkspace');
+  if (!fs.existsSync(defaultDir)) {
+    fs.mkdirSync(defaultDir, { recursive: true });
+    const mainPy = path.join(defaultDir, 'main.py');
+    if (!fs.existsSync(mainPy)) {
+      fs.writeFileSync(mainPy, `# Start writing your code here\nprint("Hello from FullCode on Local Storage!")\n`, 'utf8');
+    }
+  }
+  return defaultDir;
+}
+
+export function setActiveWorkspaceDir(dirPath) {
+  try {
+    const dir = path.dirname(CONFIG_FILE);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(CONFIG_FILE, JSON.stringify({ activeFolderPath: dirPath, updatedAt: new Date().toISOString() }), 'utf8');
+  } catch (_) {}
+}
+
+function scanWorkspaceDirectory(folderPath, maxFiles = 500) {
+  const scannedFiles = [];
+  const detectedFolders = new Set();
+
+  function walk(currentDir, relPrefix = '') {
+    if (scannedFiles.length >= maxFiles) return;
+    const entries = fs.readdirSync(currentDir, { withFileTypes: true });
+
+    for (const ent of entries) {
+      if (scannedFiles.length >= maxFiles) break;
+      if (IGNORED_NAMES.has(ent.name) || ent.name.startsWith('.')) continue;
+
+      const fullPath = path.join(currentDir, ent.name);
+      const relPath = relPrefix ? `${relPrefix}/${ent.name}` : ent.name;
+
+      if (ent.isDirectory()) {
+        detectedFolders.add(relPath);
+        walk(fullPath, relPath);
+      } else if (ent.isFile()) {
+        const ext = path.extname(ent.name).slice(1).toLowerCase();
+        if (ALLOWED_EXTENSIONS.has(ext) || ext === '') {
+          try {
+            const stat = fs.statSync(fullPath);
+            if (stat.size <= 5 * 1024 * 1024) {
+              const content = fs.readFileSync(fullPath, 'utf8');
+              scannedFiles.push({
+                name: relPath,
+                content,
+                localPath: fullPath,
+                size: stat.size,
+                mtime: stat.mtimeMs,
+              });
+            }
+          } catch (_) {}
+        }
+      }
+    }
+  }
+
+  if (fs.existsSync(folderPath) && fs.statSync(folderPath).isDirectory()) {
+    walk(folderPath);
+  }
+  return { files: scannedFiles, folders: Array.from(detectedFolders) };
+}
+
 /**
  * GET /api/fs/mac-locations
  * Returns default macOS sections (Home, Desktop, Documents, Downloads, Workspace)
@@ -258,6 +333,202 @@ router.post('/open-folder', (req, res) => {
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
+});
+
+/**
+ * GET /api/fs/workspace
+ * Loads active local computer workspace directly from local disk storage
+ */
+router.get('/workspace', (req, res) => {
+  const requestedPath = req.query.path ? String(req.query.path) : null;
+  const folderPath = requestedPath && fs.existsSync(requestedPath) ? requestedPath : getActiveWorkspaceDir();
+
+  try {
+    const { files, folders } = scanWorkspaceDirectory(folderPath);
+    res.json({
+      success: true,
+      folderPath,
+      folderName: path.basename(folderPath),
+      files,
+      folders,
+      count: files.length,
+      storageType: 'local_disk',
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * POST /api/fs/save-file
+ * Auto-saves a single file directly to local computer disk
+ */
+router.post('/save-file', (req, res) => {
+  const { path: filePath, name, content = '', folderPath } = req.body;
+  const targetDir = folderPath && fs.existsSync(folderPath) ? folderPath : getActiveWorkspaceDir();
+  const resolvedPath = filePath || (name ? path.join(targetDir, name) : null);
+
+  if (!resolvedPath) {
+    return res.status(400).json({ success: false, error: 'Path or file name is required' });
+  }
+
+  try {
+    const dir = path.dirname(resolvedPath);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(resolvedPath, content, 'utf8');
+    res.json({
+      success: true,
+      path: resolvedPath,
+      name: path.basename(resolvedPath),
+      size: Buffer.byteLength(content, 'utf8'),
+      savedAt: new Date().toISOString(),
+      storageType: 'local_disk',
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * POST /api/fs/save-workspace
+ * Live auto-saves all files from the workspace directly to local computer disk
+ */
+router.post('/save-workspace', (req, res) => {
+  const { folderPath, files } = req.body;
+  if (!Array.isArray(files)) {
+    return res.status(400).json({ success: false, error: 'files array is required' });
+  }
+
+  const baseDir = folderPath && fs.existsSync(folderPath) ? folderPath : getActiveWorkspaceDir();
+  if (!fs.existsSync(baseDir)) fs.mkdirSync(baseDir, { recursive: true });
+
+  let savedCount = 0;
+  for (const f of files) {
+    if (!f || !f.name) continue;
+    const targetPath = f.localPath && path.isAbsolute(f.localPath)
+      ? f.localPath
+      : path.join(baseDir, f.name);
+
+    try {
+      const parentDir = path.dirname(targetPath);
+      if (!fs.existsSync(parentDir)) fs.mkdirSync(parentDir, { recursive: true });
+      fs.writeFileSync(targetPath, f.content ?? '', 'utf8');
+      savedCount++;
+    } catch (_) {}
+  }
+
+  res.json({
+    success: true,
+    savedCount,
+    folderPath: baseDir,
+    savedAt: new Date().toISOString(),
+    storageType: 'local_disk',
+  });
+});
+
+/**
+ * POST /api/fs/create-file
+ * Creates a new file on local disk
+ */
+router.post('/create-file', (req, res) => {
+  const { name, content = '', folderPath } = req.body;
+  if (!name) return res.status(400).json({ success: false, error: 'File name is required' });
+
+  const baseDir = folderPath && fs.existsSync(folderPath) ? folderPath : getActiveWorkspaceDir();
+  const targetPath = path.join(baseDir, name);
+
+  try {
+    const parentDir = path.dirname(targetPath);
+    if (!fs.existsSync(parentDir)) fs.mkdirSync(parentDir, { recursive: true });
+    if (!fs.existsSync(targetPath)) {
+      fs.writeFileSync(targetPath, content, 'utf8');
+    }
+    res.json({ success: true, path: targetPath, name, storageType: 'local_disk' });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * POST /api/fs/create-folder
+ * Creates a new folder on local disk
+ */
+router.post('/create-folder', (req, res) => {
+  const { path: folderPath, name, parentPath } = req.body;
+  const targetPath = folderPath || (parentPath ? path.join(parentPath, name) : (name ? path.join(getActiveWorkspaceDir(), name) : null));
+
+  if (!targetPath) return res.status(400).json({ success: false, error: 'Path is required' });
+
+  try {
+    if (!fs.existsSync(targetPath)) {
+      fs.mkdirSync(targetPath, { recursive: true });
+    }
+    res.json({ success: true, path: targetPath, storageType: 'local_disk' });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * POST /api/fs/delete-file
+ * Deletes a file or directory from local disk
+ */
+router.post('/delete-file', (req, res) => {
+  const { path: filePath, name, folderPath } = req.body;
+  const targetPath = filePath || (folderPath && name ? path.join(folderPath, name) : (name ? path.join(getActiveWorkspaceDir(), name) : null));
+
+  if (!targetPath) return res.status(400).json({ success: false, error: 'Path is required' });
+
+  try {
+    if (fs.existsSync(targetPath)) {
+      const stat = fs.statSync(targetPath);
+      if (stat.isDirectory()) {
+        fs.rmSync(targetPath, { recursive: true, force: true });
+      } else {
+        fs.unlinkSync(targetPath);
+      }
+    }
+    res.json({ success: true, path: targetPath, storageType: 'local_disk' });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * POST /api/fs/rename-file
+ * Renames a file on local disk
+ */
+router.post('/rename-file', (req, res) => {
+  const { oldPath, newPath, oldName, newName, folderPath } = req.body;
+  const baseDir = folderPath || getActiveWorkspaceDir();
+  const src = oldPath || (oldName ? path.join(baseDir, oldName) : null);
+  const dest = newPath || (newName ? path.join(baseDir, newName) : null);
+
+  if (!src || !dest) return res.status(400).json({ success: false, error: 'Source and destination paths required' });
+
+  try {
+    if (fs.existsSync(src)) {
+      const parentDir = path.dirname(dest);
+      if (!fs.existsSync(parentDir)) fs.mkdirSync(parentDir, { recursive: true });
+      fs.renameSync(src, dest);
+    }
+    res.json({ success: true, oldPath: src, newPath: dest, storageType: 'local_disk' });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * POST /api/fs/set-workspace-folder
+ * Sets active workspace folder for local disk storage
+ */
+router.post('/set-workspace-folder', (req, res) => {
+  const { path: folderPath } = req.body;
+  if (!folderPath || !fs.existsSync(folderPath)) {
+    return res.status(400).json({ success: false, error: 'Valid folder path is required' });
+  }
+  setActiveWorkspaceDir(folderPath);
+  res.json({ success: true, folderPath, folderName: path.basename(folderPath), storageType: 'local_disk' });
 });
 
 export default router;

@@ -61,7 +61,7 @@ export default function WelcomeLandingModal({ isOpen, onClose }) {
 
   if (!isOpen) return null;
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
 
@@ -72,8 +72,8 @@ export default function WelcomeLandingModal({ isOpen, onClose }) {
       setError('Please choose a username.');
       return;
     }
-    if (cleanPwd.length < 3) {
-      setError('Password must be at least 3 characters.');
+    if (cleanPwd.length < 10) {
+      setError('Password must be at least 10 characters.');
       return;
     }
     if (mode === 'signup' && confirmPassword.trim() && cleanPwd !== confirmPassword.trim()) {
@@ -81,7 +81,7 @@ export default function WelcomeLandingModal({ isOpen, onClose }) {
       return;
     }
 
-    const res = loginOrRegister(cleanUser, cleanPwd);
+    const res = await loginOrRegister(cleanUser, cleanPwd, rememberMe);
     if (!res.success) {
       setError(res.error || 'Authentication failed');
       return;
@@ -91,7 +91,7 @@ export default function WelcomeLandingModal({ isOpen, onClose }) {
       localStorage.setItem('fullcode_visited_landing_v1', 'true');
     } catch {}
 
-    handleSwitchUser(res.user);
+    await handleSwitchUser(res.user);
     showToast(`Welcome aboard, ${res.user.username}! Happy coding 🚀`);
     onClose();
     dispatch({ type: 'NAVIGATE_PAGE', payload: 'editor' });

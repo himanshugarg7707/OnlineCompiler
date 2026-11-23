@@ -1,11 +1,15 @@
 import { Router } from 'express';
 import { executeSqlQuery } from '../dbManager.js';
 import { detectLocalCompilers, executeCodeLocally } from '../localRunner.js';
+import { isHostedEnvironment } from '../hostedMode.js';
 
 const router = Router();
 
 // GET /api/execute/status - Check local compiler availability and system environment
 router.get(['/status', '/local-status'], async (req, res) => {
+  if (isHostedEnvironment()) {
+    return res.json({ success: true, available: false, message: 'Native compilers are available only in the local desktop or development server.' });
+  }
   try {
     const info = await detectLocalCompilers();
     res.json({
@@ -35,6 +39,9 @@ router.post('/', async (req, res) => {
     });
   }
 
+  // Hosted APIs run away from the user's computer. Keep compilation and SQL
+  // execution in the client runner instead of executing submitted code here.
+  if (isHostedEnvironment()) return res.json({ useClientRunner: true });
 
   // 1. SQL Execution via native fast SQLite backend
   if (languageId === 82) {

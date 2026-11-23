@@ -1508,10 +1508,31 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigati
         case "save_to_path":
             if let path = dict["path"] as? String, let code = dict["code"] as? String {
                 do {
+                    let fileUrl = URL(fileURLWithPath: path)
+                    try FileManager.default.createDirectory(at: fileUrl.deletingLastPathComponent(), withIntermediateDirectories: true)
                     try code.write(toFile: path, atomically: true, encoding: .utf8)
-                    dispatchNativeAction("toast", extra: ["message": "Saved to \(URL(fileURLWithPath: path).lastPathComponent) 💾"])
                 } catch {
                     dispatchNativeAction("toast", extra: ["message": "Save failed: \(error.localizedDescription) ❌"])
+                }
+            }
+
+        case "save_workspace":
+            if let folderPath = dict["folderPath"] as? String,
+               let rawFiles = dict["files"] as? [[String: Any]] {
+                let defaultWs = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Documents/FullCodeWorkspace").path
+                let baseDir = (!folderPath.isEmpty && FileManager.default.fileExists(atPath: folderPath)) ? folderPath : defaultWs
+                for f in rawFiles {
+                    guard let name = f["name"] as? String else { continue }
+                    let content = (f["content"] as? String) ?? ""
+                    let localPath = (f["localPath"] as? String) ?? ""
+                    let targetUrl: URL
+                    if !localPath.isEmpty && localPath.starts(with: "/") {
+                        targetUrl = URL(fileURLWithPath: localPath)
+                    } else {
+                        targetUrl = URL(fileURLWithPath: baseDir).appendingPathComponent(name)
+                    }
+                    try? FileManager.default.createDirectory(at: targetUrl.deletingLastPathComponent(), withIntermediateDirectories: true)
+                    try? content.write(to: targetUrl, atomically: true, encoding: .utf8)
                 }
             }
 

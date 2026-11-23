@@ -1,17 +1,5 @@
-import { Pool } from 'pg';
-
-const databaseUrl = process.env.DATABASE_URL || process.env.POSTGRES_URL || '';
-const pool = databaseUrl
-  ? new Pool({
-      connectionString: databaseUrl,
-      max: Number(process.env.PG_POOL_MAX) || 5,
-      idleTimeoutMillis: 30_000,
-      connectionTimeoutMillis: 8_000,
-      ...(process.env.PGSSL === 'true' ? { ssl: { rejectUnauthorized: false } } : {}),
-    })
-  : null;
-
-let schemaPromise = null;
+import { pool } from './database.js';
+import { runMigrations } from './migrations.js';
 
 export function isWorkspaceDatabaseConfigured() {
   return Boolean(pool);
@@ -19,28 +7,7 @@ export function isWorkspaceDatabaseConfigured() {
 
 async function ensureSchema() {
   if (!pool) throw new Error('Workspace database is not configured. Set DATABASE_URL on the backend.');
-  if (!schemaPromise) {
-    schemaPromise = pool.query(`
-      CREATE TABLE IF NOT EXISTS compiler_workspaces (
-        owner_id TEXT NOT NULL,
-        workspace_id TEXT NOT NULL,
-        name TEXT NOT NULL DEFAULT 'Workspace',
-        files JSONB NOT NULL DEFAULT '[]'::jsonb,
-        folders JSONB NOT NULL DEFAULT '[]'::jsonb,
-        active_file_id TEXT,
-        open_file_ids JSONB NOT NULL DEFAULT '[]'::jsonb,
-        stdin TEXT NOT NULL DEFAULT '',
-        subject_id TEXT,
-        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-        PRIMARY KEY (owner_id, workspace_id)
-      );
-      CREATE INDEX IF NOT EXISTS compiler_workspaces_updated_at_idx ON compiler_workspaces (owner_id, updated_at DESC);
-    `).catch((error) => {
-      schemaPromise = null;
-      throw error;
-    });
-  }
-  await schemaPromise;
+  await runMigrations();
 }
 
 export async function checkWorkspaceDatabase() {
@@ -50,7 +17,8 @@ export async function checkWorkspaceDatabase() {
     await pool.query('SELECT 1');
     return { configured: true, connected: true };
   } catch (error) {
-    return { configured: true, connected: false, error: error.message };
+    console.error('[Workspace DB] Health check failed:', error);
+    return { configured: true, connected: false, error: 'Database connection or migration failed.' };
   }
 }
 
@@ -59,6 +27,8 @@ function assertWorkspacePayload(payload) {
     throw new Error('Workspace payload must include a files array.');
   }
   if (payload.files.length > 5000) throw new Error('A workspace can contain at most 5,000 files.');
+  if (payload.folders !== undefined && !Array.isArray(payload.folders)) throw new Error('Workspace folders must be an array.');
+  if (payload.folders?.length > 5000) throw new Error('A workspace can contain at most 5,000 folders.');
   let contentBytes = 0;
   for (const file of payload.files) {
     if (!file || typeof file.name !== 'string' || typeof file.content !== 'string') {

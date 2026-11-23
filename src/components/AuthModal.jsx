@@ -37,6 +37,7 @@ export default function AuthModal({ isOpen, onClose }) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Logo customization state
   const [editInitials, setEditInitials] = useState(activeUser?.avatarInitials || '');
@@ -65,17 +66,22 @@ export default function AuthModal({ isOpen, onClose }) {
 
   if (!isOpen) return null;
 
-  const handleSubmitLogin = (e) => {
+  const handleSubmitLogin = async (e) => {
     e.preventDefault();
     setError('');
-
-    const res = loginOrRegister(username, password);
+    if (password.length < 10) {
+      setError('Use a password with at least 10 characters.');
+      return;
+    }
+    setIsSubmitting(true);
+    const res = await loginOrRegister(username, password);
+    setIsSubmitting(false);
     if (!res.success) {
       setError(res.error);
       return;
     }
 
-    handleSwitchUser(res.user);
+    await handleSwitchUser(res.user);
     showToast(`Welcome back, ${res.user.username}! Happy coding 🚀`);
     onClose();
     setUsername('');
@@ -83,16 +89,16 @@ export default function AuthModal({ isOpen, onClose }) {
     dispatch({ type: 'NAVIGATE_PAGE', payload: 'editor' });
   };
 
-  const handleQuickSwitch = (targetUser) => {
+  const handleQuickSwitch = async (targetUser) => {
     if (activeUser?.id === targetUser.id) return;
-    handleSwitchUser(targetUser);
+    await handleSwitchUser(targetUser);
     showToast(`Switched profile to ${targetUser.username} (${targetUser.avatarInitials}) 👤`);
     onClose();
   };
 
-  const handleSaveLogo = () => {
+  const handleSaveLogo = async () => {
     if (!activeUser) return;
-    const updated = updateUserProfile(activeUser.id, {
+    const updated = await updateUserProfile(activeUser.id, {
       avatarInitials: editInitials.toUpperCase().slice(0, 3),
       avatarColor: editColor,
     });
@@ -289,7 +295,7 @@ export default function AuthModal({ isOpen, onClose }) {
                     <Lock size={15} className="auth-icon" />
                     <input
                       type="password"
-                      placeholder="Enter account password (min 3 chars)"
+                      placeholder="Enter account password (min 10 characters)"
                       value={password}
                       onChange={(e) => {
                         setPassword(e.target.value);
@@ -302,9 +308,9 @@ export default function AuthModal({ isOpen, onClose }) {
 
                 {error && <div className="auth-error-msg">{error}</div>}
 
-                <button type="submit" className="btn-auth-submit">
+                <button type="submit" className="btn-auth-submit" disabled={isSubmitting}>
                   <LogIn size={15} />
-                  <span>Login / Create Account</span>
+                  <span>{isSubmitting ? 'Connecting…' : 'Login / Create Account'}</span>
                 </button>
               </form>
             </div>

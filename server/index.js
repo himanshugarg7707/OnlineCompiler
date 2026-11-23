@@ -7,24 +7,29 @@ import collabRoutes from './routes/collabRoutes.js';
 import terminalRoutes from './routes/terminalRoutes.js';
 import fsRoutes from './routes/fsRoutes.js';
 import workspaceRoutes from './routes/workspaceRoutes.js';
+import aiRoutes from './routes/aiRoutes.js';
+import authRoutes from './routes/authRoutes.js';
 import { seedSampleDatabases } from './dbManager.js';
 import { checkWorkspaceDatabase, isWorkspaceDatabaseConfigured } from './workspaceStore.js';
+import { runMigrations } from './migrations.js';
+import { isHostedEnvironment, localMachineOnly } from './hostedMode.js';
 
 const app = express();
 const PORT = process.env.PORT || 5001;
-const allowedOrigins = String(process.env.CORS_ORIGIN || '')
+const allowedOrigins = String(process.env.CORS_ORIGIN || (process.env.NODE_ENV === 'production' ? '' : 'http://localhost:5173'))
   .split(',')
   .map((origin) => origin.trim())
   .filter(Boolean);
 
 // Middleware
+app.set('trust proxy', process.env.TRUST_PROXY === 'false' ? false : process.env.NODE_ENV === 'production' ? 1 : false);
 app.use(cors({
   origin(origin, callback) {
-    const allowed = !origin || allowedOrigins.length === 0 || allowedOrigins.includes(origin) ||
-      (origin.endsWith('.vercel.app') && allowedOrigins.includes('https://*.vercel.app'));
+    const allowed = !origin || allowedOrigins.includes(origin);
     callback(allowed ? null : new Error('This origin is not allowed to access the compiler API.'), allowed);
   },
-  allowedHeaders: ['Content-Type', 'X-FullCode-Client-ID'],
+  credentials: true,
+  allowedHeaders: ['Content-Type'],
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
 }));
 app.use(express.json({ limit: process.env.API_BODY_LIMIT || '50mb' }));
@@ -44,22 +49,36 @@ app.get(['/api/health', '/health'], async (req, res) => {
 });
 
 // Routes - supports both /api/xxx and /xxx for seamless Vercel serverless proxy routing
-app.use(['/api/db', '/db'], dbRoutes);
+app.use(['/api/db', '/db'], localMachineOnly, dbRoutes);
 app.use(['/api/execute', '/execute'], executeRoutes);
-app.use(['/api/terminal', '/terminal'], terminalRoutes);
+app.use(['/api/terminal', '/terminal'], localMachineOnly, terminalRoutes);
 app.use(['/api/collab', '/collab'], collabRoutes);
-app.use(['/api/fs', '/fs'], fsRoutes);
+app.use(['/api/fs', '/fs'], localMachineOnly, fsRoutes);
+app.use(['/api/auth', '/auth'], authRoutes);
 app.use(['/api/workspaces', '/workspaces'], workspaceRoutes);
+app.use(['/api/ai', '/ai'], aiRoutes);
+
+app.use((error, _req, res, next) => {
+  if (res.headersSent) return next(error);
+  const status = Number.isInteger(error.status) && error.status >= 400 && error.status < 500 ? error.status : 500;
+  if (status >= 500) console.error('[API] Unhandled request error:', error);
+  return res.status(status).json({
+    success: false,
+    error: status === 500 ? 'The server could not complete this request.' : (error.message || 'Invalid request.'),
+  });
+});
 
 // Seed sample databases and start server for local dev
 if (!process.env.VERCEL) {
-  seedSampleDatabases().then(() => {
-    app.listen(PORT, () => {
-      console.log(`🚀 Full Code Backend Server running on http://localhost:${PORT}`);
-      console.log(`🗄️ Multi-Database Manager active at /api/db`);
-    });
-  }).catch((err) => {
-    console.warn('Database seed skipped:', err.message);
+  if (!isHostedEnvironment()) {
+    seedSampleDatabases().catch((err) => console.warn('Database seed skipped:', err.message));
+  }
+  if (isWorkspaceDatabaseConfigured()) {
+    runMigrations().catch((err) => console.error('Database migration unavailable; local compiler features remain online:', err.message));
+  }
+  app.listen(PORT, () => {
+    console.log(`🚀 Full Code Backend Server running on port ${PORT}`);
+    console.log('🗄️ Multi-Database Manager active at /api/db');
   });
 }
 

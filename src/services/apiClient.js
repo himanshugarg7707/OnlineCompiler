@@ -8,7 +8,7 @@ export function apiUrl(path) {
 }
 
 export function apiFetch(path, options) {
-  return fetch(apiUrl(path), options);
+  return fetch(apiUrl(path), { credentials: 'include', ...options });
 }
 
 export function hasDedicatedApiBackend() {

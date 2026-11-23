@@ -19,6 +19,7 @@ import { recordSnapshot } from '../services/historyService';
 import { formatCode } from '../services/formatterService';
 import {
   getActiveUser,
+  restoreAuthSession,
   logoutUser,
   saveUserWorkspace,
   loadUserWorkspace,
@@ -37,6 +38,16 @@ import {
 } from '../services/localWorkspaceStore';
 import { loadCloudWorkspace, scheduleCloudWorkspaceSave } from '../services/workspaceCloudService';
 import { loadChatHistory, persistChatHistory } from '../services/chatHistoryService';
+import {
+  isLocalDiskStorageActive,
+  fetchLocalDiskWorkspace,
+  autoSaveWorkspaceToLocalDisk,
+  createFileOnLocalDisk,
+  deleteFileFromLocalDisk,
+  renameFileOnLocalDisk,
+  getActiveLocalFolderPath,
+  setActiveLocalFolderPath,
+} from '../services/localDiskWorkspaceService';
 import {
   ensureGitBaselines,
   getCurrentBranch,
@@ -303,6 +314,18 @@ function loadSavedFiles() {
       },
     ];
   }
+  // When running on localhost (Mac app or browser), files are stored directly on local computer storage
+  // and will be hydrated from disk by useEffect. Do not use frontend localStorage for file storage.
+  if (isLocalDiskStorageActive()) {
+    return [
+      {
+        id: 'file-1',
+        name: 'main.py',
+        content: '# Loading from local computer storage...\n',
+        language: defaultLang,
+      },
+    ];
+  }
   try {
     const raw = localStorage.getItem(STORAGE_FILES_KEY);
     if (raw) {
@@ -325,7 +348,7 @@ function loadSavedFiles() {
 }
 
 function loadSavedFolders() {
-  if (isIncognitoActive()) return [];
+  if (isIncognitoActive() || isLocalDiskStorageActive()) return [];
   try {
     const raw = localStorage.getItem(STORAGE_FOLDERS_KEY);
     if (raw) {
@@ -533,6 +556,7 @@ const initialState = {
     stdin: '',
   },
   incognitoMode: isIncognitoActive(),
+  folderPath: getActiveLocalFolderPath() || null,
 };
 
 function saveStateToStorage(files, activeFileId, stdin, folders, openFileIds, currentWorkspaceId, currentWorkspaceName, subjectId) {
@@ -540,6 +564,25 @@ function saveStateToStorage(files, activeFileId, stdin, folders, openFileIds, cu
     // In incognito mode, nothing is saved to persistent disk
     return;
   }
+
+  // ── 0. LOCAL COMPUTER STORAGE (100% Local PC Disk Storage) ─────────────────
+  // When running on localhost (Mac app or local browser):
+  // Never use frontend localStorage/IndexedDB for storing files/workspaces.
+  // Frontend localStorage is strictly reserved for user login/auth details.
+  // All file saving is automatically live to the local computer's disk.
+  if (isLocalDiskStorageActive()) {
+    try {
+      localStorage.removeItem(STORAGE_FILES_KEY);
+      localStorage.removeItem(STORAGE_FOLDERS_KEY);
+      if (activeFileId) localStorage.setItem(STORAGE_ACTIVE_KEY, activeFileId);
+      if (stdin !== undefined) localStorage.setItem(STORAGE_STDIN_KEY, stdin);
+      if (openFileIds) localStorage.setItem(STORAGE_OPEN_TABS_KEY, JSON.stringify(openFileIds));
+    } catch (_) {}
+
+    autoSaveWorkspaceToLocalDisk(files, folders, activeFileId);
+    return;
+  }
+
   try {
     const wsId = currentWorkspaceId || getCurrentWorkspaceMeta()?.id || 'ws_default';
     const wsName = currentWorkspaceName || getCurrentWorkspaceMeta()?.name || 'Default Workspace';
@@ -784,7 +827,12 @@ function reducer(state, action) {
         name: uniqueName,
         content: fileContent,
         language: fileLang,
+        localPath: state.folderPath ? `${state.folderPath}/${uniqueName}` : undefined,
       };
+
+      if (isLocalDiskStorageActive()) {
+        createFileOnLocalDisk(uniqueName, fileContent, state.folderPath || getActiveLocalFolderPath());
+      }
 
       const updatedFiles = [...state.files, newFile];
       const updatedOpenIds = shouldOpen
@@ -989,6 +1037,10 @@ function reducer(state, action) {
 
     case 'CLOSE_FILE': {
       const fileIdToClose = action.payload;
+      const fileToDelete = state.files.find((f) => f.id === fileIdToClose);
+      if (isLocalDiskStorageActive() && fileToDelete) {
+        deleteFileFromLocalDisk(fileToDelete, state.folderPath || getActiveLocalFolderPath());
+      }
       const filteredFiles = state.files.filter((f) => f.id !== fileIdToClose);
       const filteredOpenIds = state.openFileIds.filter((id) => id !== fileIdToClose);
 
@@ -1048,6 +1100,11 @@ function reducer(state, action) {
       const { id, newName } = action.payload;
       const trimmed = newName.trim();
       if (!trimmed) return state;
+
+      const fileToRename = state.files.find((f) => f.id === id);
+      if (isLocalDiskStorageActive() && fileToRename) {
+        renameFileOnLocalDisk(fileToRename, trimmed, state.folderPath || getActiveLocalFolderPath());
+      }
 
       // Auto-sanitize invalid filename identifiers (e.g. "01java.java" -> "java_01.java")
       const { sanitizedPath: sanitizedNewName } = sanitizeFilenameIdentifier(trimmed);
@@ -1292,6 +1349,9 @@ function reducer(state, action) {
     }
     case 'LOAD_WORKSPACE_STATE': {
       const { files, folders, activeFileId, stdin, id, name, currentWorkspaceId, currentWorkspaceName, subjectId } = action.payload;
+      if (action.payload.folderPath) {
+        setActiveLocalFolderPath(action.payload.folderPath);
+      }
       const validFiles = Array.isArray(files) && files.length > 0 ? normalizeLoadedFiles(files) : state.files;
       const nextActiveId = activeFileId || validFiles[0]?.id;
       const nextActiveFile = validFiles.find((f) => f.id === nextActiveId) || validFiles[0];
@@ -1308,6 +1368,7 @@ function reducer(state, action) {
         currentWorkspaceId: nextWsId,
         currentWorkspaceName: nextWsName,
         subjectId: nextSubjectId,
+        folderPath: action.payload.folderPath || state.folderPath || null,
         files: validFiles,
         folders: folders || [],
         openFileIds: openIds,
@@ -2186,7 +2247,7 @@ export function AppProvider({ children }) {
   }, [state.files, showToast]);
 
   // Switch Active User & Hydrate Isolated Workspace
-  const handleSwitchUser = useCallback((newUser) => {
+  const handleSwitchUser = useCallback(async (newUser) => {
     if (!newUser) return;
 
     // Save previous user's workspace
@@ -2201,7 +2262,7 @@ export function AppProvider({ children }) {
     });
 
     // Load target user's workspace
-    const targetWorkspace = loadUserWorkspace(newUser.id);
+    const targetWorkspace = await loadCloudWorkspace(state.currentWorkspaceId || 'ws_default') || loadUserWorkspace(newUser.id);
     let newFiles, newFolders, newActiveId, newOpenIds, newStdin, newConfig;
 
     if (targetWorkspace && Array.isArray(targetWorkspace.files) && targetWorkspace.files.length > 0) {
@@ -2211,6 +2272,14 @@ export function AppProvider({ children }) {
       newOpenIds = targetWorkspace.openFileIds || [newActiveId];
       newStdin = targetWorkspace.stdin || '';
       newConfig = targetWorkspace.config || state.config;
+    } else if ((!state.activeUser || state.activeUser.username?.toLocaleLowerCase() === newUser.username?.toLocaleLowerCase()) && Array.isArray(state.files) && state.files.length > 0) {
+      // First sign-in adopts the current guest workspace into this account.
+      newFiles = state.files;
+      newFolders = state.folders;
+      newActiveId = state.activeFileId;
+      newOpenIds = state.openFileIds;
+      newStdin = state.stdin;
+      newConfig = state.config;
     } else {
       const defaultStarter = {
         id: `file-${Date.now()}`,
@@ -2240,10 +2309,10 @@ export function AppProvider({ children }) {
     });
 
     saveStateToStorage(newFiles, newActiveId, newStdin, newFolders, newOpenIds);
-  }, [state.activeUser, state.files, state.folders, state.activeFileId, state.openFileIds, state.stdin, state.config]);
+  }, [state.activeUser, state.files, state.folders, state.activeFileId, state.openFileIds, state.stdin, state.config, state.currentWorkspaceId]);
 
   // Logout User & Return to Guest Workspace
-  const handleLogoutUser = useCallback(() => {
+  const handleLogoutUser = useCallback(async () => {
     if (state.activeUser) {
       saveUserWorkspace(state.activeUser.id, {
         files: state.files,
@@ -2254,7 +2323,7 @@ export function AppProvider({ children }) {
         config: state.config,
       });
     }
-    logoutUser();
+    await logoutUser();
 
     // Load guest workspace or clean starter
     const guestWorkspace = loadUserWorkspace(null);
@@ -2296,6 +2365,26 @@ export function AppProvider({ children }) {
     saveStateToStorage(newFiles, newActiveId, newStdin, newFolders, newOpenIds);
     showToast('Logged out 👋 Switched to Guest workspace');
   }, [state.activeUser, state.files, state.folders, state.activeFileId, state.openFileIds, state.stdin, state.config, showToast]);
+
+  const authRestoreStarted = useRef(false);
+  useEffect(() => {
+    if (authRestoreStarted.current) return;
+    authRestoreStarted.current = true;
+    let cancelled = false;
+    restoreAuthSession().then(async (result) => {
+      if (cancelled) return;
+      if (result.authenticated && result.user) {
+        await handleSwitchUser(result.user);
+      }
+    }).catch((error) => console.warn('[Auth] Could not restore session:', error));
+    return () => { cancelled = true; };
+  }, [handleSwitchUser, handleLogoutUser, state.activeUser]);
+
+  useEffect(() => {
+    const onSyncError = (event) => showToast(`Cloud sync issue: ${event.detail?.message || 'Local files remain available.'}`);
+    window.addEventListener('fullcode-workspace-sync-error', onSyncError);
+    return () => window.removeEventListener('fullcode-workspace-sync-error', onSyncError);
+  }, [showToast]);
 
   const handleRunCode = useCallback(async () => {
     const activeFile = state.files.find((f) => f.id === state.activeFileId) || state.files[0];
@@ -2913,8 +3002,46 @@ export function AppProvider({ children }) {
   useEffect(() => {
     if (isIncognitoActive()) {
       showToast('🕶️ Incognito Active: Fresh session. Data vanishes on refresh.');
+      return;
     }
-  }, []);
+
+    if (isLocalDiskStorageActive()) {
+      // Clear legacy workspace files from localStorage so browser storage is strictly for auth/login details
+      try {
+        localStorage.removeItem(STORAGE_FILES_KEY);
+        localStorage.removeItem(STORAGE_FOLDERS_KEY);
+      } catch (_) {}
+
+      fetchLocalDiskWorkspace().then((localWs) => {
+        if (localWs && Array.isArray(localWs.files) && localWs.files.length > 0) {
+          const parsedFiles = normalizeLoadedFiles(
+            localWs.files.map((f, idx) => ({
+              id: f.id || `local-${idx + 1}`,
+              name: f.name,
+              content: f.content,
+              localPath: f.localPath,
+              language: resolveLanguage(getLanguageFromFilename(f.name), f.name),
+            }))
+          );
+
+          dispatch({
+            type: 'LOAD_WORKSPACE_STATE',
+            payload: {
+              files: parsedFiles,
+              folders: localWs.folders || [],
+              activeFileId: parsedFiles[0]?.id,
+              openFileIds: [parsedFiles[0]?.id],
+              workspaceName: localWs.folderName || 'Local Workspace',
+              folderPath: localWs.folderPath,
+            },
+          });
+          showToast(`💾 Local Computer Storage: ${localWs.folderName || 'FullCodeWorkspace'}`);
+        }
+      }).catch((err) => {
+        console.warn('Could not load local disk workspace on startup:', err);
+      });
+    }
+  }, [showToast]);
 
   const handleLoadWorkspaceState = useCallback((workspace) => {
     if (!workspace) return;

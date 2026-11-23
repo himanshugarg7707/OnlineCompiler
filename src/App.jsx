@@ -34,6 +34,7 @@ import TestSuiteWorkspacePage from './pages/TestSuiteWorkspacePage';
 import SplitPaneContainer from './components/SplitPaneContainer';
 import WebPreviewPanel from './components/WebPreviewPanel';
 import { getLanguageFromFilename } from './services/languageDetector';
+import { setActiveLocalFolderPath } from './services/localDiskWorkspaceService';
 import { FolderTree, ChevronLeft, ChevronRight, Maximize2, Minimize2, Play, Check, BookOpen, Code2, Timer, Braces, BrainCircuit, Database, Users, Info, FlaskConical } from 'lucide-react';
 import './App.css';
 
@@ -371,6 +372,7 @@ function AppContent() {
               id: `local-${Date.now()}-${idx}`,
               name: f.name,
               content: f.content,
+              localPath: action.folderPath ? `${action.folderPath}/${f.name}` : undefined,
               language: getLanguageFromFilename(f.name),
             }));
             const detectedFolders = [...new Set(
@@ -384,8 +386,13 @@ function AppContent() {
                 files: newFiles,
                 folders: detectedFolders,
                 activeFileId: newFiles[0].id,
+                workspaceName: action.folderName || 'Local Project',
+                folderPath: action.folderPath || null,
               },
             });
+            if (action.folderPath) {
+              setActiveLocalFolderPath(action.folderPath);
+            }
             showToast(`Opened project folder "${action.folderName || 'Project'}" (${newFiles.length} files) 📂`);
           }
           break;

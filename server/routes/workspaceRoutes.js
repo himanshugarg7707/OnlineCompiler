@@ -4,57 +4,46 @@ import {
   listWorkspaceSnapshots,
   saveWorkspaceSnapshot,
 } from '../workspaceStore.js';
+import { requireAuth } from './authRoutes.js';
 
 const router = Router();
 
-function getOwnerId(req, res) {
-  const ownerId = String(req.get('x-fullcode-client-id') || '');
-  if (!/^[a-f0-9-]{32,64}$/i.test(ownerId)) {
-    res.status(400).json({ success: false, error: 'A valid local workspace client ID is required.' });
-    return null;
-  }
-  return ownerId;
-}
-
-router.get('/', async (req, res) => {
-  const ownerId = getOwnerId(req, res);
-  if (!ownerId) return;
+router.get('/', requireAuth, async (req, res) => {
   try {
-    res.json({ success: true, workspaces: await listWorkspaceSnapshots(ownerId) });
+    res.json({ success: true, workspaces: await listWorkspaceSnapshots(req.authUser.id) });
   } catch (error) {
-    res.status(503).json({ success: false, error: error.message });
+    console.error('[Workspace API] List failed:', error);
+    res.status(503).json({ success: false, error: 'Could not load cloud workspaces. Your local workspace is still available.' });
   }
 });
 
-router.get('/:workspaceId', async (req, res) => {
-  const ownerId = getOwnerId(req, res);
-  if (!ownerId) return;
+router.get('/:workspaceId', requireAuth, async (req, res) => {
   const workspaceId = String(req.params.workspaceId || '');
   if (!workspaceId || workspaceId.length > 160) {
     return res.status(400).json({ success: false, error: 'Invalid workspace ID.' });
   }
   try {
-    const workspace = await getWorkspaceSnapshot(ownerId, workspaceId);
+    const workspace = await getWorkspaceSnapshot(req.authUser.id, workspaceId);
     if (!workspace) return res.status(404).json({ success: false, error: 'Workspace not found.' });
     return res.json({ success: true, workspace });
   } catch (error) {
-    return res.status(503).json({ success: false, error: error.message });
+    console.error('[Workspace API] Load failed:', error);
+    return res.status(503).json({ success: false, error: 'Could not load this cloud workspace. Your local workspace is still available.' });
   }
 });
 
-router.put('/:workspaceId', async (req, res) => {
-  const ownerId = getOwnerId(req, res);
-  if (!ownerId) return;
+router.put('/:workspaceId', requireAuth, async (req, res) => {
   const workspaceId = String(req.params.workspaceId || '');
   if (!workspaceId || workspaceId.length > 160) {
     return res.status(400).json({ success: false, error: 'Invalid workspace ID.' });
   }
   try {
-    const result = await saveWorkspaceSnapshot(ownerId, workspaceId, req.body);
+    const result = await saveWorkspaceSnapshot(req.authUser.id, workspaceId, req.body);
     return res.json({ success: true, ...result });
   } catch (error) {
     const isPayloadValidation = /must include|at most|needs a name|40 MB/.test(error.message);
-    return res.status(isPayloadValidation ? 400 : 503).json({ success: false, error: error.message });
+    if (!isPayloadValidation) console.error('[Workspace API] Save failed:', error);
+    return res.status(isPayloadValidation ? 400 : 503).json({ success: false, error: isPayloadValidation ? error.message : 'Could not sync workspace to the database. Your local copy is safe.' });
   }
 });
 

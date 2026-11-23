@@ -1,31 +1,22 @@
 import { apiFetch, hasDedicatedApiBackend } from './apiClient';
+import { getActiveUser } from './authService';
 
-const CLIENT_ID_KEY = 'fullcode_backend_client_id_v1';
 let healthCheckPromise;
 let saveTimer;
 let pendingWorkspace;
 let cloudStatus = { configured: hasDedicatedApiBackend(), connected: false, message: 'Not connected' };
 
-function getClientId() {
-  try {
-    let clientId = localStorage.getItem(CLIENT_ID_KEY);
-    if (!clientId) {
-      clientId = globalThis.crypto?.randomUUID?.() || `${Date.now().toString(16)}-${Math.random().toString(16).slice(2)}-${Math.random().toString(16).slice(2)}`;
-      localStorage.setItem(CLIENT_ID_KEY, clientId);
-    }
-    return clientId;
-  } catch {
-    return globalThis.crypto?.randomUUID?.() || 'temporary-browser-workspace';
+function setCloudStatus(next) {
+  const changedMessage = next.message && next.message !== cloudStatus.message;
+  cloudStatus = next;
+  if (changedMessage && !next.connected && typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('fullcode-workspace-sync-error', { detail: { message: next.message } }));
   }
-}
-
-function ownerHeaders() {
-  return { 'X-FullCode-Client-ID': getClientId() };
 }
 
 async function ensureCloudDatabase() {
   if (!hasDedicatedApiBackend() && !import.meta.env.DEV) {
-    cloudStatus = { configured: false, connected: false, message: 'Set VITE_API_BASE_URL to the separate backend URL.' };
+    setCloudStatus({ configured: false, connected: false, message: 'Set VITE_API_BASE_URL to the separate backend URL.' });
     return false;
   }
   if (!healthCheckPromise) {
@@ -33,17 +24,17 @@ async function ensureCloudDatabase() {
       .then(async (response) => {
         const data = await response.json().catch(() => ({}));
         const connected = response.ok && data?.workspaceDatabase?.connected === true;
-        cloudStatus = {
+        setCloudStatus({
           configured: hasDedicatedApiBackend() || Boolean(import.meta.env.DEV),
           connected,
           message: connected ? 'Connected to PostgreSQL workspace storage.' : (data?.workspaceDatabase?.configured
             ? 'Backend is reachable, but its workspace database is unavailable.'
             : 'Add DATABASE_URL to the backend to enable cloud workspace storage.'),
-        };
+        });
         return connected;
       })
-      .catch((error) => {
-        cloudStatus = { configured: hasDedicatedApiBackend(), connected: false, message: error.message || 'Backend is unavailable.' };
+      .catch((_error) => {
+        setCloudStatus({ configured: hasDedicatedApiBackend(), connected: false, message: 'Backend is unavailable. Your local workspace remains available.' });
         return false;
       })
       .finally(() => {
@@ -59,38 +50,43 @@ export function getWorkspaceCloudStatus() {
 }
 
 export async function loadCloudWorkspace(workspaceId = 'ws_default') {
+  if (!getActiveUser()) return null;
   if (!(await ensureCloudDatabase())) return null;
   try {
     const response = await apiFetch(`/api/workspaces/${encodeURIComponent(workspaceId)}`, {
-      headers: ownerHeaders(),
       signal: AbortSignal.timeout(20_000),
     });
     if (response.status === 404) return null;
     const payload = await response.json().catch(() => ({}));
+    if (response.status === 401) {
+      setCloudStatus({ ...cloudStatus, connected: false, message: 'Sign in again to sync cloud workspaces. Local files remain available.' });
+      return null;
+    }
     if (!response.ok) throw new Error(payload.error || `Backend request failed (${response.status}).`);
     return payload.workspace || null;
   } catch (error) {
-    cloudStatus = { ...cloudStatus, connected: false, message: error.message || 'Could not load the cloud workspace.' };
+    setCloudStatus({ ...cloudStatus, connected: false, message: error.message || 'Could not load the cloud workspace. Local files remain available.' });
     return null;
   }
 }
 
 async function savePendingWorkspace() {
   const snapshot = pendingWorkspace;
-  if (!snapshot || !(await ensureCloudDatabase())) return;
+  if (!snapshot || !getActiveUser() || !(await ensureCloudDatabase())) return;
   pendingWorkspace = null;
   try {
     const response = await apiFetch(`/api/workspaces/${encodeURIComponent(snapshot.workspaceId)}`, {
       method: 'PUT',
-      headers: { ...ownerHeaders(), 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(snapshot.data),
       signal: AbortSignal.timeout(60_000),
     });
     const payload = await response.json().catch(() => ({}));
+    if (response.status === 401) throw new Error('Sign in again to sync cloud workspaces. Your local files are safe.');
     if (!response.ok) throw new Error(payload.error || `Workspace save failed (${response.status}).`);
-    cloudStatus = { configured: true, connected: true, message: 'Workspace backed up to PostgreSQL.' };
+    setCloudStatus({ configured: true, connected: true, message: 'Workspace backed up to PostgreSQL.' });
   } catch (error) {
-    cloudStatus = { ...cloudStatus, connected: false, message: error.message || 'Cloud workspace save failed.' };
+    setCloudStatus({ ...cloudStatus, connected: false, message: error.message || 'Cloud workspace save failed. Local files remain available.' });
     console.warn('[Workspace Sync] Cloud backup failed; local browser data remains available.', error);
   }
   if (pendingWorkspace && !saveTimer) {
@@ -102,7 +98,7 @@ async function savePendingWorkspace() {
 }
 
 export function scheduleCloudWorkspaceSave(workspaceId, data) {
-  if (data?.incognito || !Array.isArray(data?.files) || data.files.length === 0) return;
+  if (data?.incognito || !getActiveUser() || !Array.isArray(data?.files) || data.files.length === 0) return;
   if (!hasDedicatedApiBackend() && !import.meta.env.DEV) return;
   pendingWorkspace = { workspaceId: workspaceId || 'ws_default', data };
   if (saveTimer) clearTimeout(saveTimer);

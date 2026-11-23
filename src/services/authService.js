@@ -1,145 +1,133 @@
-// Authentication & User Profile Management with Isolated Workspace Storage
+import { apiFetch, hasDedicatedApiBackend } from './apiClient';
 
-const USERS_DB_KEY = 'fullcode_users_db_v1';
-const ACTIVE_USER_KEY = 'fullcode_active_user_id_v1';
+const PROFILE_KEY = 'fullcode_active_account_profile_v2';
+const LEGACY_ACTIVE_KEY = 'fullcode_active_user_id_v1';
 
-/**
- * Generate Avatar Initials from the first and last letter of the username
- * (e.g. "Himanshu" -> "HU", "John" -> "JN", "A" -> "A")
- */
 export function generateFirstLastInitials(username = '') {
   const clean = username.trim();
   if (!clean) return 'FC';
   if (clean.length === 1) return clean.toUpperCase();
-  const first = clean[0].toUpperCase();
-  const last = clean[clean.length - 1].toUpperCase();
-  return `${first}${last}`;
+  return `${clean[0]}${clean.at(-1)}`.toUpperCase();
 }
 
-const AVATAR_COLORS = [
-  'linear-gradient(135deg, #00d4ff, #8b5cf6)',
-  'linear-gradient(135deg, #ec4899, #f43f5e)',
-  'linear-gradient(135deg, #10b981, #06b6d4)',
-  'linear-gradient(135deg, #f59e0b, #ef4444)',
-  'linear-gradient(135deg, #8b5cf6, #3b82f6)',
-  'linear-gradient(135deg, #6366f1, #a855f7)',
-];
-
-function getRandomAvatarColor(str = '') {
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    hash = (hash + str.charCodeAt(i)) % AVATAR_COLORS.length;
-  }
-  return AVATAR_COLORS[hash];
+function safeProfile(user) {
+  if (!user || typeof user.id !== 'string' || typeof user.username !== 'string') return null;
+  return {
+    id: user.id,
+    username: user.username,
+    avatarInitials: String(user.avatarInitials || generateFirstLastInitials(user.username)).slice(0, 3),
+    avatarColor: /^#[0-9a-f]{6}$/i.test(user.avatarColor || '') ? user.avatarColor : '#00d4ff',
+    avatarEmoji: '',
+    createdAt: Number(user.createdAt) || Date.now(),
+  };
 }
 
-function hashPassword(pwd) {
-  let hash = 0;
-  for (let i = 0; i < pwd.length; i++) {
-    hash = ((hash << 5) - hash) + pwd.charCodeAt(i);
-    hash |= 0;
-  }
-  return `pwd_${Math.abs(hash).toString(16)}_${pwd.length}`;
-}
-
-/**
- * Get all registered users
- */
-export function getAllUsers() {
+function cacheProfile(user) {
+  const profile = safeProfile(user);
+  if (!profile) return null;
   try {
-    const raw = localStorage.getItem(USERS_DB_KEY);
-    return raw ? JSON.parse(raw) : {};
-  } catch (e) {
-    console.warn('Failed to load users:', e);
-    return {};
-  }
+    localStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
+    localStorage.setItem(LEGACY_ACTIVE_KEY, profile.id);
+  } catch {}
+  return profile;
 }
 
-/**
- * Get currently active user object or null (Guest)
- */
+function clearCachedProfile() {
+  try {
+    localStorage.removeItem(PROFILE_KEY);
+    localStorage.removeItem(LEGACY_ACTIVE_KEY);
+  } catch {}
+}
+
+export function getAllUsers() {
+  const active = getActiveUser();
+  return active ? { [active.id]: active } : {};
+}
+
 export function getActiveUser() {
   try {
-    const activeId = localStorage.getItem(ACTIVE_USER_KEY);
-    if (!activeId) return null;
-    const users = getAllUsers();
-    return users[activeId] || null;
-  } catch (e) {
+    const cached = localStorage.getItem(PROFILE_KEY);
+    if (cached) return safeProfile(JSON.parse(cached));
+    // Display-only migration for legacy profiles; server session validation still gates cloud access.
+    return null;
+  } catch {
     return null;
   }
 }
 
-/**
- * Single-action Login or Sign Up
- */
-export function loginOrRegister(username, password) {
-  const cleanUsername = username.trim();
-  const cleanPassword = password.trim();
-
-  if (!cleanUsername) {
-    return { success: false, error: 'Please enter a username.' };
+async function authRequest(path, body) {
+  if (!hasDedicatedApiBackend() && !import.meta.env.DEV) {
+    throw new Error('Account sign-in needs the backend URL configured. Guest workspaces still work locally.');
   }
-  if (!cleanPassword || cleanPassword.length < 3) {
-    return { success: false, error: 'Password must be at least 3 characters.' };
+  let response;
+  try {
+    response = await apiFetch(path, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(20_000),
+    });
+  } catch {
+    throw new Error('Could not reach the account server. Your local workspace is still available.');
   }
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(payload.error || `Account request failed (${response.status}).`);
+  return payload;
+}
 
-  const users = getAllUsers();
-  const userId = `user_${cleanUsername.toLowerCase().replace(/[^a-z0-9_]/g, '_')}`;
-  const pwdHash = hashPassword(cleanPassword);
+export async function loginOrRegister(username, password, rememberMe = true) {
+  try {
+    const payload = await authRequest('/api/auth/login', { username, password, rememberMe });
+    const user = cacheProfile(payload.user);
+    return { success: true, user, isNew: Boolean(payload.isNew) };
+  } catch (error) {
+    return { success: false, error: error.message || 'Authentication failed.' };
+  }
+}
 
-  let user = users[userId];
-
-  if (user) {
-    // Existing user -> check password
-    if (user.passwordHash !== pwdHash) {
-      return { success: false, error: 'Incorrect password for this account.' };
+export async function restoreAuthSession() {
+  if (!hasDedicatedApiBackend() && !import.meta.env.DEV) return { authenticated: false, unavailable: true };
+  try {
+    const response = await apiFetch('/api/auth/me', { signal: AbortSignal.timeout(12_000) });
+    if (response.status === 401) {
+      return { authenticated: false, unavailable: false };
     }
-  } else {
-    // New user -> register
-    user = {
-      id: userId,
-      username: cleanUsername,
-      passwordHash: pwdHash,
-      avatarInitials: generateFirstLastInitials(cleanUsername),
-      avatarColor: getRandomAvatarColor(cleanUsername),
-      avatarEmoji: '',
-      createdAt: Date.now(),
-    };
-    users[userId] = user;
-    localStorage.setItem(USERS_DB_KEY, JSON.stringify(users));
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) return { authenticated: false, unavailable: true };
+    return { authenticated: true, user: cacheProfile(payload.user), unavailable: false };
+  } catch {
+    return { authenticated: false, unavailable: true };
   }
-
-  // Set active user
-  localStorage.setItem(ACTIVE_USER_KEY, userId);
-  return { success: true, user, isNew: !users[userId] };
 }
 
-/**
- * Update active user's profile
- */
-export function updateUserProfile(userId, updates = {}) {
-  const users = getAllUsers();
-  if (!users[userId]) return null;
-
-  users[userId] = {
-    ...users[userId],
-    ...updates,
-  };
-
-  localStorage.setItem(USERS_DB_KEY, JSON.stringify(users));
-  return users[userId];
+export async function updateUserProfile(userId, updates = {}) {
+  const active = getActiveUser();
+  if (!active || active.id !== userId) return null;
+  try {
+    const response = await apiFetch('/api/auth/me', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updates),
+      signal: AbortSignal.timeout(12_000),
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload.error || 'Could not save profile changes.');
+    return cacheProfile(payload.user);
+  } catch (error) {
+    console.warn('[Auth] Profile update failed:', error.message);
+    return null;
+  }
 }
 
-/**
- * Logout active user
- */
-export function logoutUser() {
-  localStorage.removeItem(ACTIVE_USER_KEY);
+export async function logoutUser() {
+  try {
+    if (hasDedicatedApiBackend() || import.meta.env.DEV) {
+      await apiFetch('/api/auth/logout', { method: 'POST', signal: AbortSignal.timeout(8_000) });
+    }
+  } catch {}
+  clearCachedProfile();
 }
 
-/**
- * Workspace isolation storage helpers for user
- */
 export function getUserWorkspaceKey(userId) {
   return userId ? `fullcode_workspace_${userId}` : 'fullcode_workspace_guest';
 }
@@ -155,10 +143,9 @@ export function saveUserWorkspace(userId, workspaceData) {
 
 export function loadUserWorkspace(userId) {
   try {
-    const key = getUserWorkspaceKey(userId);
-    const raw = localStorage.getItem(key);
+    const raw = localStorage.getItem(getUserWorkspaceKey(userId));
     return raw ? JSON.parse(raw) : null;
-  } catch (e) {
+  } catch {
     return null;
   }
 }

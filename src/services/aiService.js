@@ -2,6 +2,7 @@
 // Lucia uses Gemini when configured; local heuristic responses remain available without a key.
 
 import { getConfig } from './configService';
+import { apiUrl } from './apiClient';
 
 function getAssistantPrompt(config = getConfig()) {
   const name = String(config.aiAssistantName || 'Lucia').trim().slice(0, 40) || 'Lucia';
@@ -22,10 +23,13 @@ function usesGemini(config) {
 }
 
 async function requestGemini(systemPrompt, prompt, apiKey, options = {}) {
-  if (!apiKey?.trim()) throw new Error('Add your Gemini API key in Settings → AI & Diagnostics to use Lucia AI.');
-  const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent', {
+  const model = 'gemini-3.8-flash';
+  const response = await fetch(apiKey?.trim()
+    ? `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`
+    : apiUrl('/api/ai/generate'), {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey.trim() },
+    credentials: apiKey?.trim() ? 'omit' : 'include',
+    headers: { 'Content-Type': 'application/json', ...(apiKey?.trim() ? { 'x-goog-api-key': apiKey.trim() } : {}) },
     body: JSON.stringify({
       system_instruction: { parts: [{ text: systemPrompt }] },
       contents: [{ role: 'user', parts: [{ text: prompt }] }],

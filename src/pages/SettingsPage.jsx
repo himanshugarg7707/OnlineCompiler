@@ -2338,7 +2338,7 @@ export default function SettingsPage() {
                       className="settings-select"
                     >
                       <option value="mock">Built-in Lucia (no API key)</option>
-                      <option value="gemini">Lucia AI powered by Gemini 2.5 Flash</option>
+                      <option value="gemini">Lucia AI powered by Gemini 3.8 Flash</option>
 
                     </select>
                   </div>
@@ -2347,7 +2347,7 @@ export default function SettingsPage() {
                 <div className="form-row">
                   <div className="form-label-col">
                     <span className="setting-title">Gemini API Key</span>
-                    <span className="setting-desc">Saved automatically in this browser and kept after refresh. Sent to Google only when Gemini is selected.</span>
+                    <span className="setting-desc">Optional personal key for this browser. For shared access across devices, configure GEMINI_API_KEY on the backend server.</span>
                   </div>
                   <div className="form-input-col lucia-field-control lucia-key-control">
                     <input
@@ -2371,11 +2371,11 @@ export default function SettingsPage() {
                 <div className="form-row">
                   <div className="form-label-col">
                     <span className="setting-title">Gemini Connection</span>
-                    <span className="setting-desc">Check that the Gemini key is valid for Lucia AI</span>
+                  <span className="setting-desc">Check the personal key or the shared backend Gemini key</span>
                   </div>
                   <div className="form-input-col lucia-field-control">
-                    <button type="button" className="settings-action-btn lucia-test-btn" onClick={handleTestGeminiConnection}>
-                      Test Gemini Key
+                  <button type="button" className="settings-action-btn lucia-test-btn" onClick={handleTestGeminiConnection}>
+                      Test Gemini Connection
                     </button>
                   </div>
                 </div>
