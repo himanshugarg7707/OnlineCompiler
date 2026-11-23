@@ -19,16 +19,14 @@ const CODE_FIRST_CHAT_RULES = 'For requests to write, complete, or modify code, 
 const BRIEF_CHAT_RULES = 'Answer directly and briefly. For code requests, provide a complete code block first and limit the explanation to two short bullets. Keep prose under 180 words unless the user asks for detail.';
 
 const GEMINI_MODELS = [
-  'gemini-1.5-flash',
+  'gemini-2.5-flash',
   'gemini-2.0-flash',
-  'gemini-1.5-flash-latest',
-  'gemini-2.0-flash-exp',
+  'gemini-1.5-flash',
+  'gemini-2.5-pro',
   'gemini-1.5-pro',
-  'gemini-1.5-pro-latest',
-  'gemini-pro',
 ];
 
-let activeGeminiModel = 'gemini-1.5-flash';
+let activeGeminiModel = 'gemini-2.5-flash';
 let cachedSupportedModels = null;
 let lastModelFetchKey = '';
 
@@ -37,42 +35,39 @@ export function getActiveGeminiModel() {
 }
 
 /**
- * Dynamically queries Google's ModelService.ListModels to discover
- * exactly which models are supported and active for this specific API key.
+ * Returns supported Gemini models immediately (0ms) and refreshes
+ * cache in the background to avoid blocking AI queries.
  */
-export async function getSupportedGeminiModels(apiKey) {
+export function getSupportedGeminiModels(apiKey) {
   const trimmed = apiKey?.trim() || '';
   if (!trimmed) return GEMINI_MODELS;
   if (cachedSupportedModels && lastModelFetchKey === trimmed) {
     return cachedSupportedModels;
   }
 
-  try {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(trimmed)}`;
-    const res = await fetch(url, { signal: AbortSignal.timeout(4000) });
-    if (res.ok) {
-      const data = await res.json();
+  // Non-blocking background discovery
+  const url = `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(trimmed)}`;
+  fetch(url, { signal: AbortSignal.timeout(3000) })
+    .then((res) => (res.ok ? res.json() : null))
+    .then((data) => {
       const models = (data?.models || [])
         .filter((m) => (m.supportedGenerationMethods || []).includes('generateContent'))
         .map((m) => m.name.replace(/^models\//, ''))
         .filter((name) => !name.includes('embedding') && !name.includes('aqa') && !name.includes('imagen'));
 
       if (models.length > 0) {
-        // Sort priority: flash models first, then pro
         models.sort((a, b) => {
-          const aWeight = a.includes('1.5-flash') ? 4 : a.includes('2.0-flash') ? 3 : a.includes('flash') ? 2 : 1;
-          const bWeight = b.includes('1.5-flash') ? 4 : b.includes('2.0-flash') ? 3 : b.includes('flash') ? 2 : 1;
+          const aWeight = a.includes('2.5-flash') ? 5 : a.includes('2.0-flash') ? 4 : a.includes('1.5-flash') ? 3 : 1;
+          const bWeight = b.includes('2.5-flash') ? 5 : b.includes('2.0-flash') ? 4 : b.includes('1.5-flash') ? 3 : 1;
           return bWeight - aWeight;
         });
         cachedSupportedModels = models;
         lastModelFetchKey = trimmed;
-        return models;
       }
-    }
-  } catch (e) {
-    // Network or timeout, fallback to GEMINI_MODELS
-  }
-  return GEMINI_MODELS;
+    })
+    .catch(() => {});
+
+  return cachedSupportedModels || GEMINI_MODELS;
 }
 
 function shouldCascadeModel(status, errMsg) {
@@ -152,11 +147,16 @@ async function requestGemini(systemPrompt, prompt, apiKey, options = {}) {
 
   let lastError = null;
 
+  const isDesktopOrLocal = typeof window !== 'undefined' && (
+    window.location.hostname === 'localhost' ||
+    window.location.hostname === '127.0.0.1' ||
+    Boolean(window.webkit?.messageHandlers?.nativeHost) ||
+    Boolean(window.__IS_DESKTOP_APP__)
+  );
+
   for (const model of modelsToTry) {
     try {
       if (trimmedKey) {
-        // Direct browser call with ?key=... URL param and x-goog-api-key header
-        const directUrl = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(trimmedKey)}`;
         const reqBody = {
           system_instruction: { parts: [{ text: systemPrompt }] },
           contents: [{ role: 'user', parts: [{ text: prompt }] }],
@@ -167,26 +167,9 @@ async function requestGemini(systemPrompt, prompt, apiKey, options = {}) {
         };
 
         let response = null;
-        let directFetchFailed = false;
 
-        try {
-          response = await fetch(directUrl, {
-            method: 'POST',
-            credentials: 'omit',
-            signal: options.signal,
-            headers: {
-              'Content-Type': 'application/json',
-              'x-goog-api-key': trimmedKey,
-            },
-            body: JSON.stringify(reqBody),
-          });
-        } catch (fetchErr) {
-          if (fetchErr.name === 'AbortError') throw fetchErr;
-          // Direct fetch failed (CORS or network policy) - fallback to backend proxy
-          directFetchFailed = true;
-        }
-
-        if (directFetchFailed || !response) {
+        // On desktop/local apps, route directly through the local backend proxy to eliminate browser CORS/TLS stalls
+        if (isDesktopOrLocal) {
           try {
             response = await fetch(apiUrl('/api/ai/generate'), {
               method: 'POST',
@@ -204,8 +187,49 @@ async function requestGemini(systemPrompt, prompt, apiKey, options = {}) {
             });
           } catch (proxyErr) {
             if (proxyErr.name === 'AbortError') throw proxyErr;
-            throw new Error(`Lucia could not reach AI endpoint: ${proxyErr.message}`);
           }
+        }
+
+        // On web or if local proxy unavailable, try direct Google API call with fast 4.5s timeout
+        if (!response) {
+          const directUrl = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(trimmedKey)}`;
+          try {
+            const timeoutSignal = AbortSignal.timeout(4500);
+            const combinedSignal = options.signal
+              ? (AbortSignal.any ? AbortSignal.any([options.signal, timeoutSignal]) : options.signal)
+              : timeoutSignal;
+
+            response = await fetch(directUrl, {
+              method: 'POST',
+              credentials: 'omit',
+              signal: combinedSignal,
+              headers: {
+                'Content-Type': 'application/json',
+                'x-goog-api-key': trimmedKey,
+              },
+              body: JSON.stringify(reqBody),
+            });
+          } catch (fetchErr) {
+            if (fetchErr.name === 'AbortError' && options.signal?.aborted) throw fetchErr;
+          }
+        }
+
+        // Final fallback to proxy endpoint if direct fetch stalled
+        if (!response) {
+          response = await fetch(apiUrl('/api/ai/generate'), {
+            method: 'POST',
+            credentials: 'omit',
+            signal: options.signal,
+            headers: {
+              'Content-Type': 'application/json',
+              'x-goog-api-key': trimmedKey,
+            },
+            body: JSON.stringify({
+              ...reqBody,
+              apiKey: trimmedKey,
+              model,
+            }),
+          });
         }
 
         const payload = await response.json().catch(() => ({}));
