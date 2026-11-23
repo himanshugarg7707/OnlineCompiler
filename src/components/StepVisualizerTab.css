@@ -1,0 +1,405 @@
+/* ── Live Step-by-Step Algorithm & Memory Visualizer Tab ── */
+
+.step-visualizer-tab {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 10px 14px;
+  background: var(--bg-primary, #0b1326);
+  color: var(--text-primary, #f1f5f9);
+  overflow-y: auto;
+  gap: 10px;
+}
+
+/* ── Top Controls Bar ── */
+.vis-controls-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 10px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  flex-wrap: wrap;
+}
+
+.vis-playback-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.vis-ctrl-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 9px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  color: #cbd5e1;
+  font-size: 11.5px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.vis-ctrl-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.vis-ctrl-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.vis-ctrl-btn.primary {
+  background: rgba(56, 189, 248, 0.2);
+  border-color: rgba(56, 189, 248, 0.4);
+  color: #38bdf8;
+  font-weight: 600;
+}
+
+.vis-ctrl-btn.primary:hover {
+  background: rgba(56, 189, 248, 0.3);
+  color: #ffffff;
+}
+
+.vis-ctrl-btn.primary.is-playing {
+  background: rgba(239, 68, 68, 0.2);
+  border-color: rgba(239, 68, 68, 0.4);
+  color: #f87171;
+}
+
+/* ── Progress Meta ── */
+.vis-progress-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 140px;
+  max-width: 260px;
+}
+
+.vis-step-badge {
+  font-size: 11px;
+  font-family: 'JetBrains Mono', monospace;
+  color: #94a3b8;
+  white-space: nowrap;
+}
+
+.vis-progress-track {
+  flex: 1;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.vis-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #38bdf8, #818cf8);
+  transition: width 0.2s ease;
+}
+
+/* ── Options Group ── */
+.vis-options-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.vis-speed-select {
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 5px;
+  color: #cbd5e1;
+  font-size: 11px;
+  padding: 3px 6px;
+  outline: none;
+  cursor: pointer;
+}
+
+.vis-popout-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  background: rgba(192, 132, 252, 0.12);
+  border: 1px solid rgba(192, 132, 252, 0.3);
+  border-radius: 5px;
+  color: #c084fc;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.vis-popout-btn:hover {
+  background: rgba(192, 132, 252, 0.25);
+  color: #ffffff;
+}
+
+/* ── Preset Algorithm Pills ── */
+.vis-presets-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+
+.vis-presets-label {
+  font-size: 11px;
+  color: #64748b;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-right: 4px;
+  flex-shrink: 0;
+}
+
+.vis-preset-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 12px;
+  color: #94a3b8;
+  font-size: 11px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+
+.vis-preset-pill:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #f1f5f9;
+}
+
+.vis-preset-pill.active {
+  background: rgba(56, 189, 248, 0.18);
+  border-color: rgba(56, 189, 248, 0.4);
+  color: #38bdf8;
+  font-weight: 600;
+}
+
+/* ── Active Step Banner ── */
+.vis-step-banner {
+  padding: 8px 12px;
+  background: rgba(56, 189, 248, 0.08);
+  border-left: 3px solid #38bdf8;
+  border-radius: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.vis-banner-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.vis-line-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #38bdf8;
+  box-shadow: 0 0 8px #38bdf8;
+}
+
+.vis-line-tag {
+  background: rgba(56, 189, 248, 0.2);
+  color: #7dd3fc;
+  font-size: 10.5px;
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+
+.vis-action-title {
+  color: #f1f5f9;
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.vis-banner-explanation {
+  color: #94a3b8;
+  font-size: 11.5px;
+  line-height: 1.4;
+}
+
+/* ── 3-Card Grid ── */
+.vis-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+  flex: 1;
+  min-height: 160px;
+}
+
+.vis-card {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.vis-card-header {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 10px;
+  background: rgba(255, 255, 255, 0.03);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.vis-card-title {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #cbd5e1;
+}
+
+.vis-card-body {
+  padding: 8px 10px;
+  overflow-y: auto;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.vis-empty-state {
+  color: #64748b;
+  font-size: 11px;
+  font-style: italic;
+  padding: 10px 0;
+  text-align: center;
+}
+
+/* Call Stack Frames */
+.stack-frame-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 5px 8px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 5px;
+  border-left: 2px solid transparent;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+}
+
+.stack-frame-item.active-frame {
+  background: rgba(56, 189, 248, 0.12);
+  border-left: 2px solid #38bdf8;
+  color: #ffffff;
+}
+
+.frame-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.frame-name {
+  font-weight: 600;
+  color: #e2e8f0;
+}
+
+.frame-line {
+  color: #64748b;
+  font-size: 10px;
+}
+
+.active-frame-indicator {
+  font-size: 9.5px;
+  background: rgba(56, 189, 248, 0.25);
+  color: #38bdf8;
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-weight: 700;
+}
+
+/* Variables List */
+.variable-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 4px 6px;
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: 4px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+}
+
+.var-key {
+  color: #c084fc;
+  font-weight: 600;
+}
+
+.var-val {
+  color: #34d399;
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Heap Items */
+.heap-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 5px 7px;
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: 5px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10.5px;
+}
+
+.heap-addr-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.heap-addr {
+  color: #f59e0b;
+  font-weight: 600;
+}
+
+.heap-type {
+  color: #94a3b8;
+  font-size: 10px;
+}
+
+.heap-val-preview {
+  color: #cbd5e1;
+  font-size: 10.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.icon-cyan {
+  color: #38bdf8;
+}
+
+.icon-purple {
+  color: #c084fc;
+}
+
+.icon-green {
+  color: #34d399;
+}

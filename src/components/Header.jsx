@@ -29,6 +29,7 @@ import {
   Columns2,
   FileText,
   Bot,
+  Eye,
 } from 'lucide-react';
 import LanguageIcon from './LanguageIcon';
 import { isLocalEnvironment } from '../services/judge0Service';
@@ -621,6 +622,19 @@ export default function Header() {
                 >
                   <span>Run Document</span>
                   <kbd>Ctrl+Enter</kbd>
+                </button>
+                <button
+                  className="dropdown-entry"
+                  onClick={() => closeMenuAndRun(() => {
+                    dispatch({ type: 'SET_TERMINAL_HIDDEN', payload: false });
+                    dispatch({ type: 'SET_TERMINAL_TAB', payload: 'visualizer' });
+                  })}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Eye size={14} />
+                    <span>Step-by-Step Visualizer</span>
+                  </div>
+                  <kbd>⌘⇧V</kbd>
                 </button>
                 <button
                   className="dropdown-entry"

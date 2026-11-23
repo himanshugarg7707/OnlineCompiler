@@ -17,8 +17,10 @@ import {
   CheckCircle2,
   Activity,
   AlertCircle,
+  Eye,
 } from 'lucide-react';
 import ComplexityTab from './ComplexityTab';
+import StepVisualizerTab from './StepVisualizerTab';
 import LanguageIcon from './LanguageIcon';
 import { getFriendlyLanguageName, getCompilationIdentifier } from '../services/languageDetector';
 import { isLocalEnvironment } from '../services/judge0Service';
@@ -28,6 +30,7 @@ const TABS = [
   { id: 'output', label: 'Program Output', icon: Terminal },
   { id: 'input', label: 'Custom Input (stdin)', icon: Keyboard },
   { id: 'terminal', label: 'Terminal / Shell', icon: TerminalSquare },
+  { id: 'visualizer', label: 'Step Visualizer', icon: Eye },
   { id: 'problems', label: 'Problems & Errors', icon: AlertCircle },
   { id: 'complexity', label: 'Complexity Analyzer', icon: Activity },
   { id: 'explanation', label: 'AI Explanation', icon: BrainCircuit },
@@ -1142,6 +1145,9 @@ export default function OutputPanel({
           </div>
         )}
         {/* Test Suite & Stress Tester Tab */}
+
+        {/* Visualizer Tab */}
+        {activeTab === 'visualizer' && <StepVisualizerTab />}
 
         {/* Complexity Tab */}
         {activeTab === 'complexity' && <ComplexityTab />}
