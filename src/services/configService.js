@@ -78,12 +78,13 @@ export function applyGlobalAppConfig(config) {
   const fontFamily = cfg.fontFamily || "'JetBrains Mono', monospace";
 
   try {
-    // 1. Force global UI scale (zoom) on root document
-    document.documentElement.style.zoom = String(scale);
+    // Clean up any legacy zoom on document root so window never letterboxes with black gutters
+    document.documentElement.style.zoom = '';
+    if (document.body) document.body.style.zoom = '';
     document.documentElement.style.setProperty('--workspace-ui-scale', String(scale));
     document.documentElement.style.setProperty('--app-ui-scale', String(scale));
   } catch (e) {
-    console.warn('Failed to apply UI scale zoom:', e);
+    console.warn('Failed to apply UI scale variables:', e);
   }
 
   try {
