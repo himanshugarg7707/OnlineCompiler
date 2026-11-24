@@ -206,14 +206,25 @@ export async function getTableRows(database, table, limit = 50, offset = 0) {
   const dbData = getLocalDbData(database);
   const tbl = dbData?.tables?.[table.toLowerCase()];
   if (tbl) {
-    const rows = (tbl.rows || []).slice(offset, offset + limit);
-    const columns = tbl.columns ? tbl.columns.map((c) => c.name) : (rows[0] ? Object.keys(rows[0]) : []);
+    let sourceRows = tbl.rows || [];
+    let columns = tbl.columns ? tbl.columns.map((c) => c.name) : (sourceRows[0] ? Object.keys(sourceRows[0]) : []);
+    if (tbl.type === 'view' || tbl.isView || tbl.query) {
+      // Views are virtual queries. Re-run the saved SELECT so the explorer
+      // reflects current base-table data instead of the creation-time cache.
+      const quotedName = table.replace(/"/g, '""');
+      const viewResult = await executeSqlInBrowser(`USE ${database}; SELECT * FROM "${quotedName}";`);
+      if (viewResult?.success !== false && viewResult?.sqlData) {
+        sourceRows = viewResult.sqlData.rows || [];
+        columns = viewResult.sqlData.columns || columns;
+      }
+    }
+    const rows = sourceRows.slice(offset, offset + limit);
     return {
       database,
       tableName: table,
       columns,
       rows,
-      total: tbl.rows ? tbl.rows.length : 0,
+      total: sourceRows.length,
       limit,
       offset,
     };

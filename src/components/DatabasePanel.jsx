@@ -23,6 +23,8 @@ import {
   FileCode,
   Copy,
   Terminal,
+  X,
+  Play,
 } from 'lucide-react';
 import './DatabasePanel.css';
 import { executeCode } from '../services/judge0Service';
@@ -43,9 +45,41 @@ export default function DatabasePanel() {
   const [copiedDdl, setCopiedDdl] = useState(false);
   const [connectorLang, setConnectorLang] = useState('python');
   const [viewMode, setViewMode] = useState('data'); // 'data' | 'schema'
-  const [query, setQuery] = useState('-- Write SQL here\nSELECT * FROM customers LIMIT 10;');
+  const [queryFiles, setQueryFiles] = useState(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem('fullcode_sql_query_files'));
+      if (Array.isArray(saved) && saved.length && saved.every((file) => file.id && typeof file.name === 'string' && typeof file.content === 'string')) return saved;
+    } catch {}
+    return [{ id: 'query-1', name: 'query_1.sql', content: '-- Write SQL here\nSELECT * FROM customers LIMIT 10;' }];
+  });
+  const [activeQueryId, setActiveQueryId] = useState(() => {
+    try { return localStorage.getItem('fullcode_sql_active_query') || 'query-1'; } catch { return 'query-1'; }
+  });
+  const activeQueryFile = queryFiles.find((file) => file.id === activeQueryId) || queryFiles[0];
+  const query = activeQueryFile?.content || '';
+  const setQuery = useCallback((content) => {
+    setQueryFiles((files) => files.map((file) => file.id === activeQueryFile?.id ? { ...file, content: typeof content === 'function' ? content(file.content) : content } : file));
+  }, [activeQueryFile?.id]);
+  useEffect(() => {
+    try {
+      localStorage.setItem('fullcode_sql_query_files', JSON.stringify(queryFiles));
+      localStorage.setItem('fullcode_sql_active_query', activeQueryFile?.id || 'query-1');
+    } catch {}
+  }, [queryFiles, activeQueryFile?.id]);
+  const [selectedSql, setSelectedSql] = useState('');
+  const queryEditorRef = useRef(null);
+  const sqlFileInputRef = useRef(null);
+  const [consoleInput, setConsoleInput] = useState('');
+  const [consoleHistory, setConsoleHistory] = useState([]);
+  const [lastExecutedSql, setLastExecutedSql] = useState('');
+  const [sqlDialect, setSqlDialect] = useState(() => {
+    try { return localStorage.getItem('fullcode_sql_dialect') || 'sqlite'; } catch { return 'sqlite'; }
+  });
   const [queryResult, setQueryResult] = useState(null);
   const [queryRunning, setQueryRunning] = useState(false);
+  const [sqlLowerView, setSqlLowerView] = useState('results');
+  const [sqlResultTab, setSqlResultTab] = useState('grid');
+  const [copiedSqlResult, setCopiedSqlResult] = useState(false);
   const [sidebarWidth, setSidebarWidth] = useState(() => {
     try {
       const saved = Number(localStorage.getItem('fullcode_sql_sidebar_width'));
@@ -221,19 +255,171 @@ export default function DatabasePanel() {
 
   const handleOpenQueryInEditor = (sql) => {
     setQuery(sql);
+    setSqlLowerView('results');
   };
 
-  const runQuery = async () => {
+  const addQueryFile = () => {
+    const number = Math.max(0, ...queryFiles.map((file) => Number(file.name.match(/^query_(\d+)\.sql$/)?.[1] || 0))) + 1;
+    const id = `query-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    setQueryFiles((files) => [...files, { id, name: `query_${number}.sql`, content: '-- New SQL query\n' }]);
+    setActiveQueryId(id);
+    setSelectedSql('');
+    setQueryResult(null);
+  };
+
+  const closeQueryFile = (id) => {
+    if (queryFiles.length === 1) return;
+    const file = queryFiles.find((item) => item.id === id);
+    if (file?.content.trim() && !window.confirm(`Close ${file.name}? Its SQL draft will be removed.`)) return;
+    const nextFiles = queryFiles.filter((file) => file.id !== id);
+    setQueryFiles(nextFiles);
+    if (activeQueryId === id) {
+      setActiveQueryId(nextFiles[0].id);
+      setSelectedSql('');
+      setQueryResult(null);
+    }
+  };
+
+  const renameQueryFile = (id) => {
+    const file = queryFiles.find((item) => item.id === id);
+    if (!file) return;
+    const name = window.prompt('SQL file name', file.name)?.trim();
+    if (!name) return;
+    const normalized = name.endsWith('.sql') ? name : `${name}.sql`;
+    setQueryFiles((files) => files.map((item) => item.id === id ? { ...item, name: normalized } : item));
+  };
+
+  const importQueryFiles = async (event) => {
+    const files = Array.from(event.target.files || []);
+    if (!files.length) return;
+    const imported = await Promise.all(files.map(async (file) => ({ id: `query-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, name: file.name.endsWith('.sql') ? file.name : `${file.name}.sql`, content: await file.text() })));
+    setQueryFiles((current) => [...current, ...imported]);
+    setActiveQueryId(imported[0].id);
+    setQueryResult(null);
+    event.target.value = '';
+  };
+
+  const downloadQueryFile = () => {
+    if (!activeQueryFile) return;
+    const url = URL.createObjectURL(new Blob([query], { type: 'text/sql;charset=utf-8' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = activeQueryFile.name;
+    link.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
+
+  const changeSqlDialect = (dialect) => {
+    setSqlDialect(dialect);
+    try { localStorage.setItem('fullcode_sql_dialect', dialect); } catch {}
+    setQueryResult(null);
+  };
+
+  const openTemplate = (name, content) => {
+    const id = `query-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    setQueryFiles((files) => [...files, { id, name: `${name}.sql`, content }]);
+    setActiveQueryId(id);
+    setSelectedSql('');
+    setQueryResult(null);
+  };
+
+  const insertDelimiterSnippet = () => {
+    openTemplate('mysql_delimiter', `-- MySQL client directive; DELIMITER is handled by the SQL client, not the server\nDELIMITER //\n-- Put a stored procedure or cursor block here and terminate it with //\nDELIMITER ;`);
+  };
+
+  const insertProcedureTemplate = () => {
+    const template = sqlDialect === 'oracle'
+      ? `-- Oracle PL/SQL procedure (requires an Oracle connection to execute)\nCREATE OR REPLACE PROCEDURE show_hr_employees AS\n  CURSOR employee_cursor IS\n    SELECT employee_id, first_name, last_name FROM employees;\nBEGIN\n  FOR employee_row IN employee_cursor LOOP\n    DBMS_OUTPUT.PUT_LINE(employee_row.employee_id || ': ' || employee_row.first_name || ' ' || employee_row.last_name);\n  END LOOP;\nEND;\n/`
+      : sqlDialect === 'mysql'
+        ? `-- MySQL-style procedure supported by SQL Studio's sandbox\nDELIMITER //\nCREATE PROCEDURE show_hr_employees()\nBEGIN\n  SELECT employee_id, first_name, last_name FROM employees ORDER BY employee_id;\nEND//\nDELIMITER ;\n\nCALL show_hr_employees();`
+        : `-- SQLite supports SQL statements, not CREATE PROCEDURE.\n-- Use this query with hr_db selected:\nSELECT employee_id, first_name, last_name FROM employees ORDER BY employee_id;`;
+    openTemplate('procedure', template);
+  };
+
+  const insertCursorTemplate = () => {
+    const template = sqlDialect === 'oracle'
+      ? `-- Oracle PL/SQL explicit cursor (requires an Oracle connection)\nDECLARE\n  CURSOR employee_cursor IS\n    SELECT employee_id, first_name, last_name FROM employees;\nBEGIN\n  FOR employee_row IN employee_cursor LOOP\n    DBMS_OUTPUT.PUT_LINE(employee_row.first_name || ' ' || employee_row.last_name);\n  END LOOP;\nEND;\n/`
+      : sqlDialect === 'mysql'
+        ? `-- MySQL-style cursor procedure supported by SQL Studio's sandbox\nDELIMITER //\nCREATE PROCEDURE list_hr_employees()\nBEGIN\n  DECLARE done BOOLEAN DEFAULT FALSE;\n  DECLARE employee_id_var INT;\n  DECLARE first_name_var VARCHAR(100);\n  DECLARE last_name_var VARCHAR(100);\n  DECLARE employee_cursor CURSOR FOR\n    SELECT employee_id, first_name, last_name FROM employees ORDER BY employee_id;\n  DECLARE CONTINUE HANDLER FOR NOT FOUND SET done = TRUE;\n\n  OPEN employee_cursor;\n  cursor_loop: LOOP\n    FETCH employee_cursor INTO employee_id_var, first_name_var, last_name_var;\n    IF done = 1 THEN LEAVE cursor_loop; END IF;\n    SELECT employee_id_var, first_name_var, last_name_var;\n  END LOOP;\n  CLOSE employee_cursor;\nEND//\nDELIMITER ;\n\nCALL list_hr_employees();`
+        : `-- SQLite has no procedural cursor statements. Iterate these rows in host code.\nSELECT employee_id, first_name, last_name FROM employees ORDER BY employee_id;`;
+    openTemplate('cursor', template);
+  };
+
+  const insertQueryTemplate = (type) => {
+    const table = selectedTable || 'customers';
+    const limit = sqlDialect === 'oracle' ? 'FETCH FIRST 10 ROWS ONLY' : 'LIMIT 10';
+    const templates = {
+      select: `SELECT *\nFROM ${table}\n${limit};`,
+      filter: `SELECT *\nFROM ${table}\nWHERE 1 = 1\nORDER BY 1 DESC\n${limit};`,
+      join: `SELECT a.*, b.*\nFROM ${table} AS a\nJOIN other_table AS b ON b.id = a.id\n${limit};`,
+      aggregate: `SELECT country, COUNT(*) AS total\nFROM ${table}\nGROUP BY country\nORDER BY total DESC;`,
+      create: `CREATE TABLE new_table (\n  id INTEGER PRIMARY KEY,\n  name TEXT NOT NULL,\n  created_at TEXT DEFAULT CURRENT_TIMESTAMP\n);`,
+      insert: `INSERT INTO ${table} (name)\nVALUES ('Example');`,
+      update: `UPDATE ${table}\nSET name = 'Updated'\nWHERE id = 1;`,
+      delete: `DELETE FROM ${table}\nWHERE id = 1;`,
+      view: `CREATE VIEW recent_${table} AS\nSELECT * FROM ${table}\nORDER BY 1 DESC;`,
+      index: `CREATE INDEX idx_${table}_name\nON ${table} (name);`,
+      transaction: `BEGIN TRANSACTION;\n-- Add your INSERT, UPDATE, or DELETE statements here\nCOMMIT;`,
+      explain: `EXPLAIN QUERY PLAN\nSELECT * FROM ${table} WHERE 1 = 1;`,
+      schema: sqlDialect === 'mysql' ? `DESCRIBE ${table};` : sqlDialect === 'oracle' ? `SELECT column_name, data_type, nullable\nFROM user_tab_columns\nWHERE table_name = UPPER('${table}');` : `PRAGMA table_info(${table});`,
+    };
+    if (type === 'cursor') return insertCursorTemplate();
+    if (type === 'procedure') return insertProcedureTemplate();
+    if (type === 'delimiter') return insertDelimiterSnippet();
+    if (!templates[type]) return;
+    openTemplate(type, templates[type]);
+  };
+
+  const runQuery = async ({ selectedOnly = false, sql: explicitSql, stayInConsole = false } = {}) => {
+    if (queryRunning) return;
+    const sql = explicitSql ?? (selectedOnly ? selectedSql : query);
+    if (!sql.trim()) return;
     setQueryRunning(true);
+    if (!stayInConsole) setSqlLowerView('results');
+    setLastExecutedSql(sql);
+    const started = Date.now();
     try {
       localStorage.setItem('fullcode_active_db', selectedDb);
-      const result = await executeCode(query, 82, '', [], 'query.sql');
+      const executableSql = sql.replace(/--[^\n]*/g, '').replace(/\/\*[\s\S]*?\*\//g, '');
+      const mysqlProgramSyntax = /\bCONTINUE\s+HANDLER\b|\bDECLARE\b[\s\S]*\bCURSOR\b|\b(?:OPEN|FETCH|CLOSE)\s+[A-Za-z_][\w$]*/i.test(executableSql);
+      const oracleProgramSyntax = /\bCREATE\s+OR\s+REPLACE\s+PROCEDURE\b|\bDBMS_OUTPUT\b|%NOTFOUND|\bCURSOR\s+[A-Za-z_][\w$]*\s+IS\b|\bFETCH\s+FIRST\s+\d+\s+ROWS\s+ONLY\b/i.test(executableSql);
+      const hasRoutineCommand = /\bCREATE\s+PROCEDURE\b|\bCALL\s+[a-zA-Z_][\w$]*\s*\(/i.test(executableSql);
+      if ((sqlDialect === 'mysql' && mysqlProgramSyntax && !hasRoutineCommand) || (sqlDialect === 'oracle' && oracleProgramSyntax)) {
+        const message = sqlDialect === 'mysql'
+          ? `This cursor statement must be inside a complete CREATE PROCEDURE or CALL a procedure created earlier. SQL Studio supports the common cursor loop pattern in its SQL sandbox.`
+          : `This script uses Oracle PL/SQL syntax, but SQL Studio is connected to SQLite. Connect an Oracle server to execute this script.`;
+        setQueryResult({ success: false, error: message, output: message });
+        setSqlResultTab('output');
+        setConsoleHistory((history) => [...history, { sql, message, success: false, time: new Date().toLocaleTimeString() }]);
+        return;
+      }
+      const result = await executeCode(sql, 82, '', [], activeQueryFile?.name || 'query.sql');
       setQueryResult(result);
+      setSqlResultTab(result?.success === false ? 'output' : 'grid');
+      setConsoleHistory((history) => [...history, { sql, message: result?.error || result?.output || `${result?.sqlData?.rowCount ?? 0} rows · ${Date.now() - started} ms`, success: result?.success !== false, time: new Date().toLocaleTimeString() }]);
       window.dispatchEvent(new CustomEvent('database-updated', { detail: { database: selectedDb } }));
     } catch (error) {
       setQueryResult({ success: false, error: error.message, output: error.message });
+      setSqlResultTab('output');
+      setConsoleHistory((history) => [...history, { sql, message: error.message, success: false, time: new Date().toLocaleTimeString() }]);
     } finally {
       setQueryRunning(false);
+    }
+  };
+
+  const copySqlResult = async () => {
+    const data = queryResult?.sqlData || queryResult;
+    if (!data?.columns?.length) return;
+    const csvCell = (value) => `"${String(value ?? '').replace(/"/g, '""')}"`;
+    const csv = [data.columns, ...(data.rows || []).map((row) => data.columns.map((column) => row[column]))]
+      .map((row) => row.map(csvCell).join(','))
+      .join('\n');
+    try {
+      await navigator.clipboard.writeText(csv);
+      setCopiedSqlResult(true);
+      window.setTimeout(() => setCopiedSqlResult(false), 1600);
+    } catch {
+      setCopiedSqlResult(false);
     }
   };
 
@@ -462,11 +648,25 @@ SELECT * FROM ${selectedTable || 'customers'} LIMIT 10;`;
       {/* Main Area: Visual Table Data Viewer & SQL Runner */}
       <div className="db-main-content">
         <section className="sql-query-workbench">
-          <div className="sql-query-workbench-head"><strong>SQL Query</strong><span>{selectedDb}</span><button type="button" onClick={runQuery} disabled={queryRunning}>{queryRunning ? 'Running…' : '▶ Run query'}</button></div>
-          <textarea aria-label="SQL query editor" spellCheck="false" value={query} onChange={(event) => setQuery(event.target.value)} onKeyDown={(event) => { if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') { event.preventDefault(); runQuery(); } }} />
-          {queryResult && <div className={`sql-query-result ${queryResult.success === false ? 'error' : ''}`}>
-            {queryResult.sqlData?.columns?.length ? <div className="sql-result-table-wrap"><table className="db-data-table"><thead><tr>{queryResult.sqlData.columns.map((column) => <th key={column}>{column}</th>)}</tr></thead><tbody>{(queryResult.sqlData.rows || []).map((row, rowIndex) => <tr key={rowIndex}>{queryResult.sqlData.columns.map((column) => <td key={column}>{row[column] == null ? 'NULL' : String(row[column])}</td>)}</tr>)}</tbody></table></div> : <pre>{queryResult.error || queryResult.output || 'Query completed.'}</pre>}
-          </div>}
+          <div className="sql-query-workbench-head">
+            <strong>SQL Query</strong><span>{selectedDb}</span>
+            <label className="sql-dialect-picker">Dialect<select aria-label="SQL dialect" value={sqlDialect} onChange={(event) => changeSqlDialect(event.target.value)}><option value="sqlite">SQLite (active engine)</option><option value="oracle">Oracle SQL</option><option value="mysql">MySQL</option></select></label>
+            <select className="sql-template-picker" aria-label="SQL templates" value="" onChange={(event) => { insertQueryTemplate(event.target.value); event.target.value = ''; }}>
+              <option value="">Templates…</option>
+              <optgroup label="Queries"><option value="select">Select rows</option><option value="filter">Filter and sort</option><option value="join">Join tables</option><option value="aggregate">Group and count</option><option value="explain">Explain query plan</option></optgroup>
+              <optgroup label="Tables and data"><option value="create">Create table</option><option value="insert">Insert row</option><option value="update">Update row</option><option value="delete">Delete row</option><option value="view">Create view</option><option value="index">Create index</option><option value="transaction">Transaction</option><option value="schema">Table schema</option></optgroup>
+              <optgroup label="Procedural reference"><option value="cursor">Cursor</option><option value="procedure">Procedure</option>{sqlDialect === 'mysql' && <option value="delimiter">MySQL DELIMITER</option>}</optgroup>
+            </select>
+            <button type="button" className="sql-run-selection" onClick={() => runQuery({ selectedOnly: true })} disabled={queryRunning || !selectedSql.trim()} title="Run highlighted SQL">Run selection</button>
+            <button type="button" onClick={() => runQuery()} disabled={queryRunning}>{queryRunning ? 'Running…' : '▶ Run query'}</button>
+          </div>
+          <div className="sql-file-tabs" role="tablist" aria-label="SQL query files">
+            {queryFiles.map((file) => <div key={file.id} className={`sql-file-tab ${activeQueryFile?.id === file.id ? 'active' : ''}`}><button type="button" role="tab" aria-selected={activeQueryFile?.id === file.id} onClick={() => { setActiveQueryId(file.id); setSelectedSql(''); setQueryResult(null); }} onDoubleClick={() => renameQueryFile(file.id)} title="Double click to rename"><FileCode size={13} />{file.name}</button>{queryFiles.length > 1 && <button type="button" className="sql-file-close" aria-label={`Close ${file.name}`} onClick={() => closeQueryFile(file.id)}><X size={12} /></button>}</div>)}
+            <button type="button" className="sql-file-add" onClick={addQueryFile} title="New SQL file" aria-label="New SQL file"><Plus size={14} /></button>
+            <div className="sql-file-actions"><input ref={sqlFileInputRef} type="file" accept=".sql,.txt,text/sql,text/plain" multiple hidden onChange={importQueryFiles} /><button type="button" onClick={() => sqlFileInputRef.current?.click()}>Open .sql</button><button type="button" onClick={downloadQueryFile}>Download</button></div>
+          </div>
+          {sqlDialect !== 'sqlite' && <div className="sql-dialect-notice">{sqlDialect === 'oracle' ? 'Oracle templates are for reference. Run Query currently uses this workspace’s SQLite engine; Oracle PL/SQL cannot execute here.' : 'Common MySQL stored procedures and cursor loops run in SQL Studio’s sandbox. Advanced MySQL server-specific features may behave differently from a live MySQL server.'}</div>}
+          <textarea ref={queryEditorRef} aria-label="SQL query editor" spellCheck="false" value={query} onChange={(event) => setQuery(event.target.value)} onSelect={(event) => setSelectedSql(event.currentTarget.value.slice(event.currentTarget.selectionStart, event.currentTarget.selectionEnd))} onKeyDown={(event) => { if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') { event.preventDefault(); const selection = event.currentTarget.value.slice(event.currentTarget.selectionStart, event.currentTarget.selectionEnd); runQuery(selection.trim() ? { sql: selection } : {}); } }} />
         </section>
         <div
           className="db-pane-resize db-query-resize"
@@ -488,7 +688,55 @@ SELECT * FROM ${selectedTable || 'customers'} LIMIT 10;`;
             });
           }}
         />
-        {selectedTable && tableData ? (
+        <div className="sql-lower-workspace">
+          <div className="sql-lower-tabs" role="tablist" aria-label="SQL workspace panels">
+            <button type="button" role="tab" aria-selected={sqlLowerView === 'results'} className={sqlLowerView === 'results' ? 'active' : ''} onClick={() => setSqlLowerView('results')}>
+              Query Results {queryResult?.sqlData?.rowCount != null && <span>{queryResult.sqlData.rowCount}</span>}
+            </button>
+            <button type="button" role="tab" aria-selected={sqlLowerView === 'table'} className={sqlLowerView === 'table' ? 'active' : ''} onClick={() => setSqlLowerView('table')}>Table View</button>
+            <button type="button" role="tab" aria-selected={sqlLowerView === 'console'} className={sqlLowerView === 'console' ? 'active' : ''} onClick={() => setSqlLowerView('console')}><Terminal size={13} /> SQL Console</button>
+          </div>
+          {sqlLowerView === 'results' ? (
+            <section className="sql-results-workspace" aria-label="Query output and result grid">
+              <div className="sql-results-toolbar">
+                <div className="sql-results-tabs" role="tablist" aria-label="Query result views">
+                  <button type="button" role="tab" aria-selected={sqlResultTab === 'grid'} className={sqlResultTab === 'grid' ? 'active' : ''} onClick={() => setSqlResultTab('grid')}><TableIcon size={13} /> Result Grid</button>
+                  <button type="button" role="tab" aria-selected={sqlResultTab === 'output'} className={sqlResultTab === 'output' ? 'active' : ''} onClick={() => setSqlResultTab('output')}><Terminal size={13} /> Output</button>
+                </div>
+                <div className="sql-results-meta">
+                  {queryRunning ? <span className="sql-running-indicator">Running query…</span> : queryResult ? <span className={queryResult.success === false ? 'sql-result-failed' : 'sql-result-success'}>{queryResult.success === false ? 'Failed' : 'Completed'}</span> : <span>Ready</span>}
+                  {queryResult?.sqlData?.executionTimeMs != null && <span>{queryResult.sqlData.executionTimeMs} ms</span>}
+                  {queryResult?.sqlData?.rowCount != null && <span>{queryResult.sqlData.rowCount} rows</span>}
+                  {sqlResultTab === 'grid' && <button type="button" className="sql-copy-result" onClick={copySqlResult} disabled={!((queryResult?.sqlData || queryResult)?.columns?.length)}>{copiedSqlResult ? 'Copied CSV' : 'Copy CSV'}</button>}
+                </div>
+              </div>
+              {sqlResultTab === 'grid' ? (() => {
+                const resultData = queryResult?.sqlData || queryResult;
+                return resultData?.columns?.length ? (
+                  <div className="sql-result-grid-wrap">
+                    <table className="db-data-table sql-result-grid">
+                      <thead><tr><th className="sql-row-number">#</th>{resultData.columns.map((column) => <th key={column}>{column}</th>)}</tr></thead>
+                      <tbody>{(resultData.rows || []).map((row, rowIndex) => <tr key={rowIndex}><td className="sql-row-number">{rowIndex + 1}</td>{resultData.columns.map((column) => <td key={column}>{row[column] == null ? <span className="cell-null">NULL</span> : String(row[column])}</td>)}</tr>)}</tbody>
+                    </table>
+                    {resultData.rows?.length === 0 && <div className="sql-empty-result">Query completed with no rows returned. Open Output for execution details.</div>}
+                  </div>
+                ) : <div className="sql-empty-result">{queryResult ? 'This statement did not return a result grid. Open Output for details.' : 'Run a query to see its result grid here.'}</div>;
+              })() : (
+                <div className={`sql-output-content ${queryResult?.success === false ? 'error' : ''}`}>
+                  {queryResult ? <><div className="sql-output-statement"><span>Statement</span><code>{lastExecutedSql.trim() || '(empty query)'}</code></div><pre>{queryResult.error || queryResult.output || queryResult.logs?.join('\n') || (queryResult.success === false ? 'Query failed.' : 'Query completed successfully.')}</pre></> : <div className="sql-empty-result">Execution messages, affected row counts, and errors will appear here.</div>}
+                </div>
+              )}
+            </section>
+          ) : sqlLowerView === 'console' ? (
+            <section className="sql-console" aria-label="SQL console">
+              <div className="sql-console-head"><Terminal size={14} /> SQLite console · {selectedDb}<button type="button" onClick={() => setConsoleHistory([])} disabled={!consoleHistory.length}>Clear</button></div>
+              <div className="sql-console-history" role="log" aria-live="polite">
+                {!consoleHistory.length && <div className="sql-console-empty">Run a query or enter SQL below. Commands and execution messages appear here.</div>}
+                {consoleHistory.map((entry, index) => <div className="sql-console-entry" key={`${entry.time}-${index}`}><div className="sql-console-command"><span>{entry.time} {selectedDb}&gt;</span><pre>{entry.sql}</pre></div><pre className={entry.success ? 'success' : 'error'}>{entry.message}</pre></div>)}
+              </div>
+              <form className="sql-console-input" onSubmit={(event) => { event.preventDefault(); if (consoleInput.trim()) { runQuery({ sql: consoleInput, stayInConsole: true }); setConsoleInput(''); } }}><span>{selectedDb}&gt;</span><input aria-label="SQL console command" value={consoleInput} onChange={(event) => setConsoleInput(event.target.value)} placeholder="Enter a SQL statement and press Enter" disabled={queryRunning} /><button type="submit" disabled={queryRunning || !consoleInput.trim()}>Run</button></form>
+            </section>
+          ) : selectedTable && tableData ? (
           <div className="table-viewer-wrapper">
             {/* Table Viewer Toolbar */}
             <div className="table-toolbar">
@@ -548,13 +796,26 @@ SELECT * FROM ${selectedTable || 'customers'} LIMIT 10;`;
                   className="btn-toolbar"
                   onClick={() =>
                     handleOpenQueryInEditor(
-                      `SELECT * FROM ${selectedTable} WHERE 1=1 ORDER BY 1 DESC;`
+                      `SELECT * FROM "${selectedTable}" ORDER BY 1 DESC LIMIT 100;`
                     )
                   }
-                  title="Query this table in editor"
+                  title="Load a SELECT query into SQL Studio"
                 >
                   <Code size={13} />
-                  <span>Query</span>
+                  <span>Load query</span>
+                </button>
+                <button
+                  className="btn-toolbar"
+                  onClick={() => {
+                    const sql = `SELECT * FROM "${selectedTable}" ORDER BY 1 DESC LIMIT 100;`;
+                    setQuery(sql);
+                    runQuery({ sql });
+                  }}
+                  title={isCurrentView ? 'Run a SELECT against this SQL view in SQL Studio' : 'Run a SELECT against this table in SQL Studio'}
+                  disabled={queryRunning}
+                >
+                  <Play size={13} />
+                  <span>Run here</span>
                 </button>
                 <button
                   className="btn-toolbar"
@@ -803,7 +1064,7 @@ SELECT * FROM ${selectedTable || 'customers'} LIMIT 10;`;
               </div>
             </div>
           </div>
-        ) : (
+          ) : (
           <div className="db-no-table-selected">
             <Database size={48} className="db-placeholder-icon" />
             <h3>Multi-Database SQL Engine Active</h3>
@@ -823,7 +1084,8 @@ SELECT * FROM ${selectedTable || 'customers'} LIMIT 10;`;
               ))}
             </div>
           </div>
-        )}
+          )}
+        </div>
       </div>
     </div>
   );

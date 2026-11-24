@@ -3,6 +3,7 @@ import path from 'path';
 import os from 'os';
 import { fileURLToPath } from 'url';
 import { createRequire } from 'module';
+import { isHostedEnvironment } from './hostedMode.js';
 
 const require = createRequire(import.meta.url);
 
@@ -102,7 +103,7 @@ const DB_DIR = isServerless
 
 // Ensure directory exists
 try {
-  if (!fs.existsSync(DB_DIR)) {
+  if (!isHostedEnvironment() && !fs.existsSync(DB_DIR)) {
     fs.mkdirSync(DB_DIR, { recursive: true });
   }
 } catch (err) {
@@ -137,6 +138,7 @@ export async function findDatabaseForTable(tableName) {
   if (!tableName) return null;
   const cleanTable = tableName.replace(/["'`]/g, '').toLowerCase();
   const dbs = await listDatabases();
+  const matches = [];
   for (const d of dbs) {
     const { db } = getDbConnection(d.name);
     const hasTable = await new Promise((res) => {
@@ -146,9 +148,12 @@ export async function findDatabaseForTable(tableName) {
         (err, row) => res(Boolean(row))
       );
     });
-    if (hasTable) return d.name;
+    if (hasTable) matches.push(d.name);
   }
-  return null;
+  if (matches.length > 1) {
+    throw new Error(`Table '${tableName}' exists in multiple databases (${matches.join(', ')}). Select the database explicitly before querying.`);
+  }
+  return matches[0] || null;
 }
 
 /**
@@ -330,7 +335,8 @@ const MONTH_MAP = {
 };
 
 /**
- * Transpile MySQL / Oracle / PostgreSQL dialect constructs into SQLite-compatible SQL
+ * Apply a small set of best-effort syntax rewrites before SQLite execution.
+ * This is not an Oracle or MySQL engine and does not implement either full dialect.
  */
 export function transpileSqlForSqlite(sql) {
   if (!sql) return '';
@@ -1229,7 +1235,69 @@ export async function seedSampleDatabases() {
     `, () => resolve());
   });
 
-  const existing = fs.readdirSync(DB_DIR).filter((f) => f.endsWith('.sqlite'));
+  // Keep the classic HR practice schema available even when a workspace has
+  // already created other local databases. Seed rows are idempotent by key.
+  const { db: hrDb } = getDbConnection('hr_db');
+  await new Promise((resolve, reject) => {
+    hrDb.exec(`
+      CREATE TABLE IF NOT EXISTS locations (
+        location_id INTEGER PRIMARY KEY,
+        city TEXT NOT NULL,
+        country_id TEXT
+      );
+      CREATE TABLE IF NOT EXISTS departments (
+        department_id INTEGER PRIMARY KEY,
+        department_name TEXT NOT NULL,
+        location_id INTEGER
+      );
+      CREATE TABLE IF NOT EXISTS jobs (
+        job_id TEXT PRIMARY KEY,
+        job_title TEXT NOT NULL,
+        min_salary INTEGER,
+        max_salary INTEGER
+      );
+      CREATE TABLE IF NOT EXISTS employees (
+        employee_id INTEGER PRIMARY KEY,
+        first_name TEXT,
+        last_name TEXT NOT NULL,
+        email TEXT NOT NULL,
+        hire_date TEXT NOT NULL,
+        job_id TEXT NOT NULL,
+        salary REAL,
+        manager_id INTEGER,
+        department_id INTEGER
+      );
+      CREATE TABLE IF NOT EXISTS job_history (
+        employee_id INTEGER NOT NULL,
+        start_date TEXT NOT NULL,
+        end_date TEXT NOT NULL,
+        job_id TEXT NOT NULL,
+        department_id INTEGER
+      );
+      INSERT OR IGNORE INTO locations VALUES
+        (1400, 'Southlake', 'US'), (1500, 'South San Francisco', 'US'),
+        (1700, 'Seattle', 'US'), (1800, 'Toronto', 'CA'), (2500, 'Oxford', 'UK');
+      INSERT OR IGNORE INTO departments VALUES
+        (10, 'Administration', 1700), (20, 'Marketing', 1800), (30, 'Purchasing', 1700),
+        (50, 'Shipping', 1500), (60, 'IT', 1400), (80, 'Sales', 2500), (90, 'Executive', 1700);
+      INSERT OR IGNORE INTO jobs VALUES
+        ('AD_PRES', 'President', 20000, 40000), ('AD_VP', 'Administration Vice President', 15000, 30000),
+        ('IT_PROG', 'Programmer', 4000, 10000), ('SA_REP', 'Sales Representative', 6000, 12000),
+        ('ST_CLERK', 'Shipping Clerk', 2500, 5500);
+      INSERT OR IGNORE INTO employees VALUES
+        (100, 'Steven', 'King', 'SKING', '2003-06-17', 'AD_PRES', 24000, NULL, 90),
+        (101, 'Neena', 'Kochhar', 'NKOCHHAR', '2005-09-21', 'AD_VP', 17000, 100, 90),
+        (102, 'Lex', 'De Haan', 'LDEHAAN', '2001-01-13', 'AD_VP', 17000, 100, 90),
+        (103, 'Alexander', 'Hunold', 'AHUNOLD', '2006-01-03', 'IT_PROG', 9000, 102, 60),
+        (104, 'Bruce', 'Ernst', 'BERNST', '2007-05-21', 'IT_PROG', 6000, 103, 60),
+        (145, 'John', 'Russell', 'JRUSSEL', '2004-10-01', 'SA_REP', 14000, 100, 80);
+      INSERT OR IGNORE INTO job_history VALUES
+        (102, '2001-01-13', '2006-07-24', 'IT_PROG', 60),
+        (101, '2005-09-21', '2006-03-27', 'AC_ACCOUNT', 110);
+    `, (error) => error ? reject(error) : resolve());
+  });
+
+  const existing = fs.readdirSync(DB_DIR).filter((f) => f.endsWith('.sqlite') && f !== 'hr_db.sqlite');
   if (existing.length > 1) return;
 
   console.log('🌱 Seeding sample databases (ecommerce_db, university_db)...');

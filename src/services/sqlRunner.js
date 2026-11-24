@@ -10,6 +10,7 @@ class InMemoryDatabase {
   constructor(name) {
     this.name = name;
     this.tables = {};
+    this.procedures = {};
     this.createdAt = new Date().toISOString();
   }
 
@@ -76,10 +77,21 @@ export function generateTableDdl(table) {
 export function findDatabaseForTableInBrowser(tableName) {
   if (!tableName) return null;
   const clean = tableName.replace(/["'`]/g, '').toLowerCase();
+  const matches = [];
   for (const [name, db] of inMemoryDatabases.entries()) {
-    if (db.tables[clean]) return name;
+    if (db.tables[clean]) matches.push(name);
   }
-  return null;
+  // A same-named table in multiple databases is ambiguous. Never choose one
+  // based on Map iteration order; the selected database remains authoritative.
+  return matches.length === 1 ? matches[0] : null;
+}
+
+function getDatabasesForTableInBrowser(tableName) {
+  if (!tableName) return [];
+  const clean = tableName.replace(/["'`]/g, '').toLowerCase();
+  return [...inMemoryDatabases.entries()]
+    .filter(([, db]) => Boolean(db.tables[clean]))
+    .map(([name]) => name);
 }
 
 /**
@@ -99,6 +111,7 @@ function initDatabases() {
             const parsed = JSON.parse(raw);
             const db = new InMemoryDatabase(name);
             db.tables = parsed.tables || {};
+            db.procedures = parsed.procedures || {};
             db.createdAt = parsed.createdAt || new Date().toISOString();
             inMemoryDatabases.set(name, db);
           }
@@ -109,9 +122,18 @@ function initDatabases() {
     console.warn('Failed to load SQL databases from storage:', e);
   }
 
+  try {
+    const persistedActiveDb = typeof localStorage !== 'undefined' ? localStorage.getItem('fullcode_active_db') : null;
+    if (persistedActiveDb && inMemoryDatabases.has(persistedActiveDb)) currentActiveDbName = persistedActiveDb;
+  } catch {}
+
   // If empty, seed realistic databases
   if (inMemoryDatabases.size === 0) {
     seedDefaultDatabases();
+  } else {
+    // Add the built-in HR sample without replacing any existing user data.
+    seedHrDatabase();
+    persistDatabases();
   }
 }
 
@@ -126,6 +148,7 @@ function persistDatabases() {
           JSON.stringify({
             name: db.name,
             tables: db.tables,
+            procedures: db.procedures || {},
             createdAt: db.createdAt,
           })
         );
@@ -237,7 +260,73 @@ function seedDefaultDatabases() {
 
   inMemoryDatabases.set('university_db', university);
 
+  seedHrDatabase();
+
   persistDatabases();
+}
+
+function seedHrDatabase() {
+  if (inMemoryDatabases.has('hr_db')) return;
+  const hr = new InMemoryDatabase('hr_db');
+  hr.createTable('departments', [
+    { name: 'department_id', type: 'INTEGER', isPk: true },
+    { name: 'department_name', type: 'TEXT', notNull: true },
+    { name: 'location_id', type: 'INTEGER' },
+  ]);
+  hr.tables.departments.rows = [
+    { department_id: 10, department_name: 'Administration', location_id: 1700 },
+    { department_id: 20, department_name: 'Marketing', location_id: 1800 },
+    { department_id: 30, department_name: 'Purchasing', location_id: 1700 },
+    { department_id: 50, department_name: 'Shipping', location_id: 1500 },
+    { department_id: 60, department_name: 'IT', location_id: 1400 },
+    { department_id: 80, department_name: 'Sales', location_id: 2500 },
+    { department_id: 90, department_name: 'Executive', location_id: 1700 },
+  ];
+  hr.createTable('jobs', [
+    { name: 'job_id', type: 'TEXT', isPk: true },
+    { name: 'job_title', type: 'TEXT', notNull: true },
+    { name: 'min_salary', type: 'INTEGER' },
+    { name: 'max_salary', type: 'INTEGER' },
+  ]);
+  hr.tables.jobs.rows = [
+    { job_id: 'AD_PRES', job_title: 'President', min_salary: 20000, max_salary: 40000 },
+    { job_id: 'AD_VP', job_title: 'Administration Vice President', min_salary: 15000, max_salary: 30000 },
+    { job_id: 'IT_PROG', job_title: 'Programmer', min_salary: 4000, max_salary: 10000 },
+    { job_id: 'SA_REP', job_title: 'Sales Representative', min_salary: 6000, max_salary: 12000 },
+    { job_id: 'ST_CLERK', job_title: 'Shipping Clerk', min_salary: 2500, max_salary: 5500 },
+  ];
+  hr.createTable('employees', [
+    { name: 'employee_id', type: 'INTEGER', isPk: true },
+    { name: 'first_name', type: 'TEXT' },
+    { name: 'last_name', type: 'TEXT', notNull: true },
+    { name: 'email', type: 'TEXT', notNull: true },
+    { name: 'hire_date', type: 'TEXT', notNull: true },
+    { name: 'job_id', type: 'TEXT', notNull: true },
+    { name: 'salary', type: 'REAL' },
+    { name: 'manager_id', type: 'INTEGER' },
+    { name: 'department_id', type: 'INTEGER' },
+  ]);
+  hr.tables.employees.rows = [
+    { employee_id: 100, first_name: 'Steven', last_name: 'King', email: 'SKING', hire_date: '2003-06-17', job_id: 'AD_PRES', salary: 24000, manager_id: null, department_id: 90 },
+    { employee_id: 101, first_name: 'Neena', last_name: 'Kochhar', email: 'NKOCHHAR', hire_date: '2005-09-21', job_id: 'AD_VP', salary: 17000, manager_id: 100, department_id: 90 },
+    { employee_id: 102, first_name: 'Lex', last_name: 'De Haan', email: 'LDEHAAN', hire_date: '2001-01-13', job_id: 'AD_VP', salary: 17000, manager_id: 100, department_id: 90 },
+    { employee_id: 103, first_name: 'Alexander', last_name: 'Hunold', email: 'AHUNOLD', hire_date: '2006-01-03', job_id: 'IT_PROG', salary: 9000, manager_id: 102, department_id: 60 },
+    { employee_id: 104, first_name: 'Bruce', last_name: 'Ernst', email: 'BERNST', hire_date: '2007-05-21', job_id: 'IT_PROG', salary: 6000, manager_id: 103, department_id: 60 },
+    { employee_id: 145, first_name: 'John', last_name: 'Russell', email: 'JRUSSEL', hire_date: '2004-10-01', job_id: 'SA_REP', salary: 14000, manager_id: 100, department_id: 80 },
+  ];
+  hr.createTable('locations', [
+    { name: 'location_id', type: 'INTEGER', isPk: true },
+    { name: 'city', type: 'TEXT', notNull: true },
+    { name: 'country_id', type: 'TEXT' },
+  ]);
+  hr.tables.locations.rows = [
+    { location_id: 1400, city: 'Southlake', country_id: 'US' },
+    { location_id: 1500, city: 'South San Francisco', country_id: 'US' },
+    { location_id: 1700, city: 'Seattle', country_id: 'US' },
+    { location_id: 1800, city: 'Toronto', country_id: 'CA' },
+    { location_id: 2500, city: 'Oxford', country_id: 'UK' },
+  ];
+  inMemoryDatabases.set('hr_db', hr);
 }
 
 /**
@@ -246,12 +335,24 @@ function seedDefaultDatabases() {
 function splitStatements(sql) {
   const stmts = [];
   let current = '';
+  let delimiter = ';';
   let inSingleQuote = false;
   let inDoubleQuote = false;
   let inLineComment = false;
   let inBlockComment = false;
 
   for (let i = 0; i < sql.length; i++) {
+    if (!inSingleQuote && !inDoubleQuote && !inBlockComment && !inLineComment && !current.trim() && (i === 0 || sql[i - 1] === '\n' || sql[i - 1] === '\r')) {
+      const lineEnd = sql.indexOf('\n', i);
+      const line = sql.slice(i, lineEnd < 0 ? sql.length : lineEnd).replace(/\r$/, '');
+      const delimiterDirective = line.match(/^\s*DELIMITER\s+(\S+)\s*$/i);
+      if (delimiterDirective) {
+        delimiter = delimiterDirective[1];
+        i = lineEnd < 0 ? sql.length : lineEnd;
+        continue;
+      }
+    }
+
     const char = sql[i];
     const nextChar = sql[i + 1];
 
@@ -285,10 +386,11 @@ function splitStatements(sql) {
     if (char === "'" && !inDoubleQuote) inSingleQuote = !inSingleQuote;
     else if (char === '"' && !inSingleQuote) inDoubleQuote = !inDoubleQuote;
 
-    if (char === ';' && !inSingleQuote && !inDoubleQuote) {
+    if (!inSingleQuote && !inDoubleQuote && sql.startsWith(delimiter, i)) {
       const trimmed = current.trim();
       if (trimmed) stmts.push(trimmed);
       current = '';
+      i += delimiter.length - 1;
     } else {
       current += char;
     }
@@ -313,6 +415,210 @@ function parseLiteral(valStr) {
   return trimmed;
 }
 
+function splitSqlList(value) {
+  const values = [];
+  let start = 0;
+  let depth = 0;
+  let quote = '';
+  for (let index = 0; index < value.length; index++) {
+    const char = value[index];
+    if (quote) {
+      if (char === quote && value[index - 1] !== '\\') quote = '';
+    } else if (char === "'" || char === '"') quote = char;
+    else if (char === '(') depth++;
+    else if (char === ')') depth--;
+    else if (char === ',' && depth === 0) {
+      values.push(value.slice(start, index).trim());
+      start = index + 1;
+    }
+  }
+  if (value.slice(start).trim()) values.push(value.slice(start).trim());
+  return values;
+}
+
+function evaluateRoutineExpression(expression, variables) {
+  const resolveValue = (value) => {
+    const token = value.trim();
+    if (/^NULL$/i.test(token)) return null;
+    if (/^TRUE$/i.test(token)) return 1;
+    if (/^FALSE$/i.test(token)) return 0;
+    if (/^IFNULL\s*\(/i.test(token)) {
+      const args = token.match(/^IFNULL\s*\((.*)\)$/i)?.[1];
+      if (!args) throw new Error(`Unsupported routine expression: ${expression}`);
+      const [first, fallback] = splitSqlList(args);
+      const firstValue = resolveValue(first);
+      return firstValue == null ? resolveValue(fallback) : firstValue;
+    }
+    if (/^COALESCE\s*\(/i.test(token)) {
+      const args = token.match(/^COALESCE\s*\((.*)\)$/i)?.[1];
+      if (!args) throw new Error(`Unsupported routine expression: ${expression}`);
+      for (const part of splitSqlList(args)) {
+        const value = resolveValue(part);
+        if (value != null) return value;
+      }
+      return null;
+    }
+    if (/^[-+]?\d+(?:\.\d+)?$/.test(token)) return Number(token);
+    const key = token.toLowerCase();
+    if (Object.hasOwn(variables, key)) return variables[key];
+    throw new Error(`Unsupported routine expression '${token}'.`);
+  };
+
+  const source = expression.replace(/IFNULL\s*\([^)]+\)|COALESCE\s*\([^)]+\)/gi, (call) => {
+    const value = resolveValue(call);
+    if (value == null) return 'NULL';
+    if (typeof value !== 'number') throw new Error(`Unsupported routine value in '${expression}'.`);
+    return String(value);
+  });
+  const tokens = [];
+  const tokenizer = /\s*(?:(\d+(?:\.\d+)?)|([a-zA-Z_][a-zA-Z0-9_$]*)|([()+\-*/]))/gy;
+  let cursor = 0;
+  while (cursor < source.length) {
+    tokenizer.lastIndex = cursor;
+    const match = tokenizer.exec(source);
+    if (!match) throw new Error(`Unsupported routine expression '${expression}'.`);
+    tokens.push(match[1] ? Number(match[1]) : match[2] ? resolveValue(match[2]) : match[3]);
+    cursor = tokenizer.lastIndex;
+  }
+
+  let position = 0;
+  const parsePrimary = () => {
+    const token = tokens[position++];
+    if (token === '+' || token === '-') {
+      const value = parsePrimary();
+      return token === '-' ? -Number(value || 0) : Number(value || 0);
+    }
+    if (token === '(') {
+      const value = parseSum();
+      if (tokens[position++] !== ')') throw new Error(`Unclosed parentheses in '${expression}'.`);
+      return value;
+    }
+    if (typeof token === 'number' || typeof token === 'string' || token == null) return token;
+    throw new Error(`Unsupported routine expression '${expression}'.`);
+  };
+  const parseProduct = () => {
+    let left = parsePrimary();
+    while (tokens[position] === '*' || tokens[position] === '/') {
+      const operator = tokens[position++];
+      const right = parsePrimary();
+      left = operator === '*' ? Number(left || 0) * Number(right || 0) : Number(left || 0) / Number(right || 0);
+    }
+    return left;
+  };
+  const parseSum = () => {
+    let left = parseProduct();
+    while (tokens[position] === '+' || tokens[position] === '-') {
+      const operator = tokens[position++];
+      const right = parseProduct();
+      left = operator === '+' ? Number(left || 0) + Number(right || 0) : Number(left || 0) - Number(right || 0);
+    }
+    return left;
+  };
+
+  const result = parseSum();
+  if (position !== tokens.length) throw new Error(`Unsupported routine expression '${expression}'.`);
+  return result;
+}
+
+function evaluateRoutineCondition(condition, variables) {
+  const match = condition.trim().match(/^([\w$]+)\s*(=|<>|!=|>=|<=|>|<)\s*([\w$.-]+)$/);
+  if (!match) throw new Error(`Unsupported cursor IF condition '${condition.trim()}'.`);
+  const left = evaluateRoutineExpression(match[1], variables);
+  const right = evaluateRoutineExpression(match[3], variables);
+  switch (match[2]) {
+    case '=': return left === right || String(left) === String(right);
+    case '<>': case '!=': return left !== right && String(left) !== String(right);
+    case '>': return Number(left) > Number(right);
+    case '<': return Number(left) < Number(right);
+    case '>=': return Number(left) >= Number(right);
+    case '<=': return Number(left) <= Number(right);
+    default: return false;
+  }
+}
+
+function executeCursorProcedure(procedure, activeDb) {
+  const body = procedure.body || '';
+  const variables = {};
+  const declarations = body.matchAll(/\bDECLARE\s+([a-zA-Z_][\w$]*)\s+([a-zA-Z]+(?:\s*\([^;)]*\))?)(?:\s+DEFAULT\s+([^;]+))?\s*;/gi);
+  for (const declaration of declarations) {
+    const [, name, type, initial] = declaration;
+    if (/^(?:CURSOR|CONTINUE|EXIT)$/i.test(type)) continue;
+    variables[name.toLowerCase()] = initial ? evaluateRoutineExpression(initial, variables) : null;
+  }
+
+  const cursorDeclaration = body.match(/\bDECLARE\s+([a-zA-Z_][\w$]*)\s+CURSOR\s+FOR\s+([\s\S]*?);/i);
+  if (!cursorDeclaration) {
+    const select = body.match(/\bSELECT\s+[\s\S]*?;/i)?.[0];
+    if (select) {
+      const result = executeSelectStatement(select.replace(/;$/, ''), activeDb, activeDb?.name || 'main_db');
+      if (!result.success) throw new Error(result.error || 'Procedure SELECT failed.');
+      return { ...result, type: 'CALL' };
+    }
+    return { success: true, columns: ['status'], rows: [{ status: `Procedure '${procedure.name}' completed.` }], rowCount: 1, type: 'CALL' };
+  }
+  const [, cursorName, selectSql] = cursorDeclaration;
+  const cursorResult = executeSelectStatement(selectSql, activeDb, activeDb?.name || 'main_db');
+  if (!cursorResult.success) throw new Error(cursorResult.error || 'Cursor SELECT failed.');
+
+  const handler = body.match(/\bDECLARE\s+(?:CONTINUE|EXIT)\s+HANDLER\s+FOR\s+NOT\s+FOUND\s+SET\s+([a-zA-Z_][\w$]*)\s*=\s*([^;]+);/i);
+  const loop = body.match(/(?:([a-zA-Z_][\w$]*)\s*:\s*)?LOOP\s+([\s\S]*?)\s+END\s+LOOP\b/i);
+  if (!loop) throw new Error(`Procedure '${procedure.name}' has no supported cursor loop.`);
+  const loopBody = loop[2];
+  const fetch = loopBody.match(/\bFETCH\s+([a-zA-Z_][\w$]*)\s+INTO\s+([^;]+);/i);
+  if (!fetch || fetch[1].toLowerCase() !== cursorName.toLowerCase()) {
+    throw new Error('Cursor loop must fetch from its declared cursor.');
+  }
+  const targets = splitSqlList(fetch[2]).map((name) => name.replace(/[`"']/g, '').toLowerCase());
+  const leaveIf = loopBody.match(/\bIF\s+([\s\S]+?)\s+THEN\s+LEAVE\s+[a-zA-Z_][\w$]*\s*;\s*END\s+IF\s*;/i);
+  const setStatements = [...loopBody.matchAll(/\bSET\s+([a-zA-Z_][\w$]*)\s*=\s*([^;]+);/gi)];
+  const loopSelect = loopBody.match(/\bSELECT\s+([^;]+);/i)?.[1];
+  const loopOutputRows = [];
+  const loopOutputColumns = [];
+  const doneVariable = handler?.[1]?.toLowerCase();
+  const maxIterations = Math.min(cursorResult.rows.length + 1, 100000);
+  let cursorIndex = 0;
+  for (let iteration = 0; iteration < maxIterations; iteration++) {
+    const row = cursorResult.rows[cursorIndex++];
+    if (!row) {
+      if (handler) variables[doneVariable] = evaluateRoutineExpression(handler[2], variables);
+    } else {
+      targets.forEach((target, index) => { variables[target] = row[cursorResult.columns[index]] ?? null; });
+    }
+    if (leaveIf && evaluateRoutineCondition(leaveIf[1], variables)) break;
+    if (!row) break;
+    for (const [, variable, expression] of setStatements) {
+      variables[variable.toLowerCase()] = evaluateRoutineExpression(expression, variables);
+    }
+    if (loopSelect) {
+      const outputRow = {};
+      for (const expression of splitSqlList(loopSelect)) {
+        const aliasMatch = expression.match(/^([\s\S]+?)\s+AS\s+([a-zA-Z_][\w$]*)$/i);
+        const valueExpression = aliasMatch ? aliasMatch[1].trim() : expression;
+        const columnName = aliasMatch ? aliasMatch[2] : valueExpression.trim();
+        if (!loopOutputColumns.includes(columnName)) loopOutputColumns.push(columnName);
+        outputRow[columnName] = evaluateRoutineExpression(valueExpression, variables);
+      }
+      loopOutputRows.push(outputRow);
+    }
+  }
+
+  const postLoop = body.slice(loop.index + loop[0].length);
+  const outputSelect = postLoop.match(/\bSELECT\s+([^;]+);/i)?.[1]?.trim();
+  if (!outputSelect && loopOutputRows.length) return { success: true, columns: loopOutputColumns, rows: loopOutputRows, rowCount: loopOutputRows.length, type: 'CALL' };
+  if (!outputSelect) return { success: true, columns: ['status'], rows: [{ status: `Procedure '${procedure.name}' completed.` }], rowCount: 1, type: 'CALL' };
+
+  const columns = [];
+  const row = {};
+  for (const expression of splitSqlList(outputSelect)) {
+    const aliasMatch = expression.match(/^([\s\S]+?)\s+AS\s+([a-zA-Z_][\w$]*)$/i);
+    const valueExpression = aliasMatch ? aliasMatch[1].trim() : expression;
+    const columnName = aliasMatch ? aliasMatch[2] : valueExpression.trim();
+    columns.push(columnName);
+    row[columnName] = evaluateRoutineExpression(valueExpression, variables);
+  }
+  return { success: true, columns, rows: [row], rowCount: 1, type: 'CALL' };
+}
+
 const MONTH_MAP = {
   jan: '01', feb: '02', mar: '03', apr: '04', may: '05', jun: '06',
   jul: '07', aug: '08', sep: '09', oct: '10', nov: '11', dec: '12',
@@ -321,7 +627,8 @@ const MONTH_MAP = {
 };
 
 /**
- * Transpile MySQL / Oracle / PostgreSQL dialect constructs into SQLite-compatible SQL
+ * Apply a small set of best-effort syntax rewrites before SQLite-style execution.
+ * This is not an Oracle or MySQL engine and does not implement either full dialect.
  */
 export function transpileSqlForSqlite(sql) {
   if (!sql) return '';
@@ -467,6 +774,10 @@ export function executeSelectStatement(selectStmt, activeDb, currentActiveDbName
 
   let table = activeDb?.getTable(tableName);
   if (!table) {
+    const matches = getDatabasesForTableInBrowser(tableName);
+    if (matches.length > 1) {
+      return { success: false, error: `Table '${rawTableName}' exists in multiple databases (${matches.join(', ')}). Select the database explicitly before querying.`, columns: [], rows: [], rowCount: 0 };
+    }
     const altDb = findDatabaseForTableInBrowser(tableName);
     if (altDb) {
       activeDb = inMemoryDatabases.get(altDb);
@@ -662,6 +973,10 @@ export function executeSelectStatement(selectStmt, activeDb, currentActiveDbName
  */
 export async function executeSqlInBrowser(sqlQuery) {
   initDatabases();
+  try {
+    const selectedDb = typeof localStorage !== 'undefined' ? localStorage.getItem('fullcode_active_db') : null;
+    if (selectedDb && inMemoryDatabases.has(selectedDb)) currentActiveDbName = selectedDb;
+  } catch {}
   const startTime = performance.now();
 
   const clean = (sqlQuery || '').trim();
@@ -714,6 +1029,47 @@ export async function executeSqlInBrowser(sqlQuery) {
 
     // Transpile statement through SQLite dialect preprocessor
     const stmt = transpileSqlForSqlite(rawTrimmed);
+
+    const createProcedureMatch = stmt.match(/^CREATE\s+PROCEDURE\s+([a-zA-Z_][\w$]*)\s*(?:\([^)]*\))?\s+(BEGIN\b[\s\S]*\bEND)\s*$/i);
+    if (createProcedureMatch) {
+      const activeDb = inMemoryDatabases.get(currentActiveDbName);
+      if (!activeDb) return { success: false, output: '', error: `Database '${currentActiveDbName}' is not available.`, time: '0.001', memory: 1024, statusCode: 1 };
+      const procedureName = createProcedureMatch[1].toLowerCase();
+      activeDb.procedures[procedureName] = { name: procedureName, body: createProcedureMatch[2] };
+      persistDatabases();
+      executionLogs.push(`✅ Stored procedure '${procedureName}' created in sandbox database '${currentActiveDbName}'.`);
+      finalResult = { success: true, columns: ['status', 'procedure'], rows: [{ status: 'CREATED', procedure: procedureName }], rowCount: 1, type: 'DDL' };
+      continue;
+    }
+
+    const dropProcedureMatch = stmt.match(/^DROP\s+PROCEDURE\s+(?:IF\s+EXISTS\s+)?([a-zA-Z_][\w$]*)\s*$/i);
+    if (dropProcedureMatch) {
+      const activeDb = inMemoryDatabases.get(currentActiveDbName);
+      const procedureName = dropProcedureMatch[1].toLowerCase();
+      if (activeDb?.procedures?.[procedureName]) delete activeDb.procedures[procedureName];
+      persistDatabases();
+      executionLogs.push(`🗑️ Stored procedure '${procedureName}' removed from '${currentActiveDbName}'.`);
+      finalResult = { success: true, columns: ['status', 'procedure'], rows: [{ status: 'DROPPED', procedure: procedureName }], rowCount: 1, type: 'DDL' };
+      continue;
+    }
+
+    const callProcedureMatch = stmt.match(/^CALL\s+([a-zA-Z_][\w$]*)\s*\(([^)]*)\)\s*$/i);
+    if (callProcedureMatch) {
+      const activeDb = inMemoryDatabases.get(currentActiveDbName);
+      const procedureName = callProcedureMatch[1].toLowerCase();
+      const procedure = activeDb?.procedures?.[procedureName];
+      if (!procedure) {
+        return { success: false, output: '', error: `Stored procedure '${procedureName}' does not exist in database '${currentActiveDbName}'. Create it in this database first.`, time: '0.001', memory: 1024, statusCode: 1 };
+      }
+      try {
+        finalResult = executeCursorProcedure(procedure, activeDb);
+        finalResult.database = currentActiveDbName;
+        executionLogs.push(`▶ Procedure '${procedureName}' executed in the SQL sandbox.`);
+      } catch (error) {
+        return { success: false, output: '', error: `Procedure '${procedureName}' could not run: ${error.message}`, time: '0.001', memory: 1024, statusCode: 1 };
+      }
+      continue;
+    }
 
     // 1. CREATE DATABASE / CREATE SCHEMA
     const createDbMatch = stmt.match(/^CREATE\s+(?:DATABASE|SCHEMA)\s+(?:IF\s+NOT\s+EXISTS\s+)?([a-zA-Z0-9_-]+)/i);
@@ -1006,6 +1362,8 @@ export async function executeSqlInBrowser(sqlQuery) {
       let activeDb = inMemoryDatabases.get(currentActiveDbName);
 
       if (targetTable && !activeDb?.getTable(targetTable)) {
+        const matches = getDatabasesForTableInBrowser(targetTable);
+        if (matches.length > 1) return { success: false, output: '', error: `Table '${targetTable}' exists in multiple databases (${matches.join(', ')}). Select the database explicitly.`, time: '0.001', memory: 1024, statusCode: 1 };
         const altDb = findDatabaseForTableInBrowser(targetTable);
         if (altDb) {
           currentActiveDbName = altDb;
@@ -1063,6 +1421,8 @@ export async function executeSqlInBrowser(sqlQuery) {
       let tbl = activeDb?.getTable(targetTable);
 
       if (!tbl) {
+        const matches = getDatabasesForTableInBrowser(targetTable);
+        if (matches.length > 1) return { success: false, output: '', error: `Table '${targetTable}' exists in multiple databases (${matches.join(', ')}). Select the database explicitly.`, time: '0.001', memory: 1024, statusCode: 1 };
         const altDb = findDatabaseForTableInBrowser(targetTable);
         if (altDb) {
           currentActiveDbName = altDb;
@@ -1104,6 +1464,8 @@ export async function executeSqlInBrowser(sqlQuery) {
       let tbl = activeDb?.getTable(targetTable);
 
       if (!tbl) {
+        const matches = getDatabasesForTableInBrowser(targetTable);
+        if (matches.length > 1) return { success: false, output: '', error: `Table '${targetTable}' exists in multiple databases (${matches.join(', ')}). Select the database explicitly.`, time: '0.001', memory: 1024, statusCode: 1 };
         const altDb = findDatabaseForTableInBrowser(targetTable);
         if (altDb) {
           currentActiveDbName = altDb;
@@ -1269,6 +1631,8 @@ export async function executeSqlInBrowser(sqlQuery) {
       let table = activeDb?.getTable(tableName);
 
       if (!table) {
+        const matches = getDatabasesForTableInBrowser(tableName);
+        if (matches.length > 1) return { success: false, output: '', error: `Table '${tableName}' exists in multiple databases (${matches.join(', ')}). Select the database explicitly.`, time: '0.001', memory: 1024, statusCode: 1 };
         const altDb = findDatabaseForTableInBrowser(tableName);
         if (altDb) {
           currentActiveDbName = altDb;
